@@ -1,0 +1,23 @@
+name: Build WaveConv
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.10.1' # Matches your Qt Creator version
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_mingw'
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G "MinGW Makefiles"
+          cmake --build . --config Release
