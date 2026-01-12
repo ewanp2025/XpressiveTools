@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest] # Focused on your Windows requirement
+        os: [windows-latest, ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout Code
@@ -18,27 +18,45 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.6.0'
+          host: ${{ matrix.os == 'windows-latest' && 'windows' || (matrix.os == 'macos-latest' && 'mac' || 'linux') }}
           target: 'desktop'
-          arch: 'win64_mingw'
+          arch: ${{ matrix.os == 'windows-latest' && 'win64_mingw' || (matrix.os == 'macos-latest' && 'clang_64' || 'gcc_64') }}
+
+      - name: Install Linux Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4* libxcb-image0 libxcb-keysyms* libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
+
+      - name: Set up Windows Path
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
 
       - name: Build Application
         shell: bash
         run: |
           mkdir build
           cd build
-          cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
-          mingw32-make
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
+            mingw32-make
+          else
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+            make
+          fi
 
       - name: Windows Deployment (Bundle DLLs)
+        if: matrix.os == 'windows-latest'
         shell: bash
         run: |
           cd build
-          # This command pulls in all required libraries into the 'build' folder
-          windeployqt --release --no-translations --compiler-runtime XpressiveTools.exe
+          # windeployqt copies necessary DLLs and 'platforms' folder
+          windeployqt XpressiveTools.exe
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: WaveConv-Complete-Windows
-          # Path must point to the folder, not just the exe, to include DLLs
+          name: WaveConv-${{ matrix.os }}
+          # We upload the entire build directory to preserve the folder structure
           path: build/
