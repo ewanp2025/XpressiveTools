@@ -50,13 +50,22 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
+          # Navigate to where the exe was built
           cd build
-          # windeployqt copies necessary DLLs and 'platforms' folder
-          windeployqt XpressiveTools.exe
-
-      - name: Upload Artifacts
+          # Use windeployqt to pull in all necessary Qt DLLs and plugins
+          windeployqt --release --no-translations --compiler-runtime XpressiveTools.exe
+          
+      - name: Upload Artifacts (Windows)
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: WaveConv-${{ matrix.os }}
-          # We upload the entire build directory to preserve the folder structure
+          name: XpressiveToolset-Windows
+          # Upload the build folder containing the exe and ALL bundled DLLs
           path: build/
+
+      - name: Upload Artifacts (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: XpressiveToolset-${{ matrix.os }}
+          path: build/XpressiveTools
