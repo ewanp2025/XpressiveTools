@@ -243,7 +243,7 @@ void MainWindow::saveSidExpr() {
 
 void MainWindow::addSidSegment() {
     auto *frame = new QFrame(); auto *h = new QHBoxLayout(frame);
-    auto *type = new QComboBox(); type->addItems({"trianglew", "squarew", "saww", "randv", "PWM (Mod 4)", "PWM (Mod 5)", "Arp 1", "Arp 2", "FM: Mod 1", "Tonal Noise (YM)", "Pitch Bend", "Hardware Buzz"});
+    auto *type = new QComboBox(); type->addItems({"trianglew", "squarew", "saww", "randv", "PWM (Mod 4)", "PWM (Mod 5)", "Arp 1", "Arp 2", "FM: Mod 1", "sinew", "Pitch Bend", "expw"});
     auto *dur = new QDoubleSpinBox(); dur->setValue(0.1);
     auto *off = new QDoubleSpinBox(); off->setRange(-10000, 10000);
     auto *dec = new QDoubleSpinBox(); dec->setValue(0);
@@ -263,3 +263,4 @@ void MainWindow::removeSidSegment() {
 void MainWindow::copyToClipboard() { QApplication::clipboard()->setText(statusBox->toPlainText()); }
 QString MainWindow::getModulatorFormula(int i) { return QString("(0.5 + %1(t * %2) * %3)").arg(mods[i].shape->currentText()).arg(mods[i].rate->value()).arg(mods[i].depth->value()); }
 void MainWindow::clearAllSid() {}
+
