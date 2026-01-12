@@ -14,6 +14,7 @@
 #include <QClipboard>
 #include <QApplication>
 #include <QPainter>
+#include <QLabel>
 #include <vector>
 
 struct SidSegment {
@@ -66,20 +67,26 @@ private slots:
     void copyToClipboard();
     void addSidSegment();
     void removeSidSegment();
-    void clearAllSid();
     void saveSidExpr();
+    void clearAllSid();
+    void generateConsoleWave();
+    void generateSFXMacro();
+    void generateFilterForge();
+    void generateArpAnimator();
+    void generateWavetableForge();
+
 private:
     void setupUI();
     QString generateLegacyPCM(const std::vector<double>& q, double sr);
     QString generateModernPCM(const std::vector<double>& q, double sr);
-    QString getGlobalAdsrFormula();
-    QString applyBitcrush(const QString& expr);
     QString getModulatorFormula(int index);
     QString getArpFormula(int index);
+    QString getSegmentWaveform(const SidSegment& s, const QString& fBase);
 
     QTabWidget *modeTabs;
     QDoubleSpinBox *maxDurSpin;
-    QComboBox *sampleRateCombo, *buildModeCombo;
+    QComboBox *sampleRateCombo, *buildModeCombo, *buildModeSid;
+    QComboBox *buildModeConsole, *buildModeSFX, *buildModeFilter, *buildModeArp, *buildModeWavetable;
     QCheckBox *normalizeCheck;
     QTextEdit *statusBox;
     QPushButton *btnSave, *btnCopy;
@@ -87,12 +94,21 @@ private:
 
     std::vector<SidSegment> sidSegments;
     QVBoxLayout *sidSegmentsLayout;
-    QDoubleSpinBox *aSpin, *dSpin, *sSpin;
-    QCheckBox *useGlobalAdsr;
 
     Modulator mods[5];
     ArpSettings arps[2];
     std::vector<double> originalData;
     uint32_t fileFs = 44100;
+
+    QComboBox *consoleWaveType;
+    QDoubleSpinBox *consoleSteps;
+    QDoubleSpinBox *sfxStartFreq, *sfxEndFreq, *sfxDur;
+    QComboBox *sfxWave;
+    QComboBox *filterType;
+    QDoubleSpinBox *filterTaps;
+    QDoubleSpinBox *arpSpeed;
+    QComboBox *arpInterval1, *arpInterval2;
+    QComboBox *wtBase;
+    QDoubleSpinBox *wtHarmonics;
 };
 #endif
