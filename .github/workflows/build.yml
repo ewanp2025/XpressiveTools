@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-latest] # Focused on your Windows requirement
 
     steps:
       - name: Checkout Code
@@ -18,54 +18,27 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.6.0'
-          host: ${{ matrix.os == 'windows-latest' && 'windows' || (matrix.os == 'macos-latest' && 'mac' || 'linux') }}
           target: 'desktop'
-          arch: ${{ matrix.os == 'windows-latest' && 'win64_mingw' || (matrix.os == 'macos-latest' && 'clang_64' || 'gcc_64') }}
-
-      - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4* libxcb-image0 libxcb-keysyms* libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
-
-      - name: Set up Windows Path
-        if: matrix.os == 'windows-latest'
-        run: |
-          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
+          arch: 'win64_mingw'
 
       - name: Build Application
         shell: bash
         run: |
           mkdir build
           cd build
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
-            mingw32-make
-          else
-            cmake .. -DCMAKE_BUILD_TYPE=Release
-            make
-          fi
+          cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          mingw32-make
 
       - name: Windows Deployment (Bundle DLLs)
-        if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          # Navigate to where the exe was built
           cd build
-          # Use windeployqt to pull in all necessary Qt DLLs and plugins
+          # This command pulls in all required libraries into the 'build' folder
           windeployqt --release --no-translations --compiler-runtime XpressiveTools.exe
-          
-      - name: Upload Artifacts (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: XpressiveToolset-Windows
-          # Upload the build folder containing the exe and ALL bundled DLLs
-          path: build/
 
-      - name: Upload Artifacts (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: XpressiveToolset-${{ matrix.os }}
-          path: build/XpressiveTools
+          name: WaveConv-Complete-Windows
+          # Path must point to the folder, not just the exe, to include DLLs
+          path: build/
