@@ -1,23 +1,57 @@
-name: Build WaveConv
-on: [push]
+name: Multi-Platform Build
+on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
-          version: '6.10.1' # Matches your Qt Creator version
-          host: 'windows'
+          version: '6.6.0' # Stable Qt 6 version for CI
+          host: ${{ matrix.os == 'windows-latest' && 'windows' || (matrix.os == 'macos-latest' && 'mac' || 'linux') }}
           target: 'desktop'
-          arch: 'win64_mingw'
+          arch: ${{ matrix.os == 'windows-latest' && 'win64_mingw' || (matrix.os == 'macos-latest' && 'clang_64' || 'gcc_64') }}
 
-      - name: Build
+      - name: Install Linux Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Set up MinGW (Windows Only)
+        if: matrix.os == 'windows-latest'
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
+      - name: Build Application
+        shell: bash
         run: |
           mkdir build
           cd build
-          cmake .. -G "MinGW Makefiles"
-          cmake --build . --config Release
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+            mingw32-make
+          else
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+            make
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WaveConv-${{ matrix.os }}
+          path: |
+            build/XpressiveTools.exe
+            build/XpressiveTools
+            build/XpressiveTools.app
