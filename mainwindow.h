@@ -6,10 +6,55 @@
 #include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
-#include <QSlider>
 #include <QTextEdit>
 #include <QTabWidget>
+#include <QVBoxLayout>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QClipboard>
+#include <QApplication>
+#include <QPainter>
 #include <vector>
+
+struct SidSegment {
+    QComboBox* waveType;
+    QDoubleSpinBox* duration;
+    QDoubleSpinBox* decay;
+    QDoubleSpinBox* freqOffset;
+    QPushButton* deleteBtn;
+    QWidget* container;
+};
+
+struct Modulator {
+    QComboBox* shape;
+    QDoubleSpinBox* rate;
+    QDoubleSpinBox* depth;
+    QCheckBox* sync;
+    QComboBox* multiplier;
+};
+
+struct ArpSettings {
+    QComboBox* wave;
+    QComboBox* chord;
+    QDoubleSpinBox* speed;
+    QCheckBox* sync;
+    QComboBox* multiplier;
+};
+
+class WaveformDisplay : public QWidget {
+    Q_OBJECT
+public:
+    explicit WaveformDisplay(QWidget *parent = nullptr) : QWidget(parent) {
+        setMinimumHeight(150);
+        setBackgroundRole(QPalette::Base);
+        setAutoFillBackground(true);
+    }
+    void updateData(const std::vector<SidSegment>& segments);
+protected:
+    void paintEvent(QPaintEvent *) override;
+private:
+    std::vector<SidSegment> m_segments;
+};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -18,24 +63,36 @@ public:
 private slots:
     void loadWav();
     void saveExpr();
-    void convertTxt(); // This was the missing line causing your error
+    void copyToClipboard();
+    void addSidSegment();
+    void removeSidSegment();
+    void clearAllSid();
+    void saveSidExpr();
 private:
     void setupUI();
-    QString generateLegacyExpression(const std::vector<double>& q, double sr);
-    QString generateModernExpression(const std::vector<double>& q, double sr);
+    QString generateLegacyPCM(const std::vector<double>& q, double sr);
+    QString generateModernPCM(const std::vector<double>& q, double sr);
+    QString getGlobalAdsrFormula();
+    QString applyBitcrush(const QString& expr);
+    QString getModulatorFormula(int index);
+    QString getArpFormula(int index);
 
     QTabWidget *modeTabs;
-    QDoubleSpinBox *basePitchSpin;
     QDoubleSpinBox *maxDurSpin;
-    QComboBox *sampleRateCombo;
+    QComboBox *sampleRateCombo, *buildModeCombo;
     QCheckBox *normalizeCheck;
-    QSlider *dcSlider;
-    QDoubleSpinBox *dcSpin;
     QTextEdit *statusBox;
-    QPushButton *btnSave;
+    QPushButton *btnSave, *btnCopy;
+    WaveformDisplay *waveVisualizer;
 
+    std::vector<SidSegment> sidSegments;
+    QVBoxLayout *sidSegmentsLayout;
+    QDoubleSpinBox *aSpin, *dSpin, *sSpin;
+    QCheckBox *useGlobalAdsr;
+
+    Modulator mods[5];
+    ArpSettings arps[2];
     std::vector<double> originalData;
     uint32_t fileFs = 44100;
-    QString currentFileName;
 };
 #endif
