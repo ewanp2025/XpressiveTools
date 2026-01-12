@@ -51,21 +51,12 @@ jobs:
         shell: bash
         run: |
           cd build
-          # 1. Run standard Qt deploy
+          # windeployqt copies necessary DLLs and 'platforms' folder
           windeployqt XpressiveTools.exe
-          # 2. Manually copy MinGW system libraries (The missing piece)
-          cp /c/msys64/mingw64/bin/libgcc_s_seh-1.dll .
-          cp /c/msys64/mingw64/bin/libstdc++-6.dll .
-          cp /c/msys64/mingw64/bin/libwinpthread-1.dll .
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: WaveConv-${{ matrix.os }}
-          path: |
-            build/XpressiveTools.exe
-            build/*.dll
-            build/platforms/
-            build/styles/
-            build/XpressiveTools
-            build/XpressiveTools.app
+          # We upload the entire build directory to preserve the folder structure
+          path: build/
