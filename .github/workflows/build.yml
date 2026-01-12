@@ -17,7 +17,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
-          version: '6.6.0' # Stable Qt 6 version for CI
+          version: '6.6.0'
           host: ${{ matrix.os == 'windows-latest' && 'windows' || (matrix.os == 'macos-latest' && 'mac' || 'linux') }}
           target: 'desktop'
           arch: ${{ matrix.os == 'windows-latest' && 'win64_mingw' || (matrix.os == 'macos-latest' && 'clang_64' || 'gcc_64') }}
@@ -26,13 +26,12 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4-0 libxcb-image0 libxcb-keysyms1-0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0
 
-      - name: Set up MinGW (Windows Only)
+      - name: Set up Windows Path
         if: matrix.os == 'windows-latest'
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x64
+        run: |
+          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
 
       - name: Build Application
         shell: bash
@@ -40,12 +39,19 @@ jobs:
           mkdir build
           cd build
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+            cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
             mingw32-make
           else
             cmake .. -DCMAKE_BUILD_TYPE=Release
             make
           fi
+
+      - name: Windows Deployment (Bundle DLLs)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd build
+          # windeployqt copies necessary Qt DLLs into the folder
+          windeployqt XpressiveTools.exe
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -53,5 +59,8 @@ jobs:
           name: WaveConv-${{ matrix.os }}
           path: |
             build/XpressiveTools.exe
+            build/*.dll
+            build/platforms/
+            build/styles/
             build/XpressiveTools
             build/XpressiveTools.app
