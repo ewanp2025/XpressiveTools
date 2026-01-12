@@ -1,33 +1,26 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(WaveConv VERSION 0.1 LANGUAGES CXX)
-
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
+project(XpressiveTools VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 1. Find the necessary Qt6 packages
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
 
-# 2. Define the executable and its source files
-add_executable(WaveConv
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+
+add_executable(XpressiveTools
     main.cpp
     mainwindow.cpp
     mainwindow.h
 )
 
-# 3. Link the libraries to your project
-target_link_libraries(WaveConv PRIVATE
-    Qt6::Widgets
-    Qt6::Multimedia
-)
+target_link_libraries(XpressiveTools PRIVATE Qt6::Widgets)
 
-# 4. Deployment settings (helps for cross-platform bundling)
-if(Qt6_EXECUTABLE_PROPERTIES)
-    set_target_properties(WaveConv PROPERTIES
-        ${Qt6_EXECUTABLE_PROPERTIES}
+if(WIN32)
+    set_target_properties(XpressiveTools PROPERTIES
+        WIN32_EXECUTABLE TRUE
     )
 endif()
