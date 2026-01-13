@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QPainter>
 #include <QLabel>
+#include <QSlider>
 #include <vector>
 
 struct SidSegment {
@@ -67,13 +68,19 @@ private slots:
     void copyToClipboard();
     void addSidSegment();
     void removeSidSegment();
-    void saveSidExpr();
     void clearAllSid();
+    void saveSidExpr();
     void generateConsoleWave();
     void generateSFXMacro();
     void generateFilterForge();
     void generateArpAnimator();
     void generateWavetableForge();
+    void generateBesselFM();
+    void loadBesselPreset(int index);
+    void generateHarmonicLab();
+    void generateVelocilogic();
+    void generateNoiseForge();
+    void generateXPFPackager();
 
 private:
     void setupUI();
@@ -87,6 +94,7 @@ private:
     QDoubleSpinBox *maxDurSpin;
     QComboBox *sampleRateCombo, *buildModeCombo, *buildModeSid;
     QComboBox *buildModeConsole, *buildModeSFX, *buildModeFilter, *buildModeArp, *buildModeWavetable;
+    QComboBox *buildModeBessel, *buildModeHarmonic, *buildModeVeloci, *buildModeNoise;
     QCheckBox *normalizeCheck;
     QTextEdit *statusBox;
     QPushButton *btnSave, *btnCopy;
@@ -110,5 +118,14 @@ private:
     QComboBox *arpInterval1, *arpInterval2;
     QComboBox *wtBase;
     QDoubleSpinBox *wtHarmonics;
+
+    QComboBox *besselPresetCombo;
+    QComboBox *besselCarrierWave, *besselModWave;
+    QDoubleSpinBox *besselCarrierMult, *besselModMult, *besselModIndex;
+
+    QSlider *harmonicSliders[16];
+    QComboBox *velociType;
+    QDoubleSpinBox *noiseRes;
+    QTextEdit *xpfInput;
 };
 #endif
