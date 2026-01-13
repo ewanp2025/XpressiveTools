@@ -5,6 +5,7 @@ A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive
 The suite is divided into several tabs each targeting a specific era or style of sound design.
 
 **Synthesis & Sequencing**
+
 SID Architect: A multi-segment sequencer for creating complex instrument chains with custom envelopes, frequency offsets, and automated waveforms (Triangle, Square, Saw, PWM).
 
 Bessel FM: An advanced Frequency Modulation laboratory featuring a library of 40 classic 80s presets (DX7 Electric Piano, LatelyBass, etc.).
