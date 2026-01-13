@@ -81,6 +81,9 @@ private slots:
     void generateVelocilogic();
     void generateNoiseForge();
     void generateXPFPackager();
+    void generateLeadStack();
+    void generateRandomPatch();
+    void generateDrumArchitect();
 
 private:
     void setupUI();
@@ -127,5 +130,19 @@ private:
     QComboBox *velociType;
     QDoubleSpinBox *noiseRes;
     QTextEdit *xpfInput;
+
+    QComboBox *drumType;
+    QComboBox *drumBuildMode;
+    QSlider *drumFreqSlider;
+    QSlider *drumPunchSlider;
+    QSlider *drumDecaySlider;
+    QSlider *drumToneSlider;
+    QLabel *drumFilterWarning;
+
+    // Added missing UI elements referenced in .cpp logic
+    QDoubleSpinBox *leadUnisonCount;
+    QDoubleSpinBox *leadDetuneAmount;
+    QComboBox *leadWaveType;
+    QSlider *chaosSlider;
 };
 #endif
