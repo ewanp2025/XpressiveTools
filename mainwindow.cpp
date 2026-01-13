@@ -7,6 +7,7 @@
 #include <cmath>
 #include <algorithm>
 #include <functional>
+#include <cstdlib>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setupUI();
@@ -46,8 +47,6 @@ void WaveformDisplay::paintEvent(QPaintEvent *) {
         }
         painter.drawPolyline(poly);
         xPos += segWidth;
-        painter.setPen(QColor(150, 150, 150, 80));
-        painter.drawLine(xPos, 0, xPos, h);
     }
 }
 
@@ -91,24 +90,21 @@ void MainWindow::setupUI() {
     mainHLayout->addLayout(rightLayout, 3);
     rightLayout->addWidget(modeTabs);
 
-    // 1. SID ARCHITECT - RESTORED LEGEND
-    QWidget *sidTab = new QWidget();
-    auto *sidLayout = new QVBoxLayout(sidTab);
+    // 1. SID ARCHITECT
+    QWidget *sidTab = new QWidget(); auto *sidLayout = new QVBoxLayout(sidTab);
     auto *sidOptGrid = new QGridLayout();
     buildModeSid = new QComboBox(); buildModeSid->addItems({"Modern", "Legacy"});
     sidOptGrid->addWidget(new QLabel("Build Mode:"), 0, 0); sidOptGrid->addWidget(buildModeSid, 0, 1);
     sidLayout->addLayout(sidOptGrid);
     waveVisualizer = new WaveformDisplay(); sidLayout->addWidget(waveVisualizer);
-
-    auto *legend = new QLabel("LEGEND: [ Wave Type ] [ Duration(s) ] [ Freq Offset ] [ Decay ]");
-    legend->setStyleSheet("font-weight: bold; background: #eee; padding: 5px; border: 1px solid #ccc;");
+    auto *legend = new QLabel("LEGEND: [Wave] [Dur(s)] [Freq Off] [Decay]");
+    legend->setStyleSheet("font-weight: bold; background: #eee; padding: 5px;");
     sidLayout->addWidget(legend);
-
     auto *scroll = new QScrollArea(); auto *scrollW = new QWidget();
     sidSegmentsLayout = new QVBoxLayout(scrollW); scroll->setWidget(scrollW); scroll->setWidgetResizable(true);
     sidLayout->addWidget(scroll);
     auto *sidBtns = new QHBoxLayout();
-    auto *btnAdd = new QPushButton("Add Segment (+)");
+    auto *btnAdd = new QPushButton("Add (+)");
     auto *btnClear = new QPushButton("Clear All");
     auto *btnSaveSid = new QPushButton("Export SID Chain");
     sidBtns->addWidget(btnAdd); sidBtns->addWidget(btnClear); sidBtns->addWidget(btnSaveSid);
@@ -116,12 +112,10 @@ void MainWindow::setupUI() {
     modeTabs->addTab(sidTab, "SID Architect");
 
     // 2. PCM SAMPLER
-    QWidget *pcmTab = new QWidget();
-    auto *pcmLayout = new QVBoxLayout(pcmTab);
-    auto *btnLoad = new QPushButton("1. Load WAV");
-    btnSave = new QPushButton("2. Generate String");
-    btnCopy = new QPushButton("3. Copy Clipboard");
-    btnSave->setEnabled(false); btnCopy->setEnabled(false);
+    QWidget *pcmTab = new QWidget(); auto *pcmLayout = new QVBoxLayout(pcmTab);
+    auto *btnLoad = new QPushButton("Load WAV");
+    btnSave = new QPushButton("Generate String");
+    btnCopy = new QPushButton("Copy Clipboard");
     pcmLayout->addWidget(btnLoad); pcmLayout->addWidget(btnSave); pcmLayout->addWidget(btnCopy);
     auto *pcmGrid = new QGridLayout();
     buildModeCombo = new QComboBox(); buildModeCombo->addItems({"Modern", "Legacy"});
@@ -129,80 +123,145 @@ void MainWindow::setupUI() {
     maxDurSpin = new QDoubleSpinBox(); maxDurSpin->setRange(0.01, 600.0); maxDurSpin->setValue(2.0);
     normalizeCheck = new QCheckBox("Normalize 4-bit"); normalizeCheck->setChecked(true);
     pcmGrid->addWidget(new QLabel("Build Mode:"), 0, 0); pcmGrid->addWidget(buildModeCombo, 0, 1);
-    pcmGrid->addWidget(new QLabel("Sample Rate:"), 1, 0); pcmGrid->addWidget(sampleRateCombo, 1, 1);
-    pcmGrid->addWidget(new QLabel("Max Dur(s):"), 2, 0); pcmGrid->addWidget(maxDurSpin, 2, 1);
+    pcmGrid->addWidget(new QLabel("Rate:"), 1, 0); pcmGrid->addWidget(sampleRateCombo, 1, 1);
+    pcmGrid->addWidget(new QLabel("Max(s):"), 2, 0); pcmGrid->addWidget(maxDurSpin, 2, 1);
     pcmLayout->addLayout(pcmGrid); pcmLayout->addWidget(normalizeCheck);
     modeTabs->addTab(pcmTab, "PCM Sampler");
 
     // 3. CONSOLE LAB
-    QWidget *consoleTab = new QWidget();
-    auto *consoleLayout = new QVBoxLayout(consoleTab);
-    auto *conForm = new QFormLayout();
+    QWidget *consoleTab = new QWidget(); auto *consoleLayout = new QFormLayout(consoleTab);
     buildModeConsole = new QComboBox(); buildModeConsole->addItems({"Modern", "Legacy"});
-    consoleWaveType = new QComboBox(); consoleWaveType->addItems({"NES Triangle", "GameBoy Pulse", "4-Bit Saw"});
-    consoleSteps = new QDoubleSpinBox(); consoleSteps->setRange(2, 64); consoleSteps->setValue(16);
-    conForm->addRow("Build Mode:", buildModeConsole); conForm->addRow("Wave Type:", consoleWaveType); conForm->addRow("Steps:", consoleSteps);
-    consoleLayout->addLayout(conForm);
+    consoleWaveType = new QComboBox(); consoleWaveType->addItems({"NES Triangle", "4-Bit Saw"});
+    consoleSteps = new QDoubleSpinBox(); consoleSteps->setValue(16);
+    consoleLayout->addRow("Build Mode:", buildModeConsole);
+    consoleLayout->addRow("Type:", consoleWaveType);
+    consoleLayout->addRow("Steps:", consoleSteps);
     auto *btnGenConsole = new QPushButton("Generate Console String");
-    consoleLayout->addWidget(btnGenConsole);
+    consoleLayout->addRow(btnGenConsole);
     modeTabs->addTab(consoleTab, "Console Lab");
 
     // 4. SFX MACRO
-    QWidget *sfxTab = new QWidget();
-    auto *sfxLayout = new QVBoxLayout(sfxTab);
-    auto *sfxForm = new QFormLayout();
+    QWidget *sfxTab = new QWidget(); auto *sfxLayout = new QFormLayout(sfxTab);
     buildModeSFX = new QComboBox(); buildModeSFX->addItems({"Modern", "Legacy"});
     sfxStartFreq = new QDoubleSpinBox(); sfxStartFreq->setRange(20, 20000); sfxStartFreq->setValue(880);
     sfxEndFreq = new QDoubleSpinBox(); sfxEndFreq->setRange(20, 20000); sfxEndFreq->setValue(110);
     sfxDur = new QDoubleSpinBox(); sfxDur->setValue(0.2);
-    sfxWave = new QComboBox(); sfxWave->addItems({"trianglew", "squarew", "saww", "randv"});
-    sfxForm->addRow("Build Mode:", buildModeSFX); sfxForm->addRow("Wave:", sfxWave); sfxForm->addRow("Start (Hz):", sfxStartFreq); sfxForm->addRow("End (Hz):", sfxEndFreq); sfxForm->addRow("Dur (s):", sfxDur);
-    sfxLayout->addLayout(sfxForm);
+    sfxLayout->addRow("Build Mode:", buildModeSFX);
+    sfxLayout->addRow("Start (Hz):", sfxStartFreq);
+    sfxLayout->addRow("End (Hz):", sfxEndFreq);
+    sfxLayout->addRow("Dur (s):", sfxDur);
     auto *btnGenSFX = new QPushButton("Generate SFX String");
-    sfxLayout->addWidget(btnGenSFX);
+    sfxLayout->addRow(btnGenSFX);
     modeTabs->addTab(sfxTab, "SFX Macro");
 
     // 5. ARP ANIMATOR
-    QWidget *arpTab = new QWidget();
-    auto *arpLayout = new QVBoxLayout(arpTab);
-    auto *arpForm = new QFormLayout();
+    QWidget *arpTab = new QWidget(); auto *arpLayout = new QFormLayout(arpTab);
     buildModeArp = new QComboBox(); buildModeArp->addItems({"Modern", "Legacy"});
-    arpSpeed = new QDoubleSpinBox(); arpSpeed->setRange(1, 100); arpSpeed->setValue(16);
-    arpInterval1 = new QComboBox(); arpInterval1->addItems({"None", "Major 3rd", "Minor 3rd", "Perfect 4th", "Perfect 5th"});
-    arpInterval2 = new QComboBox(); arpInterval2->addItems({"None", "Major 3rd", "Minor 3rd", "Perfect 4th", "Perfect 5th", "Octave"});
-    arpForm->addRow("Build Mode:", buildModeArp); arpForm->addRow("Speed (t/N):", arpSpeed); arpForm->addRow("Step 2:", arpInterval1); arpForm->addRow("Step 3:", arpInterval2);
-    arpLayout->addLayout(arpForm);
+    arpSpeed = new QDoubleSpinBox(); arpSpeed->setValue(16);
+    arpInterval1 = new QComboBox(); arpInterval1->addItems({"None", "Major 3rd", "Minor 3rd"});
+    arpInterval2 = new QComboBox(); arpInterval2->addItems({"None", "Perfect 5th", "Octave"});
+    arpLayout->addRow("Build Mode:", buildModeArp);
+    arpLayout->addRow("Speed:", arpSpeed);
+    arpLayout->addRow("Step 2:", arpInterval1);
+    arpLayout->addRow("Step 3:", arpInterval2);
     auto *btnGenArp = new QPushButton("Generate Arp String");
-    arpLayout->addWidget(btnGenArp);
+    arpLayout->addRow(btnGenArp);
     modeTabs->addTab(arpTab, "Arp Animator");
 
     // 6. WAVETABLE FORGE
-    QWidget *wtTab = new QWidget();
-    auto *wtLayout = new QVBoxLayout(wtTab);
-    auto *wtForm = new QFormLayout();
+    QWidget *wtTab = new QWidget(); auto *wtLayout = new QFormLayout(wtTab);
     buildModeWavetable = new QComboBox(); buildModeWavetable->addItems({"Modern", "Legacy"});
     wtBase = new QComboBox(); wtBase->addItems({"sinew", "saww", "squarew"});
-    wtHarmonics = new QDoubleSpinBox(); wtHarmonics->setRange(1, 12); wtHarmonics->setValue(4);
-    wtForm->addRow("Build Mode:", buildModeWavetable); wtForm->addRow("Base Type:", wtBase); wtForm->addRow("Harmonics:", wtHarmonics);
-    wtLayout->addLayout(wtForm);
+    wtHarmonics = new QDoubleSpinBox(); wtHarmonics->setValue(4);
+    wtLayout->addRow("Build Mode:", buildModeWavetable);
+    wtLayout->addRow("Base:", wtBase);
+    wtLayout->addRow("Harmonics:", wtHarmonics);
     auto *btnGenWT = new QPushButton("Generate Wavetable");
-    wtLayout->addWidget(btnGenWT);
+    wtLayout->addRow(btnGenWT);
     modeTabs->addTab(wtTab, "Wavetable Forge");
 
-    // 7. FILTER FORGE
-    QWidget *filterTab = new QWidget();
-    auto *filterLayout = new QVBoxLayout(filterTab);
-    auto *expNote = new QLabel("NOTE: Filter Forge is EXPERIMENTAL.");
-    expNote->setStyleSheet("color: red; font-style: italic;");
-    filterLayout->addWidget(expNote);
-    auto *fForm = new QFormLayout();
+    // 7. BESSEL FM
+    QWidget *besselTab = new QWidget(); auto *besselLayout = new QVBoxLayout(besselTab);
+    auto *bForm = new QFormLayout();
+    buildModeBessel = new QComboBox(); buildModeBessel->addItems({"Modern", "Legacy"});
+    besselPresetCombo = new QComboBox();
+    besselPresetCombo->addItems({
+        "-- CATEGORY: KEYS --", "01. DX7 Electric Piano", "02. Glass Tines", "03. Dig-it-al Harp", "04. 80s FM Organ", "05. Toy Piano", "06. Celestial Keys", "07. Polished Brass", "08. Log Drum Keys",
+        "-- CATEGORY: BASS --", "09. LatelyBass (TX81Z)", "10. Solid Bass", "11. Rubber Bass", "12. Wood Bass", "13. Slap FM Bass", "14. Sub-Thump", "15. Metallic Drone", "16. Acid FM",
+        "-- CATEGORY: BELLS/PERC --", "17. Tubular Bells", "18. Gamelan", "19. Marimba FM", "20. Cowbell (808 style)", "21. FM Snare Crack", "22. Metallic Tom", "23. Wind Chimes", "24. Ice Bell", "25. Church Bell",
+        "-- CATEGORY: PADS/LEAD --", "26. Arctic Pad", "27. FM Flute", "28. Oboe-ish", "29. Sync-Lead FM", "30. Space Reed", "31. Harmonic Swell", "32. Thin Pulse Lead", "33. Bottle Blow",
+        "-- CATEGORY: FX/NOISE --", "34. Laser Harp", "35. Sci-Fi Computer", "36. Industrial Clang", "37. Digital Rain", "38. Alarm Pulse", "39. Glitch Burst", "40. 8-Bit Explosion"
+    });
+    besselCarrierWave = new QComboBox(); besselCarrierWave->addItems({"sinew", "saww", "squarew", "trianglew"});
+    besselModWave = new QComboBox(); besselModWave->addItems({"sinew", "saww", "squarew", "trianglew"});
+    besselCarrierMult = new QDoubleSpinBox(); besselCarrierMult->setRange(0, 64); besselCarrierMult->setValue(1.0);
+    besselModMult = new QDoubleSpinBox(); besselModMult->setRange(0, 64); besselModMult->setValue(2.0);
+    besselModIndex = new QDoubleSpinBox(); besselModIndex->setRange(0, 100); besselModIndex->setValue(2.0);
+    bForm->addRow("Build Mode:", buildModeBessel);
+    bForm->addRow("80s LIBRARY:", besselPresetCombo);
+    bForm->addRow("Carrier Wave:", besselCarrierWave);
+    bForm->addRow("Carrier Mult (C):", besselCarrierMult);
+    bForm->addRow("Modulator Wave:", besselModWave);
+    bForm->addRow("Modulator Mult (M):", besselModMult);
+    bForm->addRow("Mod Index (I):", besselModIndex);
+    besselLayout->addLayout(bForm);
+    auto *btnBes = new QPushButton("Generate Bessel FM");
+    besselLayout->addWidget(btnBes);
+    modeTabs->addTab(besselTab, "Bessel FM");
+
+    // 8. HARMONIC LAB
+    QWidget *harTab = new QWidget(); auto *harLayout = new QVBoxLayout(harTab);
+    buildModeHarmonic = new QComboBox(); buildModeHarmonic->addItems({"Modern", "Legacy"});
+    harLayout->addWidget(new QLabel("Build Mode:")); harLayout->addWidget(buildModeHarmonic);
+    auto *harGrid = new QGridLayout();
+    for(int i=0; i<16; ++i) {
+        harmonicSliders[i] = new QSlider(Qt::Vertical); harmonicSliders[i]->setRange(0, 100);
+        harGrid->addWidget(new QLabel(QString("H%1").arg(i+1)), 0, i);
+        harGrid->addWidget(harmonicSliders[i], 1, i);
+    }
+    harLayout->addLayout(harGrid);
+    auto *btnHar = new QPushButton("Generate Harmonic Wave");
+    harLayout->addWidget(btnHar);
+    modeTabs->addTab(harTab, "Harmonic Lab");
+
+    // 9. VELOCILOGIC
+    QWidget *velociTab = new QWidget(); auto *velociLayout = new QFormLayout(velociTab);
+    buildModeVeloci = new QComboBox(); buildModeVeloci->addItems({"Modern", "Legacy"});
+    velociType = new QComboBox(); velociType->addItems({"Hard/Soft Layer", "Additive Brightness"});
+    velociLayout->addRow("Build Mode:", buildModeVeloci);
+    velociLayout->addRow("Type:", velociType);
+    auto *btnVeloci = new QPushButton("Generate Velocity String");
+    velociLayout->addRow(btnVeloci);
+    modeTabs->addTab(velociTab, "Velocilogic");
+
+    // 10. NOISE FORGE
+    QWidget *noiseTab = new QWidget(); auto *noiseLayout = new QFormLayout(noiseTab);
+    buildModeNoise = new QComboBox(); buildModeNoise->addItems({"Modern", "Legacy"});
+    noiseRes = new QDoubleSpinBox(); noiseRes->setRange(100, 44100); noiseRes->setValue(8000);
+    noiseLayout->addRow("Build Mode:", buildModeNoise);
+    noiseLayout->addRow("Sample-Rate:", noiseRes);
+    auto *btnNoise = new QPushButton("Generate Noise Forge");
+    noiseLayout->addRow(btnNoise);
+    modeTabs->addTab(noiseTab, "Noise Forge");
+
+    // 11. XPF PACKAGER
+    QWidget *xpfTab = new QWidget(); auto *xpfLayout = new QVBoxLayout(xpfTab);
+    xpfLayout->addWidget(new QLabel("Paste Single-Line Xpressive Code:"));
+    xpfInput = new QTextEdit(); xpfLayout->addWidget(xpfInput);
+    auto *btnXPF = new QPushButton("Package as XPF");
+    xpfLayout->addWidget(btnXPF);
+    modeTabs->addTab(xpfTab, "XPF Packager");
+
+    // 12. FILTER FORGE
+    QWidget *filterTab = new QWidget(); auto *filterLayout = new QFormLayout(filterTab);
     buildModeFilter = new QComboBox(); buildModeFilter->addItems({"Modern", "Legacy"});
     filterType = new QComboBox(); filterType->addItems({"Low-Pass", "High-Pass"});
     filterTaps = new QDoubleSpinBox(); filterTaps->setRange(2, 8); filterTaps->setValue(4);
-    fForm->addRow("Build Mode:", buildModeFilter); fForm->addRow("Type:", filterType); fForm->addRow("Taps:", filterTaps);
-    filterLayout->addLayout(fForm);
-    auto *btnGenFilter = new QPushButton("Generate Filter String");
-    filterLayout->addWidget(btnGenFilter);
+    filterLayout->addRow("Build Mode:", buildModeFilter);
+    filterLayout->addRow("Type:", filterType);
+    filterLayout->addRow("Taps:", filterTaps);
+    auto *btnFil = new QPushButton("Generate Filter");
+    filterLayout->addRow(btnFil);
     modeTabs->addTab(filterTab, "Filter Forge");
 
     statusBox = new QTextEdit(); statusBox->setMaximumHeight(100);
@@ -210,6 +269,7 @@ void MainWindow::setupUI() {
     setCentralWidget(centralWidget);
     resize(1200, 850);
 
+    // Connections
     connect(btnLoad, &QPushButton::clicked, this, &MainWindow::loadWav);
     connect(btnSave, &QPushButton::clicked, this, &MainWindow::saveExpr);
     connect(btnCopy, &QPushButton::clicked, this, &MainWindow::copyToClipboard);
@@ -218,69 +278,99 @@ void MainWindow::setupUI() {
     connect(btnSaveSid, &QPushButton::clicked, this, &MainWindow::saveSidExpr);
     connect(btnGenConsole, &QPushButton::clicked, this, &MainWindow::generateConsoleWave);
     connect(btnGenSFX, &QPushButton::clicked, this, &MainWindow::generateSFXMacro);
-    connect(btnGenFilter, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
     connect(btnGenArp, &QPushButton::clicked, this, &MainWindow::generateArpAnimator);
     connect(btnGenWT, &QPushButton::clicked, this, &MainWindow::generateWavetableForge);
+    connect(btnBes, &QPushButton::clicked, this, &MainWindow::generateBesselFM);
+    connect(besselPresetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::loadBesselPreset);
+    connect(btnHar, &QPushButton::clicked, this, &MainWindow::generateHarmonicLab);
+    connect(btnVeloci, &QPushButton::clicked, this, &MainWindow::generateVelocilogic);
+    connect(btnNoise, &QPushButton::clicked, this, &MainWindow::generateNoiseForge);
+    connect(btnXPF, &QPushButton::clicked, this, &MainWindow::generateXPFPackager);
+    connect(btnFil, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
 }
 
-void MainWindow::generateArpAnimator() {
-    double spd = arpSpeed->value();
-    QStringList ratios = {"1.0"};
-    auto mapRatio = [](const QString& intv) {
-        if (intv == "Major 3rd") return "1.2599";
-        if (intv == "Minor 3rd") return "1.1892";
-        if (intv == "Perfect 4th") return "1.3348";
-        if (intv == "Perfect 5th") return "1.4983";
-        if (intv == "Octave") return "2.0";
-        return "1.0";
+void MainWindow::loadBesselPreset(int idx) {
+    if (idx == 0 || idx == 9 || idx == 18 || idx == 28) return;
+    auto setFM = [&](QString cw, QString mw, double cm, double mm, double i) {
+        besselCarrierWave->setCurrentText(cw); besselModWave->setCurrentText(mw);
+        besselCarrierMult->setValue(cm); besselModMult->setValue(mm); besselModIndex->setValue(i);
     };
-    if (arpInterval1->currentText() != "None") ratios << mapRatio(arpInterval1->currentText());
-    if (arpInterval2->currentText() != "None") ratios << mapRatio(arpInterval2->currentText());
-
-    bool modern = buildModeArp->currentIndex() == 0;
-    QString logic;
-    if (modern) {
-        logic = QString("(mod(t * %1, %2) < 1 ? %3 : (mod(t * %1, %2) < 2 ? %4 : %5))")
-        .arg(spd).arg(ratios.size()).arg(ratios[0]).arg(ratios.size() > 1 ? ratios[1] : ratios[0]).arg(ratios.size() > 2 ? ratios[2] : ratios[0]);
-    } else {
-        logic = QString("(mod(t*%1,%2)<1)*%3 + (mod(t*%1,%2)>=1&mod(t*%1,%2)<2)*%4").arg(spd).arg(ratios.size()).arg(ratios[0]).arg(ratios.size() > 1 ? ratios[1] : ratios[0]);
+    switch(idx) {
+    case 1:  setFM("sinew", "sinew", 1.0, 14.0, 1.2); break;
+    case 2:  setFM("sinew", "sinew", 1.0, 3.5, 2.5); break;
+    case 3:  setFM("trianglew", "sinew", 1.0, 8.0, 0.8); break;
+    case 4:  setFM("sinew", "sinew", 2.0, 1.0, 0.5); break;
+    case 5:  setFM("sinew", "sinew", 1.0, 19.0, 3.0); break;
+    case 10: setFM("sinew", "saww", 1.0, 1.0, 3.5); break;
+    case 11: setFM("sinew", "sinew", 1.0, 1.0, 1.8); break;
+    case 19: setFM("sinew", "sinew", 1.0, 3.5, 2.0); break;
+    case 20: setFM("sinew", "sinew", 1.0, 7.11, 4.0); break;
+    case 37: setFM("sinew", "saww", 1.0, 8.0, 6.0); break;
+    case 40: setFM("sinew", "saww", 8.0, 0.1, 50.0); break;
+    default: setFM("sinew", "sinew", 1.0, 2.0, 2.0); break;
     }
-    statusBox->setText(QString("sinew(integrate(f * %1))").arg(logic));
-    btnCopy->setEnabled(true);
-}
-
-void MainWindow::generateWavetableForge() {
-    int count = (int)wtHarmonics->value();
-    QString type = wtBase->currentText();
-    QStringList parts;
-    for (int i = 1; i <= count; ++i) parts << QString("(1/%1) * %2(t * %1)").arg(i).arg(type);
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(parts.join(" + ")));
-    btnCopy->setEnabled(true);
 }
 
 void MainWindow::generateConsoleWave() {
-    double steps = consoleSteps->value();
-    QString base = consoleWaveType->currentIndex() == 0 ? "trianglew(integrate(f))" : (consoleWaveType->currentIndex() == 1 ? "squarew(integrate(f))" : "saww(integrate(f))");
-    statusBox->setText(QString("floor(%1 * %2) / %2").arg(base).arg(steps));
-    btnCopy->setEnabled(true);
+    double s = consoleSteps->value();
+    QString base = (consoleWaveType->currentIndex() == 0) ? "trianglew(integrate(f))" : "saww(integrate(f))";
+    statusBox->setText(QString("floor(%1 * %2) / %2").arg(base).arg(s));
 }
 
 void MainWindow::generateSFXMacro() {
     double f1 = sfxStartFreq->value(), f2 = sfxEndFreq->value(), d = sfxDur->value();
-    QString wave = sfxWave->currentText();
-    QString freq = QString("%1 * exp(-t * %2)").arg(f1).arg(std::log(f1/f2)/d);
-    QString final = buildModeSFX->currentIndex() == 0 ? QString("(t < %1 ? %2(integrate(%3)) : 0)").arg(d).arg(wave, freq) : QString("(t < %1) * %2(integrate(%3))").arg(d).arg(wave, freq);
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(final));
-    btnCopy->setEnabled(true);
+    QString audio = QString("sinew(integrate(%1 * exp(-t * %2)))").arg(f1).arg(std::log(f1/f2)/d);
+    statusBox->setText((buildModeSFX->currentIndex() == 0) ? QString("(t < %1 ? %2 : 0)").arg(d).arg(audio) : QString("(t < %1) * %2").arg(d).arg(audio));
+}
+
+void MainWindow::generateArpAnimator() {
+    double spd = arpSpeed->value();
+    QString logic = (buildModeArp->currentIndex() == 0) ? QString("(mod(t*%1,2)<1 ? 1 : 1.5)").arg(spd) : QString("(mod(t*%1,2)<1)*1 + (mod(t*%1,2)>=1)*1.5").arg(spd);
+    statusBox->setText(QString("sinew(integrate(f * %1))").arg(logic));
+}
+
+void MainWindow::generateWavetableForge() {
+    int h = (int)wtHarmonics->value(); QString type = wtBase->currentText();
+    QStringList p; for(int i=1; i<=h; ++i) p << QString("(1/%1)*%2(t*%1)").arg(i).arg(type);
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(p.join("+")));
+}
+
+void MainWindow::generateBesselFM() {
+    QString cw = besselCarrierWave->currentText();
+    QString mw = besselModWave->currentText();
+    double cm = besselCarrierMult->value();
+    double mm = besselModMult->value();
+    double I = besselModIndex->value();
+    QString freqExpr = QString("f*%1 + (%2(integrate(f*%3)) * %4 * f*%3)").arg(cm).arg(mw).arg(mm).arg(I);
+    statusBox->setText(QString("clamp(-1, %1(integrate(%2)), 1)").arg(cw, freqExpr));
+}
+
+void MainWindow::generateHarmonicLab() {
+    QStringList t; for(int i=0; i<16; ++i) {
+        double v = harmonicSliders[i]->value()/100.0;
+        if(v > 0) t << QString("%1*cos(%2*2*pi*t)").arg(v).arg(i+1);
+    }
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(t.join("+")));
+}
+
+void MainWindow::generateVelocilogic() {
+    statusBox->setText((buildModeVeloci->currentIndex() == 0) ? "(v < 0.5 ? trianglew(integrate(f)) : saww(integrate(f)))" : "(v < 0.5)*trianglew(integrate(f)) + (v >= 0.5)*saww(integrate(f))");
+}
+
+void MainWindow::generateNoiseForge() {
+    statusBox->setText(QString("randv(floor(t * %1))").arg(noiseRes->value()));
+}
+
+void MainWindow::generateXPFPackager() {
+    QString c = xpfInput->toPlainText().replace("\"", "&quot;").replace("<", "&lt;");
+    statusBox->setText(QString("<?xml version=\"1.0\"?>\n<xpressive version=\"0.1\" O1=\"%1\" />").arg(c));
 }
 
 void MainWindow::generateFilterForge() {
     int taps = (int)filterTaps->value();
-    QString filterExpr = "(W1";
-    for(int i = 1; i < taps; ++i) filterExpr += (filterType->currentIndex() == 0 ? " + " : " - ") + QString("last(%1)").arg(i);
-    // FIXED: Corrected syntax error by adding missing closing quotes and parentheses
-    statusBox->setText(QString("clamp(-1, %1 / %2, 1)").arg(filterExpr).arg(taps));
-    btnCopy->setEnabled(true);
+    QString expr = "(W1";
+    for(int i=1; i<taps; ++i) expr += (filterType->currentIndex()==0 ? "+" : "-") + QString("last(%1)").arg(i);
+    statusBox->setText(QString("clamp(-1, %1 / %2, 1)").arg(expr).arg(taps));
 }
 
 void MainWindow::saveSidExpr() {
@@ -326,7 +416,7 @@ void MainWindow::loadWav() {
         file.seek(24); file.read(reinterpret_cast<char*>(&fileFs), 4);
         file.seek(44); QByteArray raw = file.readAll();
         originalData.clear(); const int16_t* samples = reinterpret_cast<const int16_t*>(raw.data());
-        for(int i=0; i < raw.size()/2; ++i) originalData.push_back(samples[i] / 32768.0);
+        for(int i=0; i < (int)raw.size()/2; ++i) originalData.push_back(samples[i] / 32768.0);
         maxDurSpin->setValue((double)originalData.size() / fileFs);
         btnSave->setEnabled(true);
     }
@@ -367,7 +457,9 @@ QString MainWindow::generateLegacyPCM(const std::vector<double>& q, double sr) {
         blocks.append(seg);
     }
     QString expr = blocks.last();
-    for (int k = blocks.size() - 2; k >= 0; --k) expr = QString("(t<%1?%2:%3)").arg(QString::number((double)((k + 1) * blockSize) / sr, 'f', 6), blocks[k], expr);
+    for (int k = blocks.size() - 2; k >= 0; --k) {
+        expr = QString("(t<%1?%2:%3)").arg(QString::number((double)((k + 1) * blockSize) / sr, 'f', 6), blocks[k], expr);
+    }
     return expr;
 }
 
@@ -380,11 +472,11 @@ QString MainWindow::getSegmentWaveform(const SidSegment& s, const QString& fBase
     return QString("%1(integrate(%2))").arg(wave, fBase);
 }
 
-QString MainWindow::getModulatorFormula(int i) { return QString("(0.5 + %1(t * %2) * %3)").arg(mods[i].shape->currentText()).arg(mods[i].rate->value()).arg(mods[i].depth->value()); }
+QString MainWindow::getModulatorFormula(int index) { return QString("(0.5 + %1(t * %2) * %3)").arg(mods[index].shape->currentText()).arg(mods[index].rate->value()).arg(mods[index].depth->value()); }
 
-QString MainWindow::getArpFormula(int i) {
-    QString wave = arps[i].wave->currentText(), speed = arps[i].sync->isChecked() ? QString("(tempo/60) * %1").arg(arps[i].multiplier->currentText().remove('x')) : QString::number(arps[i].speed->value());
-    QString r1 = (arps[i].chord->currentText() == "Minor") ? "1.1892" : "1.2599", r2 = (arps[i].chord->currentText() == "Dim") ? "1.4142" : "1.4983";
+QString MainWindow::getArpFormula(int index) {
+    QString wave = arps[index].wave->currentText(), speed = arps[index].sync->isChecked() ? QString("(tempo/60) * %1").arg(arps[index].multiplier->currentText().remove('x')) : QString::number(arps[index].speed->value());
+    QString r1 = (arps[index].chord->currentText() == "Minor") ? "1.1892" : "1.2599", r2 = (arps[index].chord->currentText() == "Dim") ? "1.4142" : "1.4983";
     return QString("%1(integrate(f * (mod(t * %2, 3) < 1 ? 1 : (mod(t * %2, 3) < 2 ? %3 : %4))))").arg(wave, speed, r1, r2);
 }
 
