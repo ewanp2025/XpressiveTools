@@ -1,6 +1,6 @@
 **Xpressive Sound Design Suite**
 
-A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive. This suite is designed to generate complex mathematical audio expressions for the Xpressive audio engine (both Legacy and Modern parsing), allowing users to design everything from classic 8-bit SID chips to modern FM synthesis and percussive transients.
+A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive. This suite is designed to generate complex mathematical audio expressions for the Xpressive audio engine (both Legacy and Modern parsing), allowing users to design everything from classic 8-bit SID chip produced sounds to modern FM synthesis and percussive transients.
 
 **Key Features**
 
