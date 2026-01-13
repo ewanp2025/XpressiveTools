@@ -1,36 +1,41 @@
-name: Windows Minimal Portable Build
+name: Build Qt6 Windows Project
 
 on:
   push:
-    branches:
-      - master # Triggers the workflow on push to the master branch (adjust as needed)
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build_windows:
-    runs-on: windows-latest # Specifies the Windows virtual machine runner
+  build:
+    runs-on: windows-latest  # Change to Windows
 
     steps:
-      - uses: actions/checkout@v4 # Checks-out your repository under $GITHUB_WORKSPACE
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Setup MSVC development environment
-        uses: ilammy/msvc-dev-cmd@v1 # Helper action to configure the Visual C++ environment
+    - name: Install Qt6
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.6.1'
+        host: 'windows'       # Target Windows
+        target: 'desktop'
+        arch: 'win64_msvc2019_64' # Use the standard Windows architecture
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10' # Python is needed for aqtinstall
+    - name: Configure CMake
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 
-      - name: Install Qt6
-        run: |
-          pip install aqtinstall
-          python -m aqt install-qt --output ${{ github.workspace }}/Qt windows desktop 6.6.1 win64_msvc2019_64
-          echo "${{ github.workspace }}/Qt/6.6.1/msvc2019_64/bin/" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: cmd # Use cmd shell for Windows-specific commands
+    - name: Build Project
+      run: cmake --build build --config Release
 
-      - name: Configure and Build
-        shell: cmd
-        run: |
-          # Adjust 'YourProject.pro' and 'src/' to match your project structure
-          cd src/
-          qmake6 YourProject.pro -spec win32-msvc
-          nmake # Use nmake for building with MSVC, or 'cmake --build .' if using CMake
+    - name: Deployment (windeployqt)
+      shell: pwsh
+      run: |
+        # This step gathers all the .dll files your app needs to run
+        windeployqt build/Release/your_project_name.exe 
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: build/Release/ # This will include the .exe and all required .dlls
