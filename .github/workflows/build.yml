@@ -1,43 +1,36 @@
 name: Windows Minimal Portable Build
-on: [push, pull_request]
+
+on:
+  push:
+    branches:
+      - master # Triggers the workflow on push to the master branch (adjust as needed)
 
 jobs:
-  build-windows:
-    name: Build Minimal Windows EXE
-    runs-on: windows-latest
+  build_windows:
+    runs-on: windows-latest # Specifies the Windows virtual machine runner
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # Checks-out your repository under $GITHUB_WORKSPACE
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+      - name: Setup MSVC development environment
+        uses: ilammy/msvc-dev-cmd@v1 # Helper action to configure the Visual C++ environment
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          version: '6.6.0'
-          target: 'desktop'
-          arch: 'win64_mingw'
+          python-version: '3.10' # Python is needed for aqtinstall
 
-      - name: Build Application
-        shell: bash
+      - name: Install Qt6
         run: |
-          mkdir build
-          cd build
-          # G-MinGW Makefiles + Release build ensures the 189kb size
-          cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
-          mingw32-make
+          pip install aqtinstall
+          python -m aqt install-qt --output ${{ github.workspace }}/Qt windows desktop 6.6.1 win64_msvc2019_64
+          echo "${{ github.workspace }}/Qt/6.6.1/msvc2019_64/bin/" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: cmd # Use cmd shell for Windows-specific commands
 
-      - name: Surgical Windows Deployment
-        shell: bash
+      - name: Configure and Build
+        shell: cmd
         run: |
-          mkdir dist
-          cp build/XpressiveTools.exe dist/
-          
-          # windeployqt collects matching DLLs
-          # --no-opengl-sw and --no-translations remove ~40MB of bloat
-          windeployqt --release --no-translations --no-opengl-sw --compiler-runtime dist/XpressiveTools.exe
-
-      - name: Upload Clean Distribution
-        uses: actions/upload-artifact@v4
-        with:
-          name: XpressiveTools-Portable-Windows
-          path: dist/
+          # Adjust 'YourProject.pro' and 'src/' to match your project structure
+          cd src/
+          qmake6 YourProject.pro -spec win32-msvc
+          nmake # Use nmake for building with MSVC, or 'cmake --build .' if using CMake
