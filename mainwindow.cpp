@@ -81,6 +81,13 @@ void MainWindow::setupUI() {
         aForm->addRow("Wave:", arps[i].wave); aForm->addRow("Chord:", arps[i].chord); aForm->addRow("Speed:", arps[i].speed); aForm->addRow(arps[i].sync); aForm->addRow("Mult:", arps[i].multiplier);
         sideLayout->addWidget(aGroup);
     }
+
+    // Initialize missing elements referenced in generators
+    leadUnisonCount = new QDoubleSpinBox(); leadUnisonCount->setRange(1, 8); leadUnisonCount->setValue(1);
+    leadDetuneAmount = new QDoubleSpinBox(); leadDetuneAmount->setRange(0, 0.1); leadDetuneAmount->setSingleStep(0.001);
+    leadWaveType = new QComboBox(); leadWaveType->addItems({"saww", "squarew", "sinew"});
+    chaosSlider = new QSlider(Qt::Horizontal); chaosSlider->setRange(0, 100);
+
     sideScroll->setWidget(sideContent); sideScroll->setWidgetResizable(true);
     auto *containerLayout = new QVBoxLayout(sidebarGroup); containerLayout->addWidget(sideScroll);
     mainHLayout->addWidget(sidebarGroup, 1);
@@ -224,6 +231,44 @@ void MainWindow::setupUI() {
     harLayout->addWidget(btnHar);
     modeTabs->addTab(harTab, "Harmonic Lab");
 
+    // --- DRUM ARCHITECT TAB ---
+    QWidget *drumTab = new QWidget();
+    auto *drumMainLayout = new QVBoxLayout(drumTab);
+    auto *drumForm = new QFormLayout();
+
+    drumBuildMode = new QComboBox(); drumBuildMode->addItems({"Modern", "Legacy"});
+
+    drumType = new QComboBox();
+    drumType->addItems({"Kick (Bass Drum)", "Snare/Tom", "Cymbal/Hi-Hat"});
+    drumFreqSlider = new QSlider(Qt::Horizontal); drumFreqSlider->setRange(30, 150); drumFreqSlider->setValue(55);
+    drumPunchSlider = new QSlider(Qt::Horizontal); drumPunchSlider->setRange(0, 100); drumPunchSlider->setValue(70);
+    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(1, 100); drumDecaySlider->setValue(30);
+    drumToneSlider = new QSlider(Qt::Horizontal); drumToneSlider->setRange(0, 100); drumToneSlider->setValue(20);
+
+    drumFilterWarning = new QLabel("RECOMMENDED: Add External Low-Pass Filter (approx 400Hz)");
+    drumFilterWarning->setStyleSheet("color: #ff0000; font-weight: bold; padding: 5px; border: 1px solid red;");
+
+    auto *btnGenDrum = new QPushButton("Generate Drum Expression");
+
+    drumForm->addRow("Build Mode:", drumBuildMode);
+    drumForm->addRow("Drum Type:", drumType);
+    drumForm->addRow("Base Freq (Hz):", drumFreqSlider);
+    drumForm->addRow("Punch (Transient):", drumPunchSlider);
+    drumForm->addRow("Decay Length:", drumDecaySlider);
+    drumForm->addRow("Body Tone:", drumToneSlider);
+
+    drumMainLayout->addLayout(drumForm);
+    drumMainLayout->addWidget(drumFilterWarning);
+    drumMainLayout->addWidget(btnGenDrum);
+
+    modeTabs->addTab(drumTab, "Drum Architect");
+
+    connect(btnGenDrum, &QPushButton::clicked, this, &MainWindow::generateDrumArchitect);
+
+
+
+
+
     // 9. VELOCILOGIC
     QWidget *velociTab = new QWidget(); auto *velociLayout = new QFormLayout(velociTab);
     buildModeVeloci = new QComboBox(); buildModeVeloci->addItems({"Modern", "Legacy"});
@@ -264,6 +309,24 @@ void MainWindow::setupUI() {
     filterLayout->addRow(btnFil);
     modeTabs->addTab(filterTab, "Filter Forge");
 
+    // 13. LEAD STACKER
+    QWidget *leadTab = new QWidget(); auto *leadLayout = new QFormLayout(leadTab);
+    leadLayout->addRow("Unison Voices:", leadUnisonCount);
+    leadLayout->addRow("Detune Amount:", leadDetuneAmount);
+    leadLayout->addRow("Wave Type:", leadWaveType);
+    auto *btnLead = new QPushButton("Generate Lead Stack");
+    leadLayout->addRow(btnLead);
+    modeTabs->addTab(leadTab, "Lead Stacker");
+
+    // 14. RANDOMIZER
+    QWidget *randTab = new QWidget(); auto *randLayout = new QVBoxLayout(randTab);
+    randLayout->addWidget(new QLabel("Chaos Level (Randomness):"));
+    randLayout->addWidget(chaosSlider);
+    auto *btnRand = new QPushButton("GENERATE CHAOS");
+    btnRand->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 50px;");
+    randLayout->addWidget(btnRand);
+    modeTabs->addTab(randTab, "Randomizer");
+
     statusBox = new QTextEdit(); statusBox->setMaximumHeight(100);
     rightLayout->addWidget(statusBox);
     setCentralWidget(centralWidget);
@@ -287,6 +350,8 @@ void MainWindow::setupUI() {
     connect(btnNoise, &QPushButton::clicked, this, &MainWindow::generateNoiseForge);
     connect(btnXPF, &QPushButton::clicked, this, &MainWindow::generateXPFPackager);
     connect(btnFil, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
+    connect(btnLead, &QPushButton::clicked, this, &MainWindow::generateLeadStack);
+    connect(btnRand, &QPushButton::clicked, this, &MainWindow::generateRandomPatch);
 }
 
 void MainWindow::loadBesselPreset(int idx) {
@@ -336,21 +401,27 @@ void MainWindow::generateWavetableForge() {
 }
 
 void MainWindow::generateBesselFM() {
-    QString cw = besselCarrierWave->currentText();
-    QString mw = besselModWave->currentText();
-    double cm = besselCarrierMult->value();
-    double mm = besselModMult->value();
-    double I = besselModIndex->value();
-    QString freqExpr = QString("f*%1 + (%2(integrate(f*%3)) * %4 * f*%3)").arg(cm).arg(mw).arg(mm).arg(I);
-    statusBox->setText(QString("clamp(-1, %1(integrate(%2)), 1)").arg(cw, freqExpr));
+    QString fExpr = QString("f*%1 + (%2(integrate(f*%3))*%4*f*%3)").arg(besselCarrierMult->value()).arg(besselModWave->currentText()).arg(besselModMult->value()).arg(besselModIndex->value());
+    statusBox->setText(QString("clamp(-1, %1(integrate(%2)), 1)").arg(besselCarrierWave->currentText(), fExpr));
 }
 
 void MainWindow::generateHarmonicLab() {
-    QStringList t; for(int i=0; i<16; ++i) {
-        double v = harmonicSliders[i]->value()/100.0;
-        if(v > 0) t << QString("%1*cos(%2*2*pi*t)").arg(v).arg(i+1);
+    QStringList t;
+    for(int i=0; i<16; ++i) {
+        double v = harmonicSliders[i]->value() / 100.0;
+        if(v > 0) t << QString("%1 * sinew(integrate(f * %2))").arg(v).arg(i+1);
     }
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(t.join("+")));
+    statusBox->setText(t.isEmpty() ? "0" : QString("clamp(-1, %1, 1)").arg(t.join(" + ")));
+}
+
+void MainWindow::generateLeadStack() {
+    int voices = (int)leadUnisonCount->value(); double detune = leadDetuneAmount->value();
+    QStringList s;
+    for (int i = 0; i < voices; ++i) {
+        double offset = (voices == 1) ? 1.0 : 1.0 + (detune * ((double)i / (voices - 1) - 0.5) * 2.0);
+        s << QString("(1.0/%1) * %2(integrate(f * %3))").arg(voices).arg(leadWaveType->currentText()).arg(offset, 0, 'f', 4);
+    }
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(s.join(" + ")));
 }
 
 void MainWindow::generateVelocilogic() {
@@ -373,30 +444,62 @@ void MainWindow::generateFilterForge() {
     statusBox->setText(QString("clamp(-1, %1 / %2, 1)").arg(expr).arg(taps));
 }
 
+void MainWindow::generateRandomPatch() {
+    int theme = std::rand() % 3; double ch = chaosSlider->value() / 100.0;
+    if(theme == 0) statusBox->setText(QString("sinew(integrate(f*%1 + sinew(integrate(f*%2))*%3*f*%2))").arg((rand()%4)+1).arg((rand()%8)+1).arg((rand()%15)*ch+1));
+    else if(theme == 1) statusBox->setText(QString("floor(saww(integrate(f)) * %1) / %1").arg((int)(16*ch+2)));
+    else statusBox->setText("sinew(integrate(f)) + 0.5*sinew(integrate(f*2))");
+}
+
 void MainWindow::saveSidExpr() {
     if (sidSegments.empty()) return;
-    QString finalExpr = "";
+
+    QString finalExpr;
     bool isModern = (buildModeSid->currentIndex() == 0);
+
     if (isModern) {
-        std::function<QString(int, double)> buildSidTree = [&](int index, double tStart) -> QString {
-            if (index >= (int)sidSegments.size()) return "0";
-            const auto& s = sidSegments[index];
+        // We use a simple loop to build the nested ternary string from the BACK to the FRONT.
+        // This ensures the nesting is mathematically sound for the Xpressive engine.
+        QString nestedBody = "0"; // The final 'else' if time runs out
+        double totalTime = 0;
+        for (const auto& s : sidSegments) totalTime += s.duration->value();
+
+        double currentTime = totalTime;
+        // Iterate backwards to nest properly: (t < t1 ? seg1 : (t < t2 ? seg2 : 0))
+        for (int i = sidSegments.size() - 1; i >= 0; --i) {
+            const auto& s = sidSegments[i];
+            double segmentDur = s.duration->value();
+            currentTime -= segmentDur;
+
             QString fBase = (s.freqOffset->value() == 0) ? "f" : QString("(f + %1)").arg(s.freqOffset->value());
             QString waveExpr = getSegmentWaveform(s, fBase);
-            double tEnd = tStart + s.duration->value();
-            return QString("(t < %1 ? (%2 * exp(-(t - %3) * %4)) : %5)").arg(QString::number(tEnd, 'f', 4)).arg(waveExpr).arg(QString::number(tStart, 'f', 4)).arg(s.decay->value()).arg(buildSidTree(index + 1, tEnd));
-        };
-        finalExpr = buildSidTree(0, 0.0);
+            QString envExpr = QString("exp(-(t - %1) * %2)").arg(currentTime, 0, 'f', 4).arg(s.decay->value());
+
+            double tEnd = currentTime + segmentDur;
+            nestedBody = QString("(t < %1 ? (%2 * %3) : %4)")
+                             .arg(tEnd, 0, 'f', 4)
+                             .arg(waveExpr)
+                             .arg(envExpr)
+                             .arg(nestedBody);
+        }
+        finalExpr = nestedBody;
     } else {
-        QString body = ""; double tPos = 0.0;
+        // Legacy Mode: Uses additive logic (Segment1 + Segment2)
+        QStringList bodies;
+        double tPos = 0.0;
         for (const auto& s : sidSegments) {
             QString fBase = (s.freqOffset->value() == 0) ? "f" : QString("(f + %1)").arg(s.freqOffset->value());
             QString waveExpr = getSegmentWaveform(s, fBase);
-            body += (body.isEmpty() ? "" : " + ") + QString("(t >= %1 & t < %2) * %3 * exp(-(t-%1)*%4)").arg(tPos).arg(tPos + s.duration->value()).arg(waveExpr).arg(s.decay->value());
+            bodies << QString("(t >= %1 & t < %2) * %3 * exp(-(t-%1)*%4)")
+                          .arg(tPos, 0, 'f', 4)
+                          .arg(tPos + s.duration->value(), 0, 'f', 4)
+                          .arg(waveExpr)
+                          .arg(s.decay->value());
             tPos += s.duration->value();
         }
-        finalExpr = body;
+        finalExpr = bodies.join(" + ");
     }
+
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalExpr));
     waveVisualizer->updateData(sidSegments);
     btnCopy->setEnabled(true);
@@ -447,6 +550,8 @@ QString MainWindow::generateModernPCM(const std::vector<double>& q, double sr) {
     return header + buildTree(0, N - 1);
 }
 
+
+
 QString MainWindow::generateLegacyPCM(const std::vector<double>& q, double sr) {
     int blockSize = 128, N = q.size(); QStringList blocks;
     for (int b = 0; b < std::ceil((double)N / blockSize); ++b) {
@@ -457,7 +562,7 @@ QString MainWindow::generateLegacyPCM(const std::vector<double>& q, double sr) {
         blocks.append(seg);
     }
     QString expr = blocks.last();
-    for (int k = blocks.size() - 2; k >= 0; --k) {
+    for (int k = blocks.size() - 2; k >= 0; ++k) {
         expr = QString("(t<%1?%2:%3)").arg(QString::number((double)((k + 1) * blockSize) / sr, 'f', 6), blocks[k], expr);
     }
     return expr;
@@ -496,3 +601,39 @@ void MainWindow::removeSidSegment() {
 }
 
 void MainWindow::copyToClipboard() { QApplication::clipboard()->setText(statusBox->toPlainText()); }
+
+void MainWindow::generateDrumArchitect() {
+    double freq = drumFreqSlider->value();
+    double punch = drumPunchSlider->value() / 100.0;
+    double decay = drumDecaySlider->value() / 100.0;
+    double tone = drumToneSlider->value() / 100.0;
+
+    // Core Drum Math based on your CR78 and XR90 files
+    // Pitch Env: Starts high, drops fast to base freq
+    QString pitchEnv = QString("(%1 * (1 + %2 * exp(-t * 120)))").arg(freq).arg(punch * 15);
+    // Amplitude Env: Exponential decay
+    QString ampEnv = QString("exp(-t * %1)").arg(1.0 / (decay + 0.01) * 8);
+
+    // Saturation/Body Tone logic (CR71 style)
+    QString waveType = (tone > 0.5) ? "saww" : "sinew";
+    QString rawExpr = QString("%1(integrate(%2)) * %3").arg(waveType, pitchEnv, ampEnv);
+
+    QString finalExpr;
+    if (drumBuildMode->currentIndex() == 0) { // Modern
+        finalExpr = QString("var drum := %1;\nclamp(-1, drum, 1)").arg(rawExpr);
+    } else { // Legacy
+        finalExpr = QString("clamp(-1, %1, 1)").arg(rawExpr);
+    }
+
+    statusBox->setText(finalExpr);
+
+    // Dynamic Filter Suggestions
+    if (freq < 60) {
+        drumFilterWarning->setText("SUGGESTION: Add Low-Pass @ 350Hz + subtle High-Pass @ 30Hz to clear sub-mud.");
+    } else if (tone > 0.5) {
+        drumFilterWarning->setText("SUGGESTION: Add aggressive Band-Pass @ 1kHz to simulate Snare/Tom shell.");
+    } else {
+        drumFilterWarning->setText("SUGGESTION: Add Low-Pass @ 500Hz for a classic clean analog kick.");
+    }
+}
+
