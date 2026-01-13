@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest  # Change to Windows
+    runs-on: windows-latest
 
     steps:
     - name: Checkout repository
@@ -18,9 +18,10 @@ jobs:
       uses: jurplel/install-qt-action@v3
       with:
         version: '6.6.1'
-        host: 'windows'       # Target Windows
+        host: 'windows'
         target: 'desktop'
-        arch: 'win64_msvc2019_64' # Use the standard Windows architecture
+        # Using the standard 64-bit MSVC architecture for Windows
+        arch: 'win64_msvc2019_64' 
 
     - name: Configure CMake
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
@@ -31,11 +32,14 @@ jobs:
     - name: Deployment (windeployqt)
       shell: pwsh
       run: |
-        # This step gathers all the .dll files your app needs to run
-        windeployqt build/Release/your_project_name.exe 
+        # Navigate to where the build finished
+        cd build/Release/
+        # Run windeployqt to copy all necessary DLLs into this folder
+        windeployqt XpressiveTools.exe
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: windows-build
-        path: build/Release/ # This will include the .exe and all required .dlls
+        name: XpressiveTools-Windows-Build
+        # This uploads the EXE and all the DLLs gathered by windeployqt
+        path: build/Release/
