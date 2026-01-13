@@ -82,7 +82,6 @@ void MainWindow::setupUI() {
         sideLayout->addWidget(aGroup);
     }
 
-    // Initialize missing elements referenced in generators
     leadUnisonCount = new QDoubleSpinBox(); leadUnisonCount->setRange(1, 8); leadUnisonCount->setValue(1);
     leadDetuneAmount = new QDoubleSpinBox(); leadDetuneAmount->setRange(0, 0.1); leadDetuneAmount->setSingleStep(0.001);
     leadWaveType = new QComboBox(); leadWaveType->addItems({"saww", "squarew", "sinew"});
@@ -264,10 +263,6 @@ void MainWindow::setupUI() {
     modeTabs->addTab(drumTab, "Drum Architect");
 
     connect(btnGenDrum, &QPushButton::clicked, this, &MainWindow::generateDrumArchitect);
-
-
-
-
 
     // 9. VELOCILOGIC
     QWidget *velociTab = new QWidget(); auto *velociLayout = new QFormLayout(velociTab);
@@ -636,4 +631,3 @@ void MainWindow::generateDrumArchitect() {
         drumFilterWarning->setText("SUGGESTION: Add Low-Pass @ 500Hz for a classic clean analog kick.");
     }
 }
-
