@@ -1,3 +1,3 @@
 Tools for woring with Xpressive (part of LMMS) in the time domain.
 
-At the moment the SID segmentation is only working with the Alpha version.
+This will run when compiled and launched within QT6 in Windows, but I am still having trouble compiling on GitHub with the .yml
