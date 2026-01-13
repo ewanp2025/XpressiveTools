@@ -1,4 +1,4 @@
-name: Build Qt6 Windows Project
+name: Build Qt6 Multi-Platform
 
 on:
   push:
@@ -8,7 +8,20 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            qt_arch: win64_msvc2019_64
+            output_name: XpressiveTools-Windows
+          - os: macos-latest
+            qt_arch: clang_64
+            output_name: XpressiveTools-MacOS
+          - os: ubuntu-22.04
+            qt_arch: gcc_64
+            output_name: XpressiveTools-Linux
 
     steps:
     - name: Checkout repository
@@ -18,10 +31,15 @@ jobs:
       uses: jurplel/install-qt-action@v3
       with:
         version: '6.6.1'
-        host: 'windows'
+        host: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'macOS' && 'mac' || 'linux' }}
         target: 'desktop'
-        # Using the standard 64-bit MSVC architecture for Windows
-        arch: 'win64_msvc2019_64' 
+        arch: ${{ matrix.qt_arch }}
+
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxcb-cursor0 libglu1-mesa-dev
 
     - name: Configure CMake
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
@@ -29,17 +47,37 @@ jobs:
     - name: Build Project
       run: cmake --build build --config Release
 
-    - name: Deployment (windeployqt)
+    # --- DEPLOYMENT STEP: WINDOWS ---
+    - name: Deploy Windows
+      if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        # Navigate to where the build finished
-        cd build/Release/
-        # Run windeployqt to copy all necessary DLLs into this folder
-        windeployqt XpressiveTools.exe
+        windeployqt build/Release/XpressiveTools.exe
+        
+    # --- DEPLOYMENT STEP: MACOS ---
+    - name: Deploy MacOS
+      if: runner.os == 'macOS'
+      run: |
+        # macdeployqt turns the build into a standalone .app bundle
+        macdeployqt build/XpressiveTools.app -dmg
 
-    - name: Upload Artifact
+    # --- DEPLOYMENT STEP: LINUX (AppImage) ---
+    - name: Deploy Linux
+      if: runner.os == 'Linux'
+      run: |
+        # Download linuxdeployqt
+        wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
+        chmod a+x linuxdeployqt-continuous-x86_64.AppImage
+        # Create a basic AppRun/AppDir structure or just bundle the deps
+        # (Note: Linux deployment is complex; this gathers libraries into the build folder)
+        export OUTPUT=XpressiveTools-x86_64.AppImage
+        ./linuxdeployqt-continuous-x86_64.AppImage build/XpressiveTools -appimage -unreliable
+
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: XpressiveTools-Windows-Build
-        # This uploads the EXE and all the DLLs gathered by windeployqt
-        path: build/Release/
+        name: ${{ matrix.output_name }}
+        path: |
+          build/Release/
+          build/*.dmg
+          *.AppImage
