@@ -16,13 +16,13 @@ jobs:
         include:
           - os: windows-latest
             qt_arch: win64_msvc2019_64
-            output_name: XpressiveTools-Windows
+            output_name: WaveConv-Windows
           - os: macos-latest
             qt_arch: clang_64
-            output_name: XpressiveTools-MacOS
+            output_name: WaveConv-MacOS
           - os: ubuntu-22.04
             qt_arch: gcc_64
-            output_name: XpressiveTools-Linux
+            output_name: WaveConv-Linux
 
     steps:
     - name: Checkout repository
@@ -35,12 +35,13 @@ jobs:
         host: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'macOS' && 'mac' || 'linux' }}
         target: 'desktop'
         arch: ${{ matrix.qt_arch }}
+        modules: 'qtmultimedia' # Added because your code uses Multimedia
 
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libxcb-cursor0 libglu1-mesa-dev libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
+        sudo apt-get install -y libxcb-cursor0 libglu1-mesa-dev libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libpulse-dev
 
     - name: Configure CMake
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
@@ -53,29 +54,28 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        windeployqt build/Release/XpressiveTools.exe
+        windeployqt build/Release/WaveConv.exe
 
     # --- MACOS DEPLOY ---
     - name: Deploy MacOS
       if: runner.os == 'macOS'
       run: |
-        macdeployqt build/XpressiveTools.app -dmg
+        # Use the name defined in CMake (WaveConv)
+        macdeployqt build/WaveConv.app -dmg
 
     # --- LINUX DEPLOY ---
     - name: Deploy Linux
       if: runner.os == 'Linux'
       run: |
-        # 1. Get linuxdeployqt
         wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
         chmod a+x linuxdeployqt-continuous-x86_64.AppImage
         
-        # 2. Linuxdeployqt requires a .desktop file and an icon to create an AppImage
-        echo -e "[Desktop Entry]\nType=Application\nName=XpressiveTools\nExec=XpressiveTools\nIcon=icon\nCategories=Utility;" > XpressiveTools.desktop
-        touch icon.png # Creates a blank placeholder icon so the tool doesn't fail
+        echo -e "[Desktop Entry]\nType=Application\nName=WaveConv\nExec=WaveConv\nIcon=icon\nCategories=Utility;" > WaveConv.desktop
+        touch icon.png
         
-        # 3. Create AppImage (using -skip-libc-check to bypass Ubuntu version warnings)
-        export OUTPUT=XpressiveTools-x86_64.AppImage
-        ./linuxdeployqt-continuous-x86_64.AppImage build/XpressiveTools -appimage -skip-libc-check
+        export OUTPUT=WaveConv-x86_64.AppImage
+        # Point to the linux binary location
+        ./linuxdeployqt-continuous-x86_64.AppImage build/WaveConv -appimage -skip-libc-check
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
