@@ -1,14 +1,10 @@
-name: Multi-Platform Build
+name: Windows Minimal Portable Build
 on: [push, pull_request]
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+  build-windows:
+    name: Build Minimal Windows EXE
+    runs-on: windows-latest
 
     steps:
       - name: Checkout Code
@@ -18,45 +14,30 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.6.0'
-          host: ${{ matrix.os == 'windows-latest' && 'windows' || (matrix.os == 'macos-latest' && 'mac' || 'linux') }}
           target: 'desktop'
-          arch: ${{ matrix.os == 'windows-latest' && 'win64_mingw' || (matrix.os == 'macos-latest' && 'clang_64' || 'gcc_64') }}
-
-      - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4* libxcb-image0 libxcb-keysyms* libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
-
-      - name: Set up Windows Path
-        if: matrix.os == 'windows-latest'
-        run: |
-          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
+          arch: 'win64_mingw'
 
       - name: Build Application
         shell: bash
         run: |
           mkdir build
           cd build
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
-            mingw32-make
-          else
-            cmake .. -DCMAKE_BUILD_TYPE=Release
-            make
-          fi
+          # G-MinGW Makefiles + Release build ensures the 189kb size
+          cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          mingw32-make
 
-      - name: Windows Deployment (Bundle DLLs)
-        if: matrix.os == 'windows-latest'
+      - name: Surgical Windows Deployment
         shell: bash
         run: |
-          cd build
-          # windeployqt copies necessary DLLs and 'platforms' folder
-          windeployqt XpressiveTools.exe
+          mkdir dist
+          cp build/XpressiveTools.exe dist/
+          
+          # windeployqt collects matching DLLs
+          # --no-opengl-sw and --no-translations remove ~40MB of bloat
+          windeployqt --release --no-translations --no-opengl-sw --compiler-runtime dist/XpressiveTools.exe
 
-      - name: Upload Artifacts
+      - name: Upload Clean Distribution
         uses: actions/upload-artifact@v4
         with:
-          name: WaveConv-${{ matrix.os }}
-          # We upload the entire build directory to preserve the folder structure
-          path: build/
+          name: XpressiveTools-Portable-Windows
+          path: dist/
