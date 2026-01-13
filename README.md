@@ -24,7 +24,7 @@ Noise Forge: Generates sample-rate-reduced noise expressions for lo-fi textures 
 
 **Utilities & DSP**
 
-PCM Sampler: Converts standard WAV files into optimized 4-bit or high-fidelity mathematical strings for playback within the Xpressive engine.
+PCM Sampler: Converts standard WAV files into optimized 4-bit mathematical strings for playback within the Xpressive engine.
 
 Filter Forge: Designs FIR-style filters (Low-Pass/High-Pass) with adjustable tap counts. Experimental, limited success so far with FIR.
 
