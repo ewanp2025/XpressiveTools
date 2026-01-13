@@ -35,7 +35,7 @@ jobs:
         host: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'macOS' && 'mac' || 'linux' }}
         target: 'desktop'
         arch: ${{ matrix.qt_arch }}
-        modules: 'qtmultimedia' # Added because your code uses Multimedia
+        modules: 'qtmultimedia'
 
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
@@ -60,22 +60,24 @@ jobs:
     - name: Deploy MacOS
       if: runner.os == 'macOS'
       run: |
-        # Use the name defined in CMake (WaveConv)
         macdeployqt build/WaveConv.app -dmg
 
     # --- LINUX DEPLOY ---
     - name: Deploy Linux
       if: runner.os == 'Linux'
       run: |
+        # 1. Download linuxdeployqt
         wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
         chmod a+x linuxdeployqt-continuous-x86_64.AppImage
         
+        # 2. Create required metadata
         echo -e "[Desktop Entry]\nType=Application\nName=WaveConv\nExec=WaveConv\nIcon=icon\nCategories=Utility;" > WaveConv.desktop
         touch icon.png
         
+        # 3. Run deployment with error ignoring enabled
         export OUTPUT=WaveConv-x86_64.AppImage
-        # Point to the linux binary location
-        ./linuxdeployqt-continuous-x86_64.AppImage build/WaveConv -appimage -skip-libc-check
+        export IGNORE_LINUXDEPLOYQT_ERRORS=1
+        ./linuxdeployqt-continuous-x86_64.AppImage build/WaveConv -appimage
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
