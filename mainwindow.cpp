@@ -703,7 +703,8 @@ void MainWindow::generateDrumArchitect() {
 // --- NEW IMPLEMENTATION: PHONETIC LAB (SAM) ---
 
 void MainWindow::initSamLibrary() {
-    // 81 Phonemes mapped from SAM source tables.
+    // Phonemes mapped from SAM source tables.
+    // https://github.com/s-macke/SAM
     // Structure: {Name, F1, F2, F3, Voiced, A1, A2, A3, LENGTH}
 
     // --- VOICED VOWELS (Long & Loud) ---
@@ -912,3 +913,4 @@ void MainWindow::generatePhoneticFormula() {
     statusBox->setText(finalFormula);
     QApplication::clipboard()->setText(finalFormula);
 }
+
