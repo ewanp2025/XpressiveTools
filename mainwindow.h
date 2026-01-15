@@ -16,7 +16,24 @@
 #include <QPainter>
 #include <QLabel>
 #include <QSlider>
+#include <QScrollArea>
+#include <QMap>
 #include <vector>
+
+// --- NEW STRUCTURE FOR PHONETIC LAB ---
+struct SAMPhoneme {
+    QString name;
+    int f1, f2, f3;
+    bool voiced;
+    // Amplitudes (Default standard roll-off)
+    int a1 = 15;
+    int a2 = 10;
+    int a3 = 5;
+    // Relative Length in Frames (1 Frame ~ 12ms)
+    // Plosives = 5, Fricatives = 12, Vowels = 18+
+    int length = 12;
+};
+// --------------------------------------
 
 struct SidSegment {
     QComboBox* waveType;
@@ -84,9 +101,15 @@ private slots:
     void generateLeadStack();
     void generateRandomPatch();
     void generateDrumArchitect();
+    
+    // --- NEW SLOT ---
+    void generatePhoneticFormula();
 
 private:
     void setupUI();
+    // --- NEW INIT FUNCTION ---
+    void initSamLibrary();
+
     QString generateLegacyPCM(const std::vector<double>& q, double sr);
     QString generateModernPCM(const std::vector<double>& q, double sr);
     QString getModulatorFormula(int index);
@@ -139,10 +162,17 @@ private:
     QSlider *drumToneSlider;
     QLabel *drumFilterWarning;
 
-    // Added missing UI elements referenced in .cpp logic
     QDoubleSpinBox *leadUnisonCount;
     QDoubleSpinBox *leadDetuneAmount;
     QComboBox *leadWaveType;
     QSlider *chaosSlider;
+
+    // --- NEW VARIABLES FOR PHONETIC LAB ---
+    QTextEdit *phoneticInput;
+    QComboBox *parserModeCombo;   // Render Mode: HQ vs Retro
+    QComboBox *parsingStyleCombo; // Parsing Engine: Legacy vs Nightly
+    QPushButton *btnGenPhonetic;
+    QLabel *phonemeRefLabel;
+    QMap<QString, SAMPhoneme> samLibrary;
 };
 #endif
