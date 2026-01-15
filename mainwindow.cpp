@@ -136,7 +136,7 @@ void MainWindow::setupUI() {
     pcmLayout->addLayout(pcmGrid); pcmLayout->addWidget(normalizeCheck);
     modeTabs->addTab(pcmTab, "PCM Sampler");
 
-// 3. CONSOLE LAB
+    // 3. CONSOLE LAB
     QWidget *consoleTab = new QWidget(); auto *consoleLayout = new QFormLayout(consoleTab);
     buildModeConsole = new QComboBox(); buildModeConsole->addItems({"Modern", "Legacy"});
     consoleWaveType = new QComboBox(); consoleWaveType->addItems({"NES Triangle", "4-Bit Saw"});
@@ -163,30 +163,211 @@ void MainWindow::setupUI() {
     modeTabs->addTab(sfxTab, "SFX Macro");
 
     // 5. ARP ANIMATOR
-    QWidget *arpTab = new QWidget(); auto *arpLayout = new QFormLayout(arpTab);
-    buildModeArp = new QComboBox(); buildModeArp->addItems({"Modern", "Legacy"});
-    arpSpeed = new QDoubleSpinBox(); arpSpeed->setValue(16);
-    arpInterval1 = new QComboBox(); arpInterval1->addItems({"None", "Major 3rd", "Minor 3rd"});
-    arpInterval2 = new QComboBox(); arpInterval2->addItems({"None", "Perfect 5th", "Octave"});
-    arpLayout->addRow("Build Mode:", buildModeArp);
-    arpLayout->addRow("Speed:", arpSpeed);
-    arpLayout->addRow("Step 2:", arpInterval1);
-    arpLayout->addRow("Step 3:", arpInterval2);
-    auto *btnGenArp = new QPushButton("Generate Arp String");
-    arpLayout->addRow(btnGenArp);
-    modeTabs->addTab(arpTab, "Arp Animator");
+    QWidget *arpTab = new QWidget();
+    auto *arpLayout = new QVBoxLayout(arpTab);
 
-    // 6. WAVETABLE FORGE
-    QWidget *wtTab = new QWidget(); auto *wtLayout = new QFormLayout(wtTab);
-    buildModeWavetable = new QComboBox(); buildModeWavetable->addItems({"Modern", "Legacy"});
-    wtBase = new QComboBox(); wtBase->addItems({"sinew", "saww", "squarew"});
-    wtHarmonics = new QDoubleSpinBox(); wtHarmonics->setValue(4);
-    wtLayout->addRow("Build Mode:", buildModeWavetable);
-    wtLayout->addRow("Base:", wtBase);
-    wtLayout->addRow("Harmonics:", wtHarmonics);
-    auto *btnGenWT = new QPushButton("Generate Wavetable");
-    wtLayout->addRow(btnGenWT);
+    // --- SECTION 1: THE OSCILLATOR ---
+    auto *oscGroup = new QGroupBox("SID Oscillator");
+    auto *oscForm = new QFormLayout(oscGroup);
+
+    buildModeArp = new QComboBox();
+    buildModeArp->addItems({"Nightly (Nested - Clean)", "Legacy (Additive)"});
+
+    arpWave = new QComboBox();
+    arpWave->addItems({"Pulse (Classic)", "Sawtooth", "Triangle", "Noise (Percussion)", "Metal (Ring Mod)"});
+
+    arpPwmSlider = new QSlider(Qt::Horizontal);
+    arpPwmSlider->setRange(1, 99);
+    arpPwmSlider->setValue(50); // Square wave default
+
+    oscForm->addRow("Build Mode:", buildModeArp);
+    oscForm->addRow("Waveform:", arpWave);
+    oscForm->addRow("Pulse Width:", arpPwmSlider);
+
+    arpLayout->addWidget(oscGroup);
+
+    // --- SECTION 2: THE CHORD (INTERVALS) ---
+    auto *seqGroup = new QGroupBox("Chord Sequence (0 -> Step 2 -> Step 3)");
+    auto *seqForm = new QFormLayout(seqGroup);
+
+    // Populating with Semitones (The way trackers do it)
+    QStringList intervals = {
+        "0 (Root)", "+3 (Minor 3rd)", "+4 (Major 3rd)", "+5 (4th)",
+        "+7 (Perfect 5th)", "+12 (Octave)", "-12 (Sub Octave)",
+        "+19 (Octave+5th)", "+24 (2 Octaves)"
+    };
+
+    arpInterval1 = new QComboBox(); arpInterval1->addItems(intervals);
+    arpInterval1->setCurrentIndex(2); // Major 3rd default
+
+    arpInterval2 = new QComboBox(); arpInterval2->addItems(intervals);
+    arpInterval2->setCurrentIndex(4); // Perfect 5th default
+
+    seqForm->addRow("Step 2 Note:", arpInterval1);
+    seqForm->addRow("Step 3 Note:", arpInterval2);
+
+    arpLayout->addWidget(seqGroup);
+
+    // --- SECTION 3: SPEED & SYNC ---
+    auto *spdGroup = new QGroupBox("Speed / Tempo");
+    auto *spdForm = new QFormLayout(spdGroup);
+
+    arpBpmSync = new QCheckBox("Sync to BPM");
+    arpBpmSync->setChecked(true);
+
+    arpBpmVal = new QDoubleSpinBox();
+    arpBpmVal->setRange(40, 300);
+    arpBpmVal->setValue(125); // Classic Techno/Chiptune tempo
+
+    arpSpeedDiv = new QComboBox();
+    arpSpeedDiv->addItems({"1/16 (Standard)", "1/32 (Fast)", "1/48 (Triplets)", "1/64 (Hubbard Speed)", "50Hz (PAL Frame)"});
+    arpSpeedDiv->setCurrentIndex(3); // Default to "Hubbard Speed"
+
+    // We keep the old Hz spinner just in case they uncheck Sync
+    arpSpeed = new QDoubleSpinBox();
+    arpSpeed->setRange(0.1, 1000);
+    arpSpeed->setValue(50);
+    arpSpeed->setVisible(false); // Hidden by default
+
+    spdForm->addRow(arpBpmSync);
+    spdForm->addRow("Song BPM:", arpBpmVal);
+    spdForm->addRow("Grid Size:", arpSpeedDiv);
+    spdForm->addRow("Manual Hz:", arpSpeed);
+
+    arpLayout->addWidget(spdGroup);
+
+    // GENERATE BUTTON
+    auto *btnGenArp = new QPushButton("GENERATE C64 ARP");
+    btnGenArp->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
+    arpLayout->addWidget(btnGenArp);
+
+    // Logic to toggle inputs
+    connect(arpBpmSync, &QCheckBox::toggled, [=](bool checked){
+        arpBpmVal->setVisible(checked);
+        arpSpeedDiv->setVisible(checked);
+        arpSpeed->setVisible(!checked);
+    });
+
+    modeTabs->addTab(arpTab, "Arp Animator");
+    connect(btnGenArp, &QPushButton::clicked, this, &MainWindow::generateArpAnimator);
+
+    // 6. WAVETABLE FORGE (The "Hero" Tracker)
+    QWidget *wtTab = new QWidget();
+    auto *wtLayout = new QVBoxLayout(wtTab);
+
+    // Header: Presets, Loop & Build Mode
+    auto *wtHeader = new QHBoxLayout();
+
+    // 1. ADD: Build Mode Selection
+    wtHeader->addWidget(new QLabel("Build Mode:"));
+    buildModeWavetable = new QComboBox();
+    buildModeWavetable->addItems({"Nightly (Nested)", "Legacy (Additive)"});
+    wtHeader->addWidget(buildModeWavetable);
+
+
+    wtHeader->addWidget(new QLabel("| Master Library:"));
+    wtPresetCombo = new QComboBox();
+
+    // THE MASTER LIST
+    QStringList presets;
+    presets << "--- INIT ---" << "00. Empty / Init";
+
+    presets << "--- ROB HUBBARD ---"
+            << "01. Commando Bass (Glissando)" << "02. Monty Lead (Pulse+Vib)"
+            << "03. Delta Snare (Tri-Noise)" << "04. Zoids Metal (Ring Mod)"
+            << "05. Ace 2 Kick (Deep)" << "06. Crazy Comets (Echo)";
+
+    presets << "--- MARTIN GALWAY ---"
+            << "07. Wizball Arp (Bubble)" << "08. Parallax Bass (Slap)"
+            << "09. Comic Bakery (Lead)" << "10. Arkanoid (Dotted Echo)"
+            << "11. Green Beret (Military Snare)";
+
+    presets << "--- JEROEN TEL ---"
+            << "12. Cybernoid Metal Drum" << "13. Supremacy Lead (Vibrato)"
+            << "14. Turbo Outrun (Bass)" << "15. RoboCop 3 (Title Arp)";
+
+    presets << "--- CHRIS HUELSBECK ---"
+            << "16. Turrican I (Huge Arp)" << "17. Turrican II (Pad)"
+            << "18. Katakis (Space Lead)" << "19. Great Giana (Bass)";
+
+    presets << "--- TIM FOLLIN ---"
+            << "20. Solstice (Intro Lead)" << "21. Ghouls'n'Ghosts (Rain)"
+            << "22. Silver Surfer (Arp)" << "23. LED Storm (Bass)";
+
+    presets << "--- BEN DAGLISH ---"
+            << "24. Last Ninja (Dark Bass)" << "25. Deflektor (Lead)"
+            << "26. Trap (Fast Arp)";
+
+    presets << "--- DAVID WHITTAKER ---"
+            << "27. Glider Rider (Square)" << "28. Lazy Jones (Laser)";
+
+    presets << "--- YM / ATARI ST MASTERS ---"
+            << "29. YM Buzzer Envelope" << "30. YM Metal Bass"
+            << "31. YM 3-Voice Chord" << "32. Digi-Drum (SID-Style)";
+
+    presets << "--- FX / DRUMS (Utility) ---"
+            << "33. Coin (Mario Style)" << "34. Power Up"
+            << "35. Explosion (Noise Decay)" << "36. Laser (Pew Pew)"
+            << "37. 8-Bit Hi-Hat (Closed)" << "38. 8-Bit Hi-Hat (Open)"
+            << "39. Fake Chord (Minor)" << "40. Fake Chord (Major)";
+
+    wtPresetCombo->addItems(presets);
+    wtHeader->addWidget(wtPresetCombo);
+
+    wtLoopCheck = new QCheckBox("Loop Sequence");
+    wtHeader->addWidget(wtLoopCheck);
+
+    wtLayout->addLayout(wtHeader);
+
+    // ... (The rest of the Table/Button setup stays exactly the same) ...
+    // ... just keep the code below the header from the previous step ...
+
+    // The Tracker Table
+    wtTrackerTable = new QTableWidget();
+    wtTrackerTable->setColumnCount(4);
+    wtTrackerTable->setHorizontalHeaderLabels({"Waveform", "Pitch (+/-)", "PWM %", "Dur (s)"});
+    wtTrackerTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    wtTrackerTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    wtLayout->addWidget(wtTrackerTable);
+
+    // Buttons
+    auto *wtBtnLayout = new QHBoxLayout();
+    auto *btnAddStep = new QPushButton("Add Step (+)");
+    auto *btnRemStep = new QPushButton("Remove Step (-)");
+    auto *btnGenWT = new QPushButton("GENERATE SEQUENCE");
+
+    // Style the big button to look cool
+    btnGenWT->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
+
+    wtBtnLayout->addWidget(btnAddStep);
+    wtBtnLayout->addWidget(btnRemStep);
+    wtLayout->addLayout(wtBtnLayout);
+    wtLayout->addWidget(btnGenWT);
+
     modeTabs->addTab(wtTab, "Wavetable Forge");
+
+    // Connections
+    connect(wtPresetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::loadWavetablePreset);
+    connect(btnGenWT, &QPushButton::clicked, this, &MainWindow::generateWavetableForge);
+
+    // Table Editing Logic
+    connect(btnAddStep, &QPushButton::clicked, [=](){
+        int row = wtTrackerTable->rowCount();
+        wtTrackerTable->insertRow(row);
+        // Defaults: Saw, +0 semi, 50% PWM, 0.05s
+        wtTrackerTable->setItem(row, 0, new QTableWidgetItem("Saw"));
+        wtTrackerTable->setItem(row, 1, new QTableWidgetItem("0"));
+        wtTrackerTable->setItem(row, 2, new QTableWidgetItem("50"));
+        wtTrackerTable->setItem(row, 3, new QTableWidgetItem("0.05"));
+    });
+
+    connect(btnRemStep, &QPushButton::clicked, [=](){
+        if (wtTrackerTable->rowCount() > 0)
+            wtTrackerTable->removeRow(wtTrackerTable->rowCount()-1);
+    });
+
+    // Load default preset
+    loadWavetablePreset(1); // Load Hubbard Kick by default
 
     // 7. BESSEL FM
     QWidget *besselTab = new QWidget(); auto *besselLayout = new QVBoxLayout(besselTab);
@@ -234,47 +415,127 @@ void MainWindow::setupUI() {
 
     // --- DRUM ARCHITECT TAB ---
     QWidget *drumTab = new QWidget();
+
+    // 1. CHANGE: Main layout is now VERTICAL
     auto *drumMainLayout = new QVBoxLayout(drumTab);
+
+    // 2. NEW: The Red Disclaimer Label
+    drumDisclaimer = new QLabel("⚠ DISCLAIMER: PLACEHOLDER FEATURE.\n"
+                                "The intent is to suggest and automate the instrument filter external to the expression\n"
+                                "via exporting an instrument .xpf in Legacy or Nightly build format.\n"
+                                "This will be an additional part of the project.");
+    drumDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    drumDisclaimer->setAlignment(Qt::AlignCenter);
+    drumDisclaimer->setFixedHeight(80); // Consistent height
+
+    drumMainLayout->addWidget(drumDisclaimer); // Add to top
+
+    // 3. The Drum Controls (Sub-Layout)
     auto *drumForm = new QFormLayout();
 
-    drumBuildMode = new QComboBox(); drumBuildMode->addItems({"Modern", "Legacy"});
-
+    // Re-create the controls (Standard setup)
     drumType = new QComboBox();
-    drumType->addItems({"Kick (Bass Drum)", "Snare/Tom", "Cymbal/Hi-Hat"});
-    drumFreqSlider = new QSlider(Qt::Horizontal); drumFreqSlider->setRange(30, 150); drumFreqSlider->setValue(55);
-    drumPunchSlider = new QSlider(Qt::Horizontal); drumPunchSlider->setRange(0, 100); drumPunchSlider->setValue(70);
-    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(1, 100); drumDecaySlider->setValue(30);
+    drumType->addItems({"Kick (808 Style)", "Snare (Noise+Tone)", "Hi-Hat (Metal)", "Tom (Low)", "Clap (Digital)"});
+
+    drumBuildMode = new QComboBox();
+    drumBuildMode->addItems({"Nightly (Nested)", "Legacy (Additive)"});
+
+    // Sliders
+    drumFreqSlider = new QSlider(Qt::Horizontal); drumFreqSlider->setRange(0, 100); drumFreqSlider->setValue(50);
+    drumPunchSlider = new QSlider(Qt::Horizontal); drumPunchSlider->setRange(0, 100); drumPunchSlider->setValue(80);
+    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(0, 100); drumDecaySlider->setValue(40);
     drumToneSlider = new QSlider(Qt::Horizontal); drumToneSlider->setRange(0, 100); drumToneSlider->setValue(20);
 
-    drumFilterWarning = new QLabel("RECOMMENDED: Add External Low-Pass Filter (approx 400Hz)");
-    drumFilterWarning->setStyleSheet("color: #ff0000; font-weight: bold; padding: 5px; border: 1px solid red;");
+    // Filter Warning (The small yellow one we had before)
+    drumFilterWarning = new QLabel("Note: Filters must be applied manually in this version.");
+    drumFilterWarning->setStyleSheet("color: orange; font-style: italic;");
 
-    auto *btnGenDrum = new QPushButton("Generate Drum Expression");
-
-    drumForm->addRow("Build Mode:", drumBuildMode);
+    // Add rows to the form
     drumForm->addRow("Drum Type:", drumType);
-    drumForm->addRow("Base Freq (Hz):", drumFreqSlider);
-    drumForm->addRow("Punch (Transient):", drumPunchSlider);
+    drumForm->addRow("Build Mode:", drumBuildMode);
+    drumForm->addRow("Base Freq:", drumFreqSlider);
+    drumForm->addRow("Punch/Snap:", drumPunchSlider);
     drumForm->addRow("Decay Length:", drumDecaySlider);
-    drumForm->addRow("Body Tone:", drumToneSlider);
+    drumForm->addRow("Tone/Click:", drumToneSlider);
+    drumForm->addRow("", drumFilterWarning);
 
+    auto *btnDrum = new QPushButton("Generate Drum");
+    drumForm->addRow(btnDrum);
+
+    // Add the form to the main layout
     drumMainLayout->addLayout(drumForm);
-    drumMainLayout->addWidget(drumFilterWarning);
-    drumMainLayout->addWidget(btnGenDrum);
+    drumMainLayout->addStretch(); // Push to top
 
     modeTabs->addTab(drumTab, "Drum Architect");
 
-    connect(btnGenDrum, &QPushButton::clicked, this, &MainWindow::generateDrumArchitect);
+    // Connect the button
+    connect(btnDrum, &QPushButton::clicked, this, &MainWindow::generateDrumArchitect);
 
-    // 9. VELOCILOGIC
-    QWidget *velociTab = new QWidget(); auto *velociLayout = new QFormLayout(velociTab);
-    buildModeVeloci = new QComboBox(); buildModeVeloci->addItems({"Modern", "Legacy"});
-    velociType = new QComboBox(); velociType->addItems({"Hard/Soft Layer", "Additive Brightness"});
-    velociLayout->addRow("Build Mode:", buildModeVeloci);
-    velociLayout->addRow("Type:", velociType);
-    auto *btnVeloci = new QPushButton("Generate Velocity String");
-    velociLayout->addRow(btnVeloci);
-    modeTabs->addTab(velociTab, "Velocilogic");
+    // 9. VELOCILOGIC (DYNAMICS MAPPER)
+    QWidget *velTab = new QWidget();
+    auto *velLayout = new QVBoxLayout(velTab);
+
+    // 1. Disclaimer
+    velDisclaimer = new QLabel("⚠ VELOCILOGIC: DYNAMIC LAYERING.\n"
+                               "Placeholder.\n"
+                               "Code not working at present.");
+    velDisclaimer->setStyleSheet("QLabel { color: blue; font-weight: bold; font-size: 14px; border: 2px solid blue; padding: 10px; background-color: #eeeeff; }");
+    velDisclaimer->setAlignment(Qt::AlignCenter);
+    velDisclaimer->setFixedHeight(80);
+    velLayout->addWidget(velDisclaimer);
+
+    // 2. Options
+    auto *velOptLayout = new QHBoxLayout();
+    velOptLayout->addWidget(new QLabel("Build Mode:"));
+    velMapMode = new QComboBox();
+    velMapMode->addItems({"Nightly (Nested Ternary)", "Legacy (Additive)"});
+    velOptLayout->addWidget(velMapMode);
+    velOptLayout->addStretch();
+    velLayout->addLayout(velOptLayout);
+
+    // 3. The Zone Table
+    velMapTable = new QTableWidget();
+    velMapTable->setColumnCount(2);
+    velMapTable->setHorizontalHeaderLabels({"Upper Velocity Limit (0-127)", "Expression (Code)"});
+    velMapTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    velLayout->addWidget(velMapTable);
+
+    // 4. Buttons
+    auto *velBtnLayout = new QHBoxLayout();
+    auto *btnAddVel = new QPushButton("Add Velocity Zone");
+    auto *btnRemVel = new QPushButton("Remove Zone");
+    velBtnLayout->addWidget(btnAddVel);
+    velBtnLayout->addWidget(btnRemVel);
+    velLayout->addLayout(velBtnLayout);
+
+    auto *btnGenVel = new QPushButton("GENERATE VELOCITY MAP");
+    btnGenVel->setStyleSheet("font-weight: bold; height: 40px; background-color: #444; color: white;");
+    velLayout->addWidget(btnGenVel);
+
+    modeTabs->addTab(velTab, "Velocilogic");
+
+    // Connections
+    connect(btnGenVel, &QPushButton::clicked, this, &MainWindow::generateVelocilogic);
+
+    auto addVelZone = [=](int limit, QString code) {
+        int r = velMapTable->rowCount();
+        velMapTable->insertRow(r);
+        velMapTable->setItem(r, 0, new QTableWidgetItem(QString::number(limit)));
+        velMapTable->setItem(r, 1, new QTableWidgetItem(code));
+    };
+
+    connect(btnAddVel, &QPushButton::clicked, [=](){ addVelZone(100, "pulse(t*f)"); });
+    connect(btnRemVel, &QPushButton::clicked, [=](){
+        if(velMapTable->rowCount()>0) velMapTable->removeRow(velMapTable->rowCount()-1);
+    });
+
+    // Default "Ghost Note" Setup
+    // 0-40: Soft Sine (Ghost note)
+    // 41-100: Standard Saw
+    // 101-127: Hard Square with Noise (Accent)
+    addVelZone(40, "sinew(t*f)*0.5");
+    addVelZone(100, "saww(t*f)");
+    addVelZone(127, "squarew(t*f) + (randv(t)*0.2)");
 
     // 10. NOISE FORGE
     QWidget *noiseTab = new QWidget(); auto *noiseLayout = new QFormLayout(noiseTab);
@@ -286,24 +547,75 @@ void MainWindow::setupUI() {
     noiseLayout->addRow(btnNoise);
     modeTabs->addTab(noiseTab, "Noise Forge");
 
-    // 11. XPF PACKAGER
-    QWidget *xpfTab = new QWidget(); auto *xpfLayout = new QVBoxLayout(xpfTab);
-    xpfLayout->addWidget(new QLabel("Paste Single-Line Xpressive Code:"));
-    xpfInput = new QTextEdit(); xpfLayout->addWidget(xpfInput);
-    auto *btnXPF = new QPushButton("Package as XPF");
-    xpfLayout->addWidget(btnXPF);
+     // 11. XPF PACKAGER / MANAGER
+    QWidget *xpfTab = new QWidget();
+    auto *xpfLayout = new QVBoxLayout(xpfTab);
+
+    // 1. Red Disclaimer (O1 Editing Mode)
+    xpfDisclaimer = new QLabel("⚠ NOTICE: O1 EDITING MODE.\n"
+                               "This tab is a placeholder the tab logic is not complete or tested\n"
+                               "This tool packages your code into Oscillator 1 (O1) only.\n"
+                               "O2, Filters, and Wavetables (W1) are disabled by default.\n"
+                               "Panning is centered.");
+    xpfDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    xpfDisclaimer->setAlignment(Qt::AlignCenter);
+    xpfDisclaimer->setFixedHeight(80);
+    xpfLayout->addWidget(xpfDisclaimer);
+
+    // 2. Input Area
+    auto *xpfGroup = new QGroupBox("Expression Source");
+    auto *xpfForm = new QVBoxLayout(xpfGroup);
+
+    xpfInput = new QTextEdit();
+    xpfInput->setPlaceholderText("Paste your generated Legacy or Nightly code here...");
+    xpfForm->addWidget(xpfInput);
+    xpfLayout->addWidget(xpfGroup);
+
+    // 3. Save Button
+    btnSaveXpf = new QPushButton("Save as Instrument (.xpf)...");
+    btnSaveXpf->setStyleSheet("font-weight: bold; height: 50px; font-size: 14px;");
+    xpfLayout->addWidget(btnSaveXpf);
+
     modeTabs->addTab(xpfTab, "XPF Packager");
 
+    // Connect (FIXED: Uses 'btnSaveXpf' and 'saveXpfInstrument')
+    connect(btnSaveXpf, &QPushButton::clicked, this, &MainWindow::saveXpfInstrument);
+
     // 12. FILTER FORGE
-    QWidget *filterTab = new QWidget(); auto *filterLayout = new QFormLayout(filterTab);
+    QWidget *filterTab = new QWidget();
+
+    // 1. CHANGE: Main layout is now VERTICAL
+    auto *filterMainLayout = new QVBoxLayout(filterTab);
+
+    // 2. NEW: The Red Disclaimer Label
+    filterDisclaimer = new QLabel("⚠ DISCLAIMER: EXPERIMENTAL FEATURE.\n"
+                                  "Limited success with FIR filters using last(n).\n"
+                                  "May produce unexpected audio artifacts.");
+    filterDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    filterDisclaimer->setAlignment(Qt::AlignCenter);
+    filterDisclaimer->setFixedHeight(80); // Consistent height
+
+    filterMainLayout->addWidget(filterDisclaimer); // Add to top
+
+    // 3. The Form Controls (Sub-Layout)
+    auto *filterForm = new QFormLayout(); // This holds the inputs nicely
+
     buildModeFilter = new QComboBox(); buildModeFilter->addItems({"Modern", "Legacy"});
     filterType = new QComboBox(); filterType->addItems({"Low-Pass", "High-Pass"});
     filterTaps = new QDoubleSpinBox(); filterTaps->setRange(2, 8); filterTaps->setValue(4);
-    filterLayout->addRow("Build Mode:", buildModeFilter);
-    filterLayout->addRow("Type:", filterType);
-    filterLayout->addRow("Taps:", filterTaps);
+
+    filterForm->addRow("Build Mode:", buildModeFilter);
+    filterForm->addRow("Type:", filterType);
+    filterForm->addRow("Taps:", filterTaps);
+
     auto *btnFil = new QPushButton("Generate Filter");
-    filterLayout->addRow(btnFil);
+    filterForm->addRow(btnFil);
+
+    // Add the form to the main layout
+    filterMainLayout->addLayout(filterForm);
+    // Push everything to the top so it doesn't float in the middle
+    filterMainLayout->addStretch();
+
     modeTabs->addTab(filterTab, "Filter Forge");
 
     // 13. LEAD STACKER
@@ -362,7 +674,164 @@ void MainWindow::setupUI() {
 
     modeTabs->addTab(phoneticTab, "Phonetic Lab");
     connect(btnGenPhonetic, &QPushButton::clicked, this, &MainWindow::generatePhoneticFormula);
-    // ------------------------------------------
+
+    // --- 16. LOGIC CONVERTER TAB (NEW) ---
+    QWidget *convTab = new QWidget();
+
+    // 1. CHANGE: Main layout is now VERTICAL to stack the warning on top
+    auto *mainConvLayout = new QVBoxLayout(convTab);
+
+    // 2. NEW: The Red Disclaimer Label
+    convDisclaimer = new QLabel("⚠ DISCLAIMER: CURRENTLY EXPERIMENTAL.\n"
+                                "Only works with SHORT PCM samples (approx < 0.1s).\n"
+                                "Long files or complex expressions may cause crashes.");
+    convDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    convDisclaimer->setAlignment(Qt::AlignCenter);
+    convDisclaimer->setFixedHeight(80); // Fixed height to ensure it's visible
+
+    mainConvLayout->addWidget(convDisclaimer); // Add it to the top
+
+    // 3. The Columns (Input - Buttons - Output)
+    auto *hLayout = new QHBoxLayout(); // This holds the boxes side-by-side
+
+    // LEFT SIDE (Input)
+    auto *leftGroup = new QGroupBox("Input Formula");
+    auto *leftLay = new QVBoxLayout(leftGroup);
+    convInput = new QTextEdit();
+    convInput->setPlaceholderText("Paste Legacy or Nightly code here...");
+    leftLay->addWidget(convInput);
+
+    // MIDDLE (Buttons)
+    auto *midLayout = new QVBoxLayout();
+    btnToNightly = new QPushButton("Legacy\n-->\nNightly");
+    btnToLegacy = new QPushButton("Nightly\n-->\nLegacy");
+
+    midLayout->addStretch();
+    midLayout->addWidget(btnToNightly);
+    midLayout->addWidget(new QLabel(" ")); // Spacer
+    midLayout->addWidget(btnToLegacy);
+    midLayout->addStretch();
+
+    // RIGHT SIDE (Output)
+    auto *rightGroup = new QGroupBox("Converted Result");
+    auto *rightLay = new QVBoxLayout(rightGroup);
+    convOutput = new QTextEdit();
+    convOutput->setReadOnly(true);
+    rightLay->addWidget(convOutput);
+
+    // Add columns to the sub-layout
+    hLayout->addWidget(leftGroup, 2);
+    hLayout->addLayout(midLayout, 0);
+    hLayout->addWidget(rightGroup, 2);
+
+    // Add the sub-layout to the main vertical layout
+    mainConvLayout->addLayout(hLayout);
+
+    modeTabs->addTab(convTab, "Logic Converter");
+
+    // Connect the buttons (Using the new Universal Logic)
+    connect(btnToNightly, &QPushButton::clicked, [=](){
+        convOutput->setText(convertLegacyToNightly(convInput->toPlainText()));
+    });
+
+    connect(btnToLegacy, &QPushButton::clicked, [=](){
+        convOutput->setText(convertNightlyToLegacy(convInput->toPlainText()));
+    });
+
+    // 17. KEY MAPPER (KEYBOARD SPLIT)
+    QWidget *keyTab = new QWidget();
+    auto *keyLayout = new QVBoxLayout(keyTab);
+
+    // 1. Red Disclaimer
+    keyMapDisclaimer = new QLabel("⚠ DISCLAIMER: EXPERIMENTAL KEY MAPPING.\n"
+                                  "This feature allows splitting logic across the keyboard.\n"
+                                  "Requires further development.\n"
+                                  "Is not working yet.");
+    keyMapDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    keyMapDisclaimer->setAlignment(Qt::AlignCenter);
+    keyMapDisclaimer->setFixedHeight(80);
+    keyLayout->addWidget(keyMapDisclaimer);
+
+    // 2. Options
+    auto *keyOptLayout = new QHBoxLayout();
+    keyOptLayout->addWidget(new QLabel("Build Mode:"));
+    keyMapMode = new QComboBox();
+    keyMapMode->addItems({"Nightly (Nested Ternary)", "Legacy (Additive)"});
+    keyOptLayout->addWidget(keyMapMode);
+    keyOptLayout->addStretch();
+    keyLayout->addLayout(keyOptLayout);
+
+    // 3. The Zone Table
+    keyMapTable = new QTableWidget();
+    keyMapTable->setColumnCount(2);
+    keyMapTable->setHorizontalHeaderLabels({"Upper Key Limit (0-127)", "Expression (Code)"});
+    keyMapTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    keyLayout->addWidget(keyMapTable);
+
+    // 4. Buttons (Add/Remove/Gen)
+    auto *keyBtnLayout = new QHBoxLayout();
+    auto *btnAddZone = new QPushButton("Add Split Zone");
+    auto *btnRemZone = new QPushButton("Remove Zone");
+    keyBtnLayout->addWidget(btnAddZone);
+    keyBtnLayout->addWidget(btnRemZone);
+    keyLayout->addLayout(keyBtnLayout);
+
+    auto *btnGenKey = new QPushButton("GENERATE KEY MAP");
+    btnGenKey->setStyleSheet("font-weight: bold; height: 40px; background-color: #444; color: white;");
+    keyLayout->addWidget(btnGenKey);
+
+    modeTabs->addTab(keyTab, "Key Mapper");
+
+    // Connections
+    connect(btnGenKey, &QPushButton::clicked, this, &MainWindow::generateKeyMapper);
+
+    // Logic to add rows
+    auto addZone = [=](int limit, QString code) {
+        int r = keyMapTable->rowCount();
+        keyMapTable->insertRow(r);
+        keyMapTable->setItem(r, 0, new QTableWidgetItem(QString::number(limit)));
+        keyMapTable->setItem(r, 1, new QTableWidgetItem(code));
+    };
+
+    connect(btnAddZone, &QPushButton::clicked, [=](){ addZone(72, "sinew(t*f)"); });
+    connect(btnRemZone, &QPushButton::clicked, [=](){
+        if(keyMapTable->rowCount()>0) keyMapTable->removeRow(keyMapTable->rowCount()-1);
+    });
+
+    // Add Default Splits (Bass / Lead)
+    addZone(60, "saww(t*f*0.5)"); // Bass (Below Middle C)
+    addZone(128, "pulse(t*f)");   // Lead (Everything else)
+
+
+
+    // 18. NEED TO KNOW / NOTES TAB
+    QWidget *notesTab = new QWidget();
+    auto *notesLayout = new QVBoxLayout(notesTab);
+
+    QTextEdit *notesText = new QTextEdit();
+    notesText->setReadOnly(true);
+
+    // HTML Formatting for clarity
+    notesText->setHtml(
+        "<h2 style='color:#333;'>Project Status & Limitations</h2>"
+        "<p><b>Current Version:</b> Experimental Build</p>"
+        "<hr>"
+
+        "<h3 style='color:red;'>CRITICAL LIMITATIONS</h3>"
+        "<ul>"
+        "<li><b>NO ADSR Shaping:</b> The generated code does not automate the Instrument Envelope (Attack, Decay, Sustain, Release). You must program these expressions yourself or set these knobs manually in the Instrument Editor.</li>"
+        "<li><b>O1 Only:</b> The XPF Packager and Generators only output code for <b>Oscillator 1 (O1)</b>. O2, W1, W2, and W3 are disabled or ignored.</li>"
+        "<li><b>Filters are Manual:</b> The 'Filter Forge' aims to generate a mathematical approximation of a filter if FIR is resolved, but it does <b>not</b> control the actual Filter Section (Cutoff/Resonance) of the instrument.</li>"
+        "</ul>"
+
+
+        );
+
+    notesLayout->addWidget(notesText);
+    modeTabs->addTab(notesTab, "Need to Know");
+
+
+    // Above here for interfaces
 
     statusBox = new QTextEdit(); statusBox->setMaximumHeight(100);
     rightLayout->addWidget(statusBox);
@@ -383,9 +852,9 @@ void MainWindow::setupUI() {
     connect(btnBes, &QPushButton::clicked, this, &MainWindow::generateBesselFM);
     connect(besselPresetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::loadBesselPreset);
     connect(btnHar, &QPushButton::clicked, this, &MainWindow::generateHarmonicLab);
-    connect(btnVeloci, &QPushButton::clicked, this, &MainWindow::generateVelocilogic);
+    connect(btnGenVel, &QPushButton::clicked, this, &MainWindow::generateVelocilogic);
     connect(btnNoise, &QPushButton::clicked, this, &MainWindow::generateNoiseForge);
-    connect(btnXPF, &QPushButton::clicked, this, &MainWindow::generateXPFPackager);
+    connect(btnSaveXpf, &QPushButton::clicked, this, &MainWindow::saveXpfInstrument);
     connect(btnFil, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
     connect(btnLead, &QPushButton::clicked, this, &MainWindow::generateLeadStack);
     connect(btnRand, &QPushButton::clicked, this, &MainWindow::generateRandomPatch);
@@ -426,16 +895,94 @@ void MainWindow::generateSFXMacro() {
 }
 
 void MainWindow::generateArpAnimator() {
-    double spd = arpSpeed->value();
-    QString logic = (buildModeArp->currentIndex() == 0) ? QString("(mod(t*%1,2)<1 ? 1 : 1.5)").arg(spd) : QString("(mod(t*%1,2)<1)*1 + (mod(t*%1,2)>=1)*1.5").arg(spd);
-    statusBox->setText(QString("sinew(integrate(f * %1))").arg(logic));
+    // 1. CALCULATE SPEED
+    double hz = 0;
+    if (arpBpmSync->isChecked()) {
+        double bpm = arpBpmVal->value();
+        // 1/16th note = BPM / 60 * 4
+        // Hubbard Speed (1/64) is 4x faster than that
+        int divIdx = arpSpeedDiv->currentIndex();
+        if (divIdx == 4) hz = 50.0; // PAL Frame (Classic C64 standard)
+        else {
+            double multiplier = (divIdx == 0) ? 4.0 : (divIdx == 1) ? 8.0 : (divIdx == 2) ? 12.0 : 16.0;
+            hz = (bpm / 60.0) * multiplier;
+        }
+    } else {
+        hz = arpSpeed->value();
+    }
+
+    // 2. GET INTERVALS (Parse the combobox text)
+    // Helper to extract number from string like "+7 (Perfect 5th)"
+    auto getSemi = [](QString s) {
+        return s.split(" ")[0].toInt();
+    };
+    int note1 = 0; // Root is always 0
+    int note2 = getSemi(arpInterval1->currentText());
+    int note3 = getSemi(arpInterval2->currentText());
+
+    // 3. GENERATE WAVEFORM LOGIC
+    QString waveName = arpWave->currentText();
+    double pwm = arpPwmSlider->value() / 100.0;
+
+    // We define a lambda to generate the "Audio" part for a specific pitch
+    auto genAudio = [&](QString pitchMult) {
+        if (waveName.contains("Pulse")) {
+            // Pulse Width formula: (sin(f) > width ? 1 : -1)
+            // We scale PWM to -1..1 range for the engine
+            return QString("(sinew(integrate(f*%1)) > %2 ? 1 : -1)")
+                .arg(pitchMult).arg((pwm * 2.0) - 1.0);
+        }
+        else if (waveName.contains("Metal")) {
+            // Ring Mod: Square * Detuned Square
+            return QString("(squarew(integrate(f*%1)) * squarew(integrate(f*%1*2.41)))")
+                .arg(pitchMult);
+        }
+        else if (waveName.contains("Noise")) {
+            return QString("randv(t*10000)"); // Noise ignores pitch usually
+        }
+        else {
+            QString osc = waveName.contains("Saw") ? "saww" : "trianglew";
+            return QString("%1(integrate(f*%2))").arg(osc).arg(pitchMult);
+        }
+    };
+
+    QString finalExpr;
+
+    // 4. BUILD THE ARP (Nested vs Legacy)
+
+    // Calculate Pitch Multipliers: 2^(semitones/12)
+    QString p1 = "1.0";
+    QString p2 = QString::number(std::pow(2.0, note2 / 12.0), 'f', 4);
+    QString p3 = QString::number(std::pow(2.0, note3 / 12.0), 'f', 4);
+
+    if (buildModeArp->currentIndex() == 0) { // NIGHTLY (Clean Switching)
+        // Logic: var step := floor(t * speed) % 3;
+        // (step == 0 ? Note1 : (step == 1 ? Note2 : Note3))
+
+        QString selector = QString("mod(floor(t*%1), 3)").arg(hz);
+
+        finalExpr = QString("(%1 < 1 ? %2 : (%1 < 2 ? %3 : %4))")
+                        .arg(selector)
+                        .arg(genAudio(p1))
+                        .arg(genAudio(p2))
+                        .arg(genAudio(p3));
+
+    } else { // LEGACY (Additive)
+        // Logic: ((Phase 0) * Note1) + ((Phase 1) * Note2) ...
+        // We use mod(floor(t*spd), 3) to find the current step index
+
+        QString stepCheck = QString("mod(floor(t*%1), 3)").arg(hz);
+
+        finalExpr = QString("((%1 < 1) * %2) + ((%1 >= 1 & %1 < 2) * %3) + ((%1 >= 2) * %4)")
+                        .arg(stepCheck)
+                        .arg(genAudio(p1))
+                        .arg(genAudio(p2))
+                        .arg(genAudio(p3));
+    }
+
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalExpr));
 }
 
-void MainWindow::generateWavetableForge() {
-    int h = (int)wtHarmonics->value(); QString type = wtBase->currentText();
-    QStringList p; for(int i=1; i<=h; ++i) p << QString("(1/%1)*%2(t*%1)").arg(i).arg(type);
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(p.join("+")));
-}
 
 void MainWindow::generateBesselFM() {
     QString fExpr = QString("f*%1 + (%2(integrate(f*%3))*%4*f*%3)").arg(besselCarrierMult->value()).arg(besselModWave->currentText()).arg(besselModMult->value()).arg(besselModIndex->value());
@@ -461,8 +1008,70 @@ void MainWindow::generateLeadStack() {
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(s.join(" + ")));
 }
 
+// ---------------------------------------------------------
+// GENERATOR: VELOCILOGIC (DYNAMICS)
+// ---------------------------------------------------------
 void MainWindow::generateVelocilogic() {
-    statusBox->setText((buildModeVeloci->currentIndex() == 0) ? "(v < 0.5 ? trianglew(integrate(f)) : saww(integrate(f)))" : "(v < 0.5)*trianglew(integrate(f)) + (v >= 0.5)*saww(integrate(f))");
+    int rows = velMapTable->rowCount();
+    if (rows == 0) return;
+
+    QString finalFormula;
+
+    // --- MODE A: NIGHTLY (Nested Ternary) ---
+    // Structure: (vel < 0.5 ? Soft : (vel < 0.8 ? Med : Hard))
+    if (velMapMode->currentIndex() == 0) {
+
+        QString nestedBody = "0";
+        int startIdx = rows - 1;
+
+        // Base case optimization
+        if (velMapTable->item(startIdx, 0)->text().toInt() >= 127) {
+            nestedBody = velMapTable->item(startIdx, 1)->text();
+            startIdx--;
+        }
+
+        for (int i = startIdx; i >= 0; --i) {
+            // Convert 0-127 to 0.0-1.0
+            double rawLimit = velMapTable->item(i, 0)->text().toDouble();
+            double normLimit = rawLimit / 127.0;
+
+            QString code = velMapTable->item(i, 1)->text();
+
+            nestedBody = QString("(vel < %1 ? %2 : %3)")
+                             .arg(normLimit, 0, 'f', 3)
+                             .arg(code)
+                             .arg(nestedBody);
+        }
+        finalFormula = nestedBody;
+    }
+
+    // --- MODE B: LEGACY (Additive) ---
+    // Structure: ((vel < 0.5) * Soft) + ...
+    else {
+        QStringList segments;
+        double lowerBound = 0.0;
+
+        for (int i = 0; i < rows; ++i) {
+            double rawLimit = velMapTable->item(i, 0)->text().toDouble();
+            double upperBound = rawLimit / 127.0;
+            QString code = velMapTable->item(i, 1)->text();
+
+            QString rangeCheck;
+            if (i == rows - 1 && rawLimit >= 127) {
+                rangeCheck = QString("(vel >= %1)").arg(lowerBound, 0, 'f', 3);
+            } else {
+                rangeCheck = QString("(vel >= %1 & vel < %2)")
+                .arg(lowerBound, 0, 'f', 3)
+                    .arg(upperBound, 0, 'f', 3);
+            }
+
+            segments << QString("(%1 * %2)").arg(rangeCheck).arg(code);
+            lowerBound = upperBound;
+        }
+        finalFormula = segments.join(" + ");
+    }
+
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalFormula));
 }
 
 void MainWindow::generateNoiseForge() {
@@ -914,3 +1523,655 @@ void MainWindow::generatePhoneticFormula() {
     QApplication::clipboard()->setText(finalFormula);
 }
 
+// ---------------------------------------------------------
+// HELPER: Finds a character but ignores anything inside brackets
+// Critical for not splitting math like "sin(t+1)"
+// ---------------------------------------------------------
+int findScopeAwareChar(const QString &str, char target) {
+    int balance = 0;
+    for (int i = 0; i < str.length(); ++i) {
+        if (str[i] == '(') balance++;
+        else if (str[i] == ')') balance--;
+        else if (str[i] == target && balance == 0) return i;
+    }
+    return -1;
+}
+
+// ---------------------------------------------------------
+// FUNCTION 1: Legacy (Time t) --> Nightly (Samples s)
+// * Converts "t < 0.1" to "s <= 799" *
+// ---------------------------------------------------------
+// ---------------------------------------------------------
+// FUNCTION 1: Legacy (Chain) --> Nightly (Balanced Tree)
+// * Solves the "Stack Overflow" / Bracket Pile-up error *
+// ---------------------------------------------------------
+// ---------------------------------------------------------
+// FUNCTION 1: Universal "Make it Nightly"
+// * Accepts 't' (Time) OR 's' (Samples)
+// * Outputs perfectly balanced 'var s' tree
+// ---------------------------------------------------------
+// ---------------------------------------------------------
+// FUNCTION 1: Universal "Make it Nightly"
+// * Uses RECURSION to handle both Trees and Chains
+// * Digs out the true values and rebuilds a clean 'var s' tree
+// ---------------------------------------------------------
+// ---------------------------------------------------------
+// FUNCTION 1: Legacy (Time) --> Nightly (Samples)
+// * Auto-Detects Sample Rate (2000 vs 8000)
+// * Preserves your Tree Brackets perfectly
+// * Removes "clamp"
+// ---------------------------------------------------------
+QString MainWindow::convertLegacyToNightly(QString input) {
+    // 1. Clean formatting
+    input = input.replace("\n", "").replace(" ", "").trimmed();
+
+    // Remove "clamp" wrapper if present (User requested raw output)
+    if (input.startsWith("clamp(")) {
+        int c = input.indexOf(','), p = input.lastIndexOf(')');
+        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
+    }
+    if (input.startsWith("0.000+")) input = input.mid(6);
+
+    // 2. AUTO-DETECT SAMPLE RATE
+    // We scan the text for the smallest non-zero number.
+    // Example: If we see "0.000500", we know Rate = 1 / 0.0005 = 2000.
+    double sampleRate = 8000.0; // Default fallback
+
+    QRegularExpression floatReg("0\\.00[0-9]+"); // Look for small decimals
+    auto matches = floatReg.globalMatch(input);
+    double minVal = 1.0;
+    bool foundAny = false;
+
+    while (matches.hasNext()) {
+        double val = matches.next().captured(0).toDouble();
+        if (val > 0.000001 && val < minVal) {
+            minVal = val;
+            foundAny = true;
+        }
+    }
+    if (foundAny) {
+        // Round to nearest hundred to avoid precision errors (e.g., 1999.99 -> 2000)
+        sampleRate = std::round(1.0 / minVal);
+    }
+
+    // 3. TREE PRESERVATION MODE
+    // If the input contains nested '?' (like your example),
+    // we do NOT rebuild the tree. We just regex-swap 't' for 's'.
+    // This keeps your brackets 100% identical.
+    if (input.contains("?")) {
+
+        static QRegularExpression tReg("t<([0-9\\.]+)");
+        QString result;
+        int lastPos = 0;
+
+        auto it = tReg.globalMatch(input);
+        while (it.hasNext()) {
+            QRegularExpressionMatch match = it.next();
+
+            // Keep the text structure exactly as is
+            result.append(input.mid(lastPos, match.capturedStart() - lastPos));
+
+            // MATH: Convert Time -> Sample
+            // Formula: s <= floor(t * rate) - 1
+            double tVal = match.captured(1).toDouble();
+            int sVal = std::floor(tVal * sampleRate) - 1;
+            if (sVal < 0) sVal = 0;
+
+            // Swap "t < 0.005" with "s <= 9"
+            result.append(QString("s<=%1").arg(sVal));
+
+            lastPos = match.capturedEnd();
+        }
+        result.append(input.mid(lastPos));
+
+        // Output correct header, NO CLAMP
+        return QString("var s:=floor(t*%1);\n%2")
+            .arg(int(sampleRate))
+            .arg(result);
+    }
+
+    // 4. CHAIN MODE (Fallback)
+    // Only used if you give it a flat chain (SID/Arp)
+    // ... (Your previous flattening logic could go here if needed,
+    // but for PCM trees, the block above handles it perfectly) ...
+
+    return "Error: Input format not recognized (Try standard Legacy PCM).";
+}
+
+// ---------------------------------------------------------
+// FUNCTION 2: Nightly (Samples s) --> Legacy (Time t)
+// * Converts "s <= 799" to "t < 0.1" *
+// ---------------------------------------------------------
+QString MainWindow::convertNightlyToLegacy(QString input) {
+    input = input.replace("\n", "").replace(" ", "").trimmed();
+    if (input.startsWith("clamp(")) {
+        int c = input.indexOf(','), p = input.lastIndexOf(')');
+        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
+    }
+
+    // --- MODE A: PCM Tree Detected ("var s") ---
+    // This is the main one used for PCM files
+    static QRegularExpression pcmVar("var\\s*s\\s*:=\\s*floor\\(t\\s*\\*\\s*([0-9]+)\\);");
+    auto pcmMatch = pcmVar.match(input);
+
+    if (pcmMatch.hasMatch()) {
+        double sr = pcmMatch.captured(1).toDouble();
+        if (sr == 0) sr = 8000;
+        input.remove(pcmMatch.captured(0)); // Remove var declaration
+
+        // Replace all "s <= 123" with "t < 0.015"
+        static QRegularExpression sReg("s\\s*<=\\s*([0-9]+)");
+        QString result;
+        int lastPos = 0;
+        auto it = sReg.globalMatch(input);
+        while (it.hasNext()) {
+            QRegularExpressionMatch m = it.next();
+            result.append(input.mid(lastPos, m.capturedStart() - lastPos));
+
+            // MATH: Convert Sample Index -> Time
+            // (Sample + 1) / Rate is the start time of the NEXT sample
+            double tVal = (m.captured(1).toDouble() + 1.0) / sr;
+            result.append(QString("t < %1").arg(QString::number(tVal, 'f', 6)));
+            lastPos = m.capturedEnd();
+        }
+        result.append(input.mid(lastPos));
+
+        // Return wrapped (The tree structure ? : is valid in Legacy too!)
+        return QString("clamp(-1, %1, 1)").arg(result);
+    }
+
+    // --- MODE B: Standard Chain Fallback ---
+    // If the input isn't PCM (doesn't have var s), we treat it as a SID chain
+    if (input.startsWith("0.000+")) input = input.mid(6);
+
+    QStringList additiveParts;
+    double lastStartTime = 0.0;
+    QString currentLayer = input;
+
+    while (true) {
+        int questIdx = currentLayer.indexOf('?');
+        if (questIdx == -1) break;
+
+        QString postQuest = currentLayer.mid(questIdx + 1);
+        int localColon = findScopeAwareChar(postQuest, ':');
+        if (localColon == -1) break;
+        int colonIdx = questIdx + 1 + localColon;
+
+        int timeEnd = questIdx - 1;
+        int timeStart = currentLayer.lastIndexOf("t<", timeEnd);
+        QString timeStr = (timeStart != -1) ? currentLayer.mid(timeStart + 2, timeEnd - timeStart - 1) : "0";
+
+        QString content = currentLayer.mid(questIdx + 1, colonIdx - questIdx - 1);
+
+        QString remainder = currentLayer.mid(colonIdx + 1);
+        while (remainder.startsWith("(") && remainder.endsWith(")") &&
+               findScopeAwareChar(remainder.mid(1, remainder.length()-2), ':') != -1) {
+            remainder = remainder.mid(1, remainder.length() - 2);
+        }
+
+        additiveParts << QString("((t >= %1 & t < %2) * %3)")
+                             .arg(QString::number(lastStartTime, 'f', 6))
+                             .arg(timeStr).arg(content);
+
+        lastStartTime = timeStr.toDouble();
+        currentLayer = remainder;
+    }
+
+    if (additiveParts.isEmpty()) return "Error: Logic mismatch.";
+    return QString("clamp(-1, %1, 1)").arg(additiveParts.join(" + "));
+}
+
+// ---------------------------------------------------------
+// PRESET LOADER: THE MASTERS COLLECTION
+// ---------------------------------------------------------
+void MainWindow::loadWavetablePreset(int index) {
+    // Helper lambda to make adding steps cleaner
+    // Args: Waveform, Semitones, PWM, Duration
+    auto add = [&](QString w, int p, int pwm, double d) {
+        int r = wtTrackerTable->rowCount();
+        wtTrackerTable->insertRow(r);
+        wtTrackerTable->setItem(r, 0, new QTableWidgetItem(w));
+        wtTrackerTable->setItem(r, 1, new QTableWidgetItem(QString::number(p)));
+        wtTrackerTable->setItem(r, 2, new QTableWidgetItem(QString::number(pwm)));
+        wtTrackerTable->setItem(r, 3, new QTableWidgetItem(QString::number(d)));
+    };
+
+    wtTrackerTable->setRowCount(0);
+    QString txt = wtPresetCombo->currentText();
+
+    // --- ROB HUBBARD ---
+    if (txt.contains("Commando")) { // Glissando Bass
+        add("Tri", 0, 0, 0.03); add("Tri", -1, 0, 0.03); add("Tri", -2, 0, 0.03);
+        add("Tri", -3, 0, 0.03); add("Tri", -4, 0, 0.03); add("Tri", -5, 0, 0.03);
+    }
+    else if (txt.contains("Monty")) { // Fast PWM Lead
+        add("Pulse", 0, 10, 0.04); add("Pulse", 0, 50, 0.04); add("Pulse", 0, 90, 0.04);
+        add("Pulse", 0, 50, 0.04); // PWM Sweep loop
+    }
+    else if (txt.contains("Delta")) { // The classic SID Snare
+        add("Noise", 12, 0, 0.02); // Snap
+        add("TriNoise", 0, 0, 0.04); // Body (Tri mixed with Noise)
+        add("Tri", -5, 0, 0.05);   // Tonal tail
+    }
+    else if (txt.contains("Zoids")) { // Ring Mod Simulation
+        add("Metal", 0, 0, 0.03); add("Metal", 1, 0, 0.03);
+        add("Metal", -1, 0, 0.03); add("Metal", 0, 0, 0.03);
+    }
+    else if (txt.contains("Ace 2")) { // Kick
+        add("Square", 0, 50, 0.01); add("Tri", -12, 0, 0.02); add("Tri", -24, 0, 0.08);
+    }
+    else if (txt.contains("Comets")) { // Echo
+        add("Saw", 0, 0, 0.06); add("Saw", 0, 0, 0.06); // Main
+        add("Saw", 0, 0, 0.06); // Space
+        add("Saw", 0, 0, 0.04); // Echo (simulated by decay in engine usually, but here distinct)
+    }
+
+    // --- MARTIN GALWAY ---
+    else if (txt.contains("Wizball")) { // Bubble Arp
+        add("Tri", 0, 0, 0.03); add("Tri", 4, 0, 0.03); add("Tri", 7, 0, 0.03);
+    }
+    else if (txt.contains("Parallax")) { // Slap Bass
+        add("Saw", 12, 0, 0.02); // Slap
+        add("Pulse", 0, 20, 0.05); // Body
+        add("Pulse", 0, 40, 0.10); // Open
+    }
+    else if (txt.contains("Comic")) { // Lead
+        add("Pulse", 0, 50, 0.03); add("Pulse", 0, 50, 0.03); // Wait
+        add("Pulse", 1, 50, 0.02); add("Pulse", 0, 50, 0.02); // Vibrato
+    }
+    else if (txt.contains("Arkanoid")) { // Dotted Echo Effect
+        add("Saw", 0, 0, 0.06); // Note
+        add("Saw", 0, 0, 0.06); // Space
+        add("Saw", 0, 0, 0.04); // Echo 1
+        add("Saw", 0, 0, 0.04); // Space
+        add("Saw", 0, 0, 0.02); // Echo 2
+    }
+    else if (txt.contains("Green Beret")) { // Military Snare
+        add("Noise", 10, 0, 0.02); // Crack
+        add("Noise", 5, 0, 0.03);  // Body
+        add("Noise", 0, 0, 0.05);  // Decay
+    }
+    // --- JEROEN TEL ---
+    else if (txt.contains("Cybernoid")) { // Metallic Drum
+        add("Metal", 24, 0, 0.02); add("Metal", 12, 0, 0.02); add("Noise", 0, 0, 0.05);
+    }
+    else if (txt.contains("Supremacy")) { // Vibrato Lead
+        add("Saw", 0, 0, 0.05); add("Saw", 0, 0, 0.05);
+        add("Saw", 1, 0, 0.02); add("Saw", -1, 0, 0.02); // Late Vibrato
+    }
+    else if (txt.contains("Turbo Outrun")) { // Slap Bass
+        add("Metal", 0, 0, 0.02);   // Metallic Attack
+        add("Pulse", -12, 40, 0.04); // Deep Body
+        add("Pulse", -12, 60, 0.08); // PWM Open
+    }
+    else if (txt.contains("RoboCop 3")) { // Title Screen Arp
+        // Famous intro: Root -> +7 -> +12 -> +19
+        add("Saw", 0, 0, 0.02); add("Saw", 7, 0, 0.02);
+        add("Saw", 12, 0, 0.02); add("Saw", 19, 0, 0.02);
+    }
+    // --- CHRIS HUELSBECK ---
+    else if (txt.contains("Turrican I")) { // Huge Arp
+        add("Pulse", 0, 50, 0.02); add("Pulse", 12, 50, 0.02);
+        add("Pulse", 0, 25, 0.02); add("Pulse", 19, 25, 0.02);
+    }
+    else if (txt.contains("Katakis")) { // Space Lead
+        add("SawSync", 0, 0, 0.04); add("SawSync", 0, 0, 0.04);
+    }
+    else if (txt.contains("Turrican II")) { // Pad / Sweep
+        add("Pulse", 0, 10, 0.05); add("Pulse", 0, 20, 0.05);
+        add("Pulse", 0, 30, 0.05); add("Pulse", 0, 40, 0.05);
+        add("Pulse", 0, 50, 0.20); // Sustain
+    }
+    else if (txt.contains("Great Giana")) { // Classic C64 Bass
+        add("Tri", 0, 0, 0.03);
+        add("Square", 0, 50, 0.10); // Solid square body
+    }
+    // --- TIM FOLLIN ---
+    else if (txt.contains("Solstice")) { // Prog Lead
+        add("Pulse", 0, 15, 0.02); add("Pulse", 0, 20, 0.02);
+        add("Pulse", 0, 25, 0.02); add("Pulse", 0, 30, 0.02); // PWM Swell
+    }
+    else if (txt.contains("Ghouls")) { // Rain
+        add("Noise", 24, 0, 0.01); add("Noise", 12, 0, 0.02);
+    }
+    else if (txt.contains("Silver Surfer")) { // Insane Arp
+        // Follin often used irregular intervals
+        add("Pulse", 0, 25, 0.01); add("Pulse", 4, 25, 0.01);
+        add("Pulse", 7, 25, 0.01); add("Pulse", 11, 25, 0.01);
+        add("Pulse", 14, 25, 0.01); add("Pulse", 12, 50, 0.01);
+    }
+    else if (txt.contains("LED Storm")) { // Rolling Bass
+        add("Saw", 12, 0, 0.02); // Pick
+        add("Saw", 0, 0, 0.03);  // Low
+        add("Saw", 0, 0, 0.03);  // Low
+        add("Saw", 12, 0, 0.02); // Octave Jump
+    }
+
+    // --- BEN DAGLISH ---
+    else if (txt.contains("Last Ninja")) { // Dark Bass
+        add("Saw", 0, 0, 0.04);
+        add("Tri", 0, 0, 0.04); // Mixing waveforms for texture
+        add("Tri", -12, 0, 0.10);
+    }
+    else if (txt.contains("Deflektor")) { // Glide Lead
+        add("Pulse", 0, 50, 0.02); add("Pulse", 1, 50, 0.02);
+        add("Pulse", 2, 50, 0.02); add("Pulse", 3, 50, 0.02); // Slide up
+        add("Pulse", 4, 10, 0.10); // Thin Sustain
+    }
+    else if (txt.contains("Trap")) { // Fast Arp
+        add("Square", 0, 50, 0.02); add("Square", 4, 50, 0.02);
+        add("Square", 7, 50, 0.02); add("Square", 0, 50, 0.02);
+    }
+
+    // --- DAVID WHITTAKER ---
+    else if (txt.contains("Glider Rider")) { // Pure Square
+        add("Square", 0, 50, 0.05); add("Square", 0, 50, 0.05); // Just a pure, unmodulated tone
+    }
+    else if (txt.contains("Lazy Jones")) { // Laser
+        add("Saw", 24, 0, 0.01); add("Saw", 20, 0, 0.01);
+        add("Saw", 16, 0, 0.01); add("Saw", 12, 0, 0.01);
+        add("Saw", 8, 0, 0.01);  add("Saw", 4, 0, 0.01);
+    }
+
+    // --- YM / ATARI ---
+    else if (txt.contains("YM Buzzer")) { // YM Envelope
+        add("Saw", 0, 0, 0.02); add("Saw", 0, 0, 0.02); // Step
+        add("Pulse", 0, 50, 0.01); // Buzz
+    }
+    else if (txt.contains("YM Metal")) {
+        add("Metal", 0, 0, 0.05); add("Metal", -12, 0, 0.05);
+    }
+    else if (txt.contains("YM 3-Voice")) { // Fake Chord
+        // Rapidly cycling 3 notes to simulate a chord on one channel
+        add("Saw", 0, 0, 0.01); add("Saw", 4, 0, 0.01);
+        add("Saw", 7, 0, 0.01);
+    }
+    else if (txt.contains("Digi-Drum")) { // 4-bit Sample Emulation
+        // Rapid volume changes to simulate a sample curve
+        add("Pulse", -24, 50, 0.01); add("Pulse", -24, 50, 0.01);
+        add("Pulse", -24, 90, 0.01); // Thinner (quiet)
+        add("Pulse", -24, 10, 0.01); // Thinner (quiet)
+    }
+    // --- FX ---
+    else if (txt.contains("Coin")) {
+        add("Pulse", 0, 50, 0.03); add("Pulse", 5, 50, 0.03);
+        add("Pulse", 10, 50, 0.03); add("Pulse", 15, 50, 0.10);
+    }
+    else if (txt.contains("Explosion")) {
+        add("Noise", 0, 0, 0.10); add("Noise", -5, 0, 0.10); add("Noise", -10, 0, 0.20);
+    }
+    else if (txt.contains("Fake Chord (Major)")) {
+        add("Saw", 0, 0, 0.01); add("Saw", 4, 0, 0.01); add("Saw", 7, 0, 0.01);
+    }
+    else if (txt.contains("Power Up")) {
+        add("Tri", 0, 0, 0.02); add("Tri", 2, 0, 0.02);
+        add("Tri", 4, 0, 0.02); add("Tri", 5, 0, 0.02);
+        add("Tri", 7, 0, 0.02); add("Tri", 12, 0, 0.10);
+    }
+    else if (txt.contains("Laser")) { // Pew Pew
+        add("Saw", 30, 0, 0.01); add("Saw", 20, 0, 0.01);
+        add("Saw", 10, 0, 0.01); add("Saw", 0, 0, 0.01);
+        add("Saw", -10, 0, 0.01);
+    }
+    else if (txt.contains("Hi-Hat (Closed)")) {
+        add("Metal", 40, 0, 0.01); // High pitch metal
+        add("Noise", 40, 0, 0.01);
+    }
+    else if (txt.contains("Hi-Hat (Open)")) {
+        add("Metal", 40, 0, 0.02);
+        add("Noise", 40, 0, 0.04); // Longer decay
+    }
+    else if (txt.contains("Fake Chord (Minor)")) {
+        add("Saw", 0, 0, 0.01); add("Saw", 3, 0, 0.01); add("Saw", 7, 0, 0.01);
+    }
+
+}
+
+// ---------------------------------------------------------
+// GENERATOR: WITH NEW "SPECIAL" WAVEFORMS
+// ---------------------------------------------------------
+void MainWindow::generateWavetableForge() {
+    int rows = wtTrackerTable->rowCount();
+    if (rows == 0) return;
+
+    double totalDuration = 0;
+    for(int i=0; i<rows; ++i)
+        if(wtTrackerTable->item(i,3)) totalDuration += wtTrackerTable->item(i, 3)->text().toDouble();
+
+    QString timeVar = "t";
+    if (wtLoopCheck->isChecked()) timeVar = QString("mod(t, %1)").arg(totalDuration, 0, 'f', 4);
+
+    // MODE SELECTION
+    if (buildModeWavetable->currentIndex() == 0) { // NIGHTLY (Nested)
+        QString nestedBody = "0";
+        double currentTime = totalDuration;
+
+        for (int i = rows - 1; i >= 0; --i) {
+            QString type = wtTrackerTable->item(i, 0)->text().toLower();
+            int pitch = wtTrackerTable->item(i, 1)->text().toInt();
+            double pwmVal = wtTrackerTable->item(i, 2)->text().toDouble() / 100.0;
+            double dur = wtTrackerTable->item(i, 3)->text().toDouble();
+            currentTime -= dur;
+
+            double pitchMult = std::pow(2.0, pitch / 12.0);
+
+            // --- NEW WAVEFORM LOGIC ---
+            QString audio;
+
+            if (type.contains("trinoise")) {
+                // Classic C64 Snare Drum trick (Tri + Noise)
+                audio = QString("(trianglew(integrate(f*%1)) + 0.5*randv(t*10000))").arg(pitchMult);
+            }
+            else if (type.contains("metal")) {
+                // Ring Mod Simulation (Square * Detuned Square)
+                audio = QString("(squarew(integrate(f*%1)) * squarew(integrate(f*%2)))")
+                            .arg(pitchMult).arg(pitchMult * 2.41);
+            }
+            else if (type.contains("sawsync")) {
+                // Hard Sync Simulation (Saw * Saw window)
+                audio = QString("(saww(integrate(f*%1)) * saww(integrate(f*%2)))")
+                            .arg(pitchMult).arg(pitchMult * 0.5);
+            }
+            else if (type.contains("pulse")) {
+                audio = QString("(sinew(integrate(f*%1)) > %2 ? 1 : -1)")
+                .arg(pitchMult, 0, 'f', 4).arg((pwmVal * 2.0) - 1.0, 0, 'f', 4);
+            }
+            else if (type.contains("noise")) {
+                audio = "randv(t * 10000)";
+            }
+            else {
+                QString osc = type.contains("tri") ? "trianglew" : "saww";
+                audio = QString("%1(integrate(f*%2))").arg(osc).arg(pitchMult, 0, 'f', 4);
+            }
+
+            nestedBody = QString("(%1 < %2 ? %3 : %4)")
+                             .arg(timeVar).arg(currentTime + dur, 0, 'f', 4)
+                             .arg(audio).arg(nestedBody);
+        }
+        statusBox->setText(QString("clamp(-1, %1, 1)").arg(nestedBody));
+    }
+    else { // LEGACY (Additive)
+        QStringList additiveParts;
+        double currentTime = 0.0;
+        for (int i = 0; i < rows; ++i) {
+            QString type = wtTrackerTable->item(i, 0)->text().toLower();
+            int pitch = wtTrackerTable->item(i, 1)->text().toInt();
+            double pwmVal = wtTrackerTable->item(i, 2)->text().toDouble() / 100.0;
+            double dur = wtTrackerTable->item(i, 3)->text().toDouble();
+
+            double pitchMult = std::pow(2.0, pitch / 12.0);
+            QString audio;
+
+            // Same special waveforms for Legacy
+            if (type.contains("trinoise")) audio = QString("(trianglew(integrate(f*%1)) + 0.5*randv(t*10000))").arg(pitchMult);
+            else if (type.contains("metal")) audio = QString("(squarew(integrate(f*%1)) * squarew(integrate(f*%2)))").arg(pitchMult).arg(pitchMult * 2.41);
+            else if (type.contains("sawsync")) audio = QString("(saww(integrate(f*%1)) * saww(integrate(f*%2)))").arg(pitchMult).arg(pitchMult * 0.5);
+            else if (type.contains("pulse")) audio = QString("(sinew(integrate(f*%1)) > %2 ? 1 : -1)").arg(pitchMult).arg((pwmVal * 2.0) - 1.0);
+            else if (type.contains("noise")) audio = "randv(t * 10000)";
+            else {
+                QString osc = type.contains("tri") ? "trianglew" : "saww";
+                audio = QString("%1(integrate(f*%2))").arg(osc).arg(pitchMult);
+            }
+
+            QString block = QString("((%1 >= %2 & %1 < %3) * %4)")
+                                .arg(timeVar).arg(currentTime, 0, 'f', 4)
+                                .arg(currentTime + dur, 0, 'f', 4).arg(audio);
+            additiveParts << block;
+            currentTime += dur;
+        }
+        statusBox->setText(QString("clamp(-1, %1, 1)").arg(additiveParts.join(" + ")));
+    }
+}
+
+// ---------------------------------------------------------
+// XPF PACKAGER: INJECTS CODE INTO INSTRUMENT TEMPLATE
+// ---------------------------------------------------------
+void MainWindow::saveXpfInstrument() {
+    // ... (The logic I gave you in the previous step goes here) ...
+    // If you need the full logic block again, let me know!
+
+    QString code = xpfInput->toPlainText();
+    if (code.isEmpty()) {
+        statusBox->setText("Error: No code to package! Paste something in the XPF tab first.");
+        return;
+    }
+
+    // Escape XML characters (Basic safety)
+    code = code.replace("&", "&amp;")
+               .replace("\"", "&quot;")
+               .replace("'", "&apos;")
+               .replace("<", "&lt;")
+               .replace(">", "&gt;")
+               .replace("\n", ""); // Remove newlines for the attribute
+
+    // THE MASTER TEMPLATE
+    // Based on 'foryoumyfriend.xpf' but cleaned up:
+    // - O1="1" (Enabled)
+    // - W1="0" (Disabled)
+    // - O2="0" (Disabled)
+    // - pan="0" (Centered)
+    // - src1="..." (Your Code)
+
+    QString xmlContent =
+        "<?xml version=\"1.0\"?>\n"
+        "<!DOCTYPE lmms-project>\n"
+        "<lmms-project creator=\"WaveConv\" version=\"20\">\n"
+        "  <head/>\n"
+        "  <instrumenttracksettings name=\"WaveConv_Patch\" type=\"0\" muted=\"0\" solo=\"0\">\n"
+        "    <instrumenttrack usemasterpitch=\"1\" vol=\"100\" pitch=\"0\" pan=\"0\" basenote=\"57\">\n" // Centered Pan
+        "      <instrument name=\"xpressive\">\n"
+        "        <xpressive \n"
+        "           version=\"0.1\" \n"
+        "           gain=\"1\" \n"
+        "           O1=\"1\" \n"           // O1 Enabled
+        "           O2=\"0\" \n"           // O2 Disabled
+        "           W1=\"0\" \n"           // W1 Disabled (Removed as requested)
+        "           W2=\"0\" \n"
+        "           src1=\"" + code + "\" \n"  // <--- YOUR CODE GOES HERE
+                 "           src2=\"\" \n"
+                 "           p1=\"0\" p2=\"0\" \n"  // Panning for Oscs (Centered)
+                 "           crse1=\"0\" fine1=\"0\" \n"
+                 "           crse2=\"0\" fine2=\"0\" \n"
+                 "           ph1=\"0\" ph2=\"0\" \n"
+                 "           bin=\"\" \n"           // Cleared binary data
+                 "        >\n"
+                 "          <key/>\n"
+                 "        </xpressive>\n"
+                 "      </instrument>\n"
+                 "      <eldata fcut=\"14000\" fres=\"0.5\" ftype=\"0\" fwet=\"0\">\n"
+                 "        <elvol amt=\"1\" att=\"0\" dec=\"0.5\" hold=\"0.5\" rel=\"0.1\" sustain=\"0.5\"/>\n"
+                 "        <elcut amt=\"0\"/>\n"
+                 "        <elres amt=\"0\"/>\n"
+                 "      </eldata>\n"
+                 "    </instrumenttrack>\n"
+                 "  </instrumenttracksettings>\n"
+                 "</lmms-project>\n";
+
+    // Save File Dialog
+    QString fileName = QFileDialog::getSaveFileName(this, "Save Instrument", "", "LMMS Instrument (*.xpf)");
+
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (file.open(QIODevice::WriteOnly)) {
+        QTextStream stream(&file);
+        stream << xmlContent;
+        file.close();
+        statusBox->setText("Saved successfully to: " + fileName);
+    } else {
+        statusBox->setText("Error: Could not save file.");
+    }
+}
+// ---------------------------------------------------------
+// GENERATOR: KEY MAPPER (KEYBOARD SPLITS)
+// ---------------------------------------------------------
+void MainWindow::generateKeyMapper() {
+    int rows = keyMapTable->rowCount();
+    if (rows == 0) return;
+
+    QString finalFormula;
+
+    // --- MODE A: NIGHTLY (Nested Ternary) ---
+    // Structure: (key < Limit1 ? Code1 : (key < Limit2 ? Code2 : Code3))
+    if (keyMapMode->currentIndex() == 0) {
+
+        // Start with the last zone (The "Else" case)
+        QString nestedBody = "0";
+
+        // We iterate backwards.
+        // The last row is usually the "Rest of the keyboard" (Limit 127/128)
+        // But for nesting, we build from the bottom up.
+
+        // Optimization: If the last row goes to 128, it's the base case.
+        int startIdx = rows - 1;
+        if (keyMapTable->item(startIdx, 0)->text().toInt() >= 127) {
+            nestedBody = keyMapTable->item(startIdx, 1)->text();
+            startIdx--; // We consumed this row as the base
+        }
+
+        for (int i = startIdx; i >= 0; --i) {
+            QString limit = keyMapTable->item(i, 0)->text();
+            QString code = keyMapTable->item(i, 1)->text();
+
+            // Format: (key < LIMIT ? CODE : NEXT_BLOCK)
+            nestedBody = QString("(key < %1 ? %2 : %3)")
+                             .arg(limit)
+                             .arg(code)
+                             .arg(nestedBody);
+        }
+        finalFormula = nestedBody;
+    }
+
+    // --- MODE B: LEGACY (Additive) ---
+    // Structure: ((key < 60) * Bass) + ((key >= 60 & key < 84) * Pad) ...
+    else {
+        QStringList segments;
+        int lowerBound = 0; // Start at MIDI 0
+
+        for (int i = 0; i < rows; ++i) {
+            int upperBound = keyMapTable->item(i, 0)->text().toInt();
+            QString code = keyMapTable->item(i, 1)->text();
+
+            // Range Logic
+            QString rangeCheck;
+            if (i == rows - 1 && upperBound >= 127) {
+                // Last segment goes to end: (key >= lower)
+                rangeCheck = QString("(key >= %1)").arg(lowerBound);
+            } else {
+                // Middle segment: (key >= lower & key < upper)
+                rangeCheck = QString("(key >= %1 & key < %2)")
+                                 .arg(lowerBound)
+                                 .arg(upperBound);
+            }
+
+            // Combine: (Range * Code)
+            segments << QString("(%1 * %2)").arg(rangeCheck).arg(code);
+
+            // Set up next loop
+            lowerBound = upperBound;
+        }
+        finalFormula = segments.join(" + ");
+    }
+
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalFormula));
+}
