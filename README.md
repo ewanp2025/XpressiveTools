@@ -30,7 +30,7 @@ Filter Forge: Designs FIR style filters (Low-Pass/High-Pass) with adjustable tap
 
 Harmonic Lab: An additive synthesis interface with 16 harmonic sliders for building complex timbres.
 
-Text to Speech: Text to Speech based on phonemes from Software Automatic Mouth
+Text to Speech: Text to Speech based on phonemes from Software Automatic Mouth.
 
 **Technical**
 
