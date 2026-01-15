@@ -2044,14 +2044,6 @@ void MainWindow::saveXpfInstrument() {
                .replace(">", "&gt;")
                .replace("\n", ""); // Remove newlines for the attribute
 
-    // THE MASTER TEMPLATE
-    // Based on 'foryoumyfriend.xpf' but cleaned up:
-    // - O1="1" (Enabled)
-    // - W1="0" (Disabled)
-    // - O2="0" (Disabled)
-    // - pan="0" (Centered)
-    // - src1="..." (Your Code)
-
     QString xmlContent =
         "<?xml version=\"1.0\"?>\n"
         "<!DOCTYPE lmms-project>\n"
@@ -2175,3 +2167,4 @@ void MainWindow::generateKeyMapper() {
 
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalFormula));
 }
+
