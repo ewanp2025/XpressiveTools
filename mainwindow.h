@@ -107,6 +107,7 @@ private slots:
     
     // --- NEW SLOT ---
     void generatePhoneticFormula();
+    void generateStepGate();
 
 private:
     void setupUI();
@@ -228,6 +229,17 @@ private:
     QPushButton *btnSaveXpf;
 
     void saveXpfInstrument();
+
+    // --- NEW STEP GATE VARIABLES ---
+    QComboBox *gateBuildMode;
+    QComboBox *gateSpeedCombo;
+    QCheckBox *gateTripletCheck;
+    QComboBox *gateShapeCombo;
+    QTextEdit *gateCustomShape;
+    QPushButton *gateSteps[16];
+    QSlider *gateMixSlider;
+
+
 
     // Helper functions for the logic
     QString convertLegacyToNightly(QString input);
