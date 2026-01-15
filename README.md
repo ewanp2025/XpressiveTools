@@ -48,6 +48,6 @@ Export: Use the Copy Clipboard function to take the generated string and paste i
 
 **License**
 
-This project is licensed under the MIT License.
+The phonemes were worked out by various versions of reversed engineered SAM (1982) found on github which was from the Commodore 64 and no longer exists / is assumed abandonware. Therefore due to this assumption, I cannot put my code under any specific open source software license.
 
 Copyright (c) 2026 Ewan Pettigrew
