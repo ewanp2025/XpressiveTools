@@ -413,7 +413,7 @@ void MainWindow::setupUI() {
     harLayout->addWidget(btnHar);
     modeTabs->addTab(harTab, "Harmonic Lab");
 
-    // --- DRUM ARCHITECT TAB ---
+    // 9. --- DRUM ARCHITECT TAB ---
     QWidget *drumTab = new QWidget();
 
     // 1. CHANGE: Main layout is now VERTICAL
@@ -471,7 +471,7 @@ void MainWindow::setupUI() {
     // Connect the button
     connect(btnDrum, &QPushButton::clicked, this, &MainWindow::generateDrumArchitect);
 
-    // 9. VELOCILOGIC (DYNAMICS MAPPER)
+    // 10. VELOCILOGIC (DYNAMICS MAPPER)
     QWidget *velTab = new QWidget();
     auto *velLayout = new QVBoxLayout(velTab);
 
@@ -537,7 +537,7 @@ void MainWindow::setupUI() {
     addVelZone(100, "saww(t*f)");
     addVelZone(127, "squarew(t*f) + (randv(t)*0.2)");
 
-    // 10. NOISE FORGE
+    // 11. NOISE FORGE
     QWidget *noiseTab = new QWidget(); auto *noiseLayout = new QFormLayout(noiseTab);
     buildModeNoise = new QComboBox(); buildModeNoise->addItems({"Modern", "Legacy"});
     noiseRes = new QDoubleSpinBox(); noiseRes->setRange(100, 44100); noiseRes->setValue(8000);
@@ -547,7 +547,7 @@ void MainWindow::setupUI() {
     noiseLayout->addRow(btnNoise);
     modeTabs->addTab(noiseTab, "Noise Forge");
 
-     // 11. XPF PACKAGER / MANAGER
+     // 12. XPF PACKAGER / MANAGER
     QWidget *xpfTab = new QWidget();
     auto *xpfLayout = new QVBoxLayout(xpfTab);
 
@@ -627,14 +627,14 @@ void MainWindow::setupUI() {
     leadLayout->addRow(btnLead);
     modeTabs->addTab(leadTab, "Lead Stacker");
 
-    // 14. RANDOMIZER
+    // 14. RANDOMISER
     QWidget *randTab = new QWidget(); auto *randLayout = new QVBoxLayout(randTab);
     randLayout->addWidget(new QLabel("Chaos Level (Randomness):"));
     randLayout->addWidget(chaosSlider);
     auto *btnRand = new QPushButton("GENERATE CHAOS");
     btnRand->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 50px;");
     randLayout->addWidget(btnRand);
-    modeTabs->addTab(randTab, "Randomizer");
+    modeTabs->addTab(randTab, "Randomiser");
 
     // --- 15. PHONETIC LAB (NEW) ---
     QWidget *phoneticTab = new QWidget();
@@ -802,9 +802,75 @@ void MainWindow::setupUI() {
     addZone(60, "saww(t*f*0.5)"); // Bass (Below Middle C)
     addZone(128, "pulse(t*f)");   // Lead (Everything else)
 
+    // 18 STEP GATE
+    QWidget *gateTab = new QWidget();
+    QVBoxLayout *gateLayout = new QVBoxLayout(gateTab);
 
+    QLabel *gateDisclaimer = new QLabel("⚠ DISCLAIMER: INCOMPLETE FEATURE.\n"
+                                        "Only Legacy gate logic is currently working.");
+    gateDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    gateDisclaimer->setAlignment(Qt::AlignCenter);
+    gateDisclaimer->setFixedHeight(80);
+    gateLayout->addWidget(gateDisclaimer);
 
-    // 18. NEED TO KNOW / NOTES TAB
+    // Controls (Build Mode, Speed, Triplet, Mix)
+    QHBoxLayout *gateCtrlLayout = new QHBoxLayout();
+    gateBuildMode = new QComboBox(); gateBuildMode->addItems({"Nightly (Variables)", "Legacy (Inline)"});
+    gateSpeedCombo = new QComboBox(); gateSpeedCombo->addItems({"1/2 Speed (Slow)", "1x (Synced)", "2x (Fast)", "4x (Hyper)"});
+    gateSpeedCombo->setCurrentIndex(1);
+    gateTripletCheck = new QCheckBox("Triplet Mode (3/2)");
+    gateMixSlider = new QSlider(Qt::Horizontal); gateMixSlider->setRange(0, 100); gateMixSlider->setValue(100);
+
+    gateCtrlLayout->addWidget(new QLabel("Build:")); gateCtrlLayout->addWidget(gateBuildMode);
+    gateCtrlLayout->addWidget(new QLabel("Speed:")); gateCtrlLayout->addWidget(gateSpeedCombo);
+    gateCtrlLayout->addWidget(gateTripletCheck);
+    gateCtrlLayout->addWidget(new QLabel("Mix:")); gateCtrlLayout->addWidget(gateMixSlider);
+    gateLayout->addLayout(gateCtrlLayout);
+
+    // 16-Step Grid Buttons
+    QGridLayout *gateGrid = new QGridLayout();
+    gateGrid->setSpacing(4);
+    for(int i=0; i<16; ++i) {
+        gateSteps[i] = new QPushButton(QString::number(i+1));
+        gateSteps[i]->setCheckable(true);
+        gateSteps[i]->setFixedSize(45, 40);
+        // Styling: Red (OFF) -> Green (ON)
+        gateSteps[i]->setStyleSheet(
+            "QPushButton { background-color: #441111; color: #ff9999; border: 1px solid #552222; border-radius: 4px; }"
+            "QPushButton:checked { background-color: #00ee00; color: black; border: 1px solid #00aa00; font-weight: bold; }"
+            );
+        // Default pattern: (Every 3rd step roughly)
+        if(i == 0 || i == 2 || i == 3 || i == 6 || i == 8 || i == 10 || i == 11 || i == 14)
+            gateSteps[i]->setChecked(true);
+
+        int row = i / 8; // 2 rows of 8
+        int col = i % 8;
+        gateGrid->addWidget(gateSteps[i], row, col);
+    }
+    gateLayout->addLayout(gateGrid);
+
+    // Waveform Selector
+    QFormLayout *gateForm = new QFormLayout();
+    gateShapeCombo = new QComboBox();
+    gateShapeCombo->addItems({"Square Wave (Basic)", "Sawtooth (Sharp)", "Sine Wave (Soft)", "Noise (Perc)", "Custom (Paste Below)"});
+    gateCustomShape = new QTextEdit();
+    gateCustomShape->setPlaceholderText("Paste custom formula here if 'Custom' selected (use 'f' for freq)...");
+    gateCustomShape->setMaximumHeight(60);
+
+    gateForm->addRow("Source Wave:", gateShapeCombo);
+    gateForm->addRow("Custom Code:", gateCustomShape);
+    gateLayout->addLayout(gateForm);
+
+    // Generate Button
+    QPushButton *btnGenGate = new QPushButton("GENERATE STEP GATE");
+    btnGenGate->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 50px; font-size: 14px;");
+    gateLayout->addWidget(btnGenGate);
+
+    modeTabs->addTab(gateTab, "Step Gate");
+
+    connect(btnGenGate, &QPushButton::clicked, this, &MainWindow::generateStepGate);
+
+    // 19. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -2044,6 +2110,14 @@ void MainWindow::saveXpfInstrument() {
                .replace(">", "&gt;")
                .replace("\n", ""); // Remove newlines for the attribute
 
+    // THE MASTER TEMPLATE
+    // Based on 'foryoumyfriend.xpf' but cleaned up:
+    // - O1="1" (Enabled)
+    // - W1="0" (Disabled)
+    // - O2="0" (Disabled)
+    // - pan="0" (Centered)
+    // - src1="..." (Your Code)
+
     QString xmlContent =
         "<?xml version=\"1.0\"?>\n"
         "<!DOCTYPE lmms-project>\n"
@@ -2168,3 +2242,67 @@ void MainWindow::generateKeyMapper() {
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalFormula));
 }
 
+// ---------------------------------------------------------
+// GENERATOR: STEP GATE
+// ---------------------------------------------------------
+void MainWindow::generateStepGate() {
+    // 1. Calculate Rate
+    // Base: 16th notes at Tempo. Formula: (tempo/60) * 4
+    QString speedExpr = "(tempo/60.0)*4.0";
+    double mult = 1.0;
+    int sIdx = gateSpeedCombo->currentIndex();
+    if(sIdx == 0) mult = 0.5;
+    if(sIdx == 2) mult = 2.0;
+    if(sIdx == 3) mult = 4.0;
+    if(gateTripletCheck->isChecked()) mult *= 1.5; // Triplet feel (faster)
+
+    speedExpr += QString("*%1").arg(mult);
+
+    // 2. Get Carrier Waveform
+    QString wave = "squarew(integrate(f))"; // Default
+    int shapeIdx = gateShapeCombo->currentIndex();
+    if(shapeIdx == 1) wave = "saww(integrate(f))";
+    else if(shapeIdx == 2) wave = "sinew(integrate(f))";
+    else if(shapeIdx == 3) wave = "randv(t*10000)";
+    else if(shapeIdx == 4) wave = QString("(%1)").arg(gateCustomShape->toPlainText());
+
+    // 3. Build Gate Pattern
+    // We map step (0-15) to On(1) or Off(0)
+    QString gateLogic;
+    bool nightly = (gateBuildMode->currentIndex() == 0);
+
+    if (nightly) {
+        // Nightly: Use variables for cleaner code
+        // "var step := mod(floor(t * speed), 16);"
+        QString stepMap = "0";
+        // Build nested ternary backwards: (step == 15 ? val : (step == 14 ? val ...))
+        for(int i=15; i>=0; --i) {
+            QString val = gateSteps[i]->isChecked() ? "1" : "0";
+            stepMap = QString("(step == %1 ? %2 : %3)").arg(i).arg(val).arg(stepMap);
+        }
+        gateLogic = QString("var step := mod(floor(t * %1), 16);\nvar g := %2;\n(g * %3)").arg(speedExpr).arg(stepMap).arg(wave);
+    } else {
+        // Legacy: Inline everything (Additive)
+        // "((mod(floor(t*rate),16)==0)*1) + ..."
+        QStringList parts;
+        for(int i=0; i<16; ++i) {
+            if(gateSteps[i]->isChecked()) {
+                // We use >= i & < i+1 logic to catch the step
+                parts << QString("((mod(floor(t*%1),16) >= %2 & mod(floor(t*%1),16) < %3))")
+                             .arg(speedExpr).arg(i).arg(i+1);
+            }
+        }
+        if(parts.isEmpty()) gateLogic = "0";
+        else gateLogic = QString("(%1) * %2").arg(parts.join(" + ")).arg(wave);
+    }
+
+    // 4. Mix Amount (Dry / Wet)
+    double mix = gateMixSlider->value() / 100.0;
+    if(mix < 1.0) {
+        // Formula: (Original_Wave * (1-mix)) + (Gated_Wave * mix)
+        gateLogic = QString("((%1 * %2) + (%3 * %4))").arg(wave).arg(1.0-mix).arg(gateLogic).arg(mix);
+    }
+
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(gateLogic));
+    QApplication::clipboard()->setText(statusBox->toPlainText());
+}
