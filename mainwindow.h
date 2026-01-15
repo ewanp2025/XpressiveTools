@@ -19,6 +19,9 @@
 #include <QScrollArea>
 #include <QMap>
 #include <vector>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QHeaderView>
 
 // --- NEW STRUCTURE FOR PHONETIC LAB ---
 struct SAMPhoneme {
@@ -141,6 +144,14 @@ private:
     QComboBox *filterType;
     QDoubleSpinBox *filterTaps;
     QDoubleSpinBox *arpSpeed;
+
+    QComboBox *arpWave;
+    QSlider *arpPwmSlider;      // The soul of the C64
+    QCheckBox *arpBpmSync;      // "Lock to BPM"
+    QDoubleSpinBox *arpBpmVal;  // The Song BPM
+    QComboBox *arpSpeedDiv;     // 1/16, 1/32, 1/64 (The "Hubbard Speed")
+
+
     QComboBox *arpInterval1, *arpInterval2;
     QComboBox *wtBase;
     QDoubleSpinBox *wtHarmonics;
@@ -174,5 +185,55 @@ private:
     QPushButton *btnGenPhonetic;
     QLabel *phonemeRefLabel;
     QMap<QString, SAMPhoneme> samLibrary;
+
+    // --- NEW CONVERTER TAB VARIABLES ---
+    QTextEdit *convInput;       // The left box (Source)
+    QTextEdit *convOutput;      // The right box (Result)
+    QPushButton *btnToNightly;  // Button: Legacy -> Nightly
+    QPushButton *btnToLegacy;   // Button: Nightly -> Legacy
+
+
+    // --- NEW WAVETABLE TRACKER STRUCTURES ---
+    struct WavetableStep {
+        QString shape;      // "Pulse", "Saw", "Tri", "Noise"
+        int semitones;      // Transpose (e.g., 0, +7, +12)
+        int pwm;            // Pulse Width (0-100)
+        double duration;    // How long to hold this step (in seconds)
+    };
+
+    QTableWidget *wtTrackerTable;
+    QComboBox *wtPresetCombo;
+    QCheckBox *wtLoopCheck;
+
+    // Key Mapper Variables
+    QTableWidget *keyMapTable;
+    QComboBox *keyMapMode;
+    QLabel *keyMapDisclaimer;
+    void generateKeyMapper();
+
+    // Velocilogic Variables
+    QTableWidget *velMapTable;
+    QComboBox *velMapMode;
+    QLabel *velDisclaimer;
+
+
+    // Helper to load presets
+    void loadWavetablePreset(int index);
+
+    // Disclaimers
+    QLabel *convDisclaimer; //
+    QLabel *filterDisclaimer;
+    QLabel *drumDisclaimer;
+    QLabel *xpfDisclaimer;
+    QPushButton *btnSaveXpf;
+
+    void saveXpfInstrument();
+
+    // Helper functions for the logic
+    QString convertLegacyToNightly(QString input);
+    QString convertNightlyToLegacy(QString input);
+
+    // ... end of class ...
+
 };
 #endif
