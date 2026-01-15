@@ -18,7 +18,7 @@ Lead Stacker: Create thick, "supersaw" style leads by stacking unison voices wit
 
 **Percussion & Noise**
 
-Drum Architect: A specialised tool for designing kicks, snares, and cymbals using pitch-enveloped oscillators. It includes filter suggestions based on the base frequency.
+Drum Architect: A specialised tool for designing kicks, snares, and cymbals using pitch-enveloped oscillators. It includes filter suggestions based on the base frequency. - Very early version, the aim is to control the filter within the GUI by exporting an .xpf as most drums require filters.
 
 Noise Forge: Generates sample-rate-reduced noise expressions for lofi textures and percussion.
 
@@ -29,6 +29,8 @@ PCM Sampler: Converts standard WAV files into optimised 4 bit mathematical strin
 Filter Forge: Designs FIR style filters (Low-Pass/High-Pass) with adjustable tap counts. Experimental, limited success so far with FIR.
 
 Harmonic Lab: An additive synthesis interface with 16 harmonic sliders for building complex timbres.
+
+Text to Speech: Text to Speech based on phonemes from Software Automatic Mouth
 
 **Technical**
 
