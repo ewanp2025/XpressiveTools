@@ -1,7 +1,6 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include "mainwindow.moc"
 #include <QMainWindow>
 #include <QPushButton>
 #include <QDoubleSpinBox>
@@ -279,4 +278,5 @@ private:
 
 };
 #endif
+
 
