@@ -240,6 +240,35 @@ private:
     QSlider *gateMixSlider;
 
 
+    // --- LEGACY PIANO LAB VARIABLES ---
+    QTextEdit *pianoSourceEdit;
+
+    // Core Instrument Controls
+    QSlider *pianoVolSlider;
+    QSlider *pianoCutoffSlider;
+    QSlider *pianoResSlider;
+
+    // Envelope Controls
+    QSlider *pianoAttSlider;
+    QSlider *pianoDecSlider;
+    QSlider *pianoSusSlider;
+    QSlider *pianoRelSlider;
+
+    // NEW: Math Expression Mixers
+    QSlider *pianoMixSawSlider;   // Center Saw
+    QSlider *pianoMixSubSlider;   // Sub Octave (-12)
+    QSlider *pianoMixHighSlider;  // High Octave (+12)
+
+    // NEW: Effects (Reverb/Plate)
+    QSlider *pianoRevBandwidth;
+    QSlider *pianoRevTail;
+    QSlider *pianoRevDamping;
+    QSlider *pianoRevMix;
+
+    QLabel *pianoStatusLabel;
+
+    // Function to run the logic
+    void saveLegacyPiano();
 
     // Helper functions for the logic
     QString convertLegacyToNightly(QString input);
