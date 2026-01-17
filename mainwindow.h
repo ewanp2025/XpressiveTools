@@ -103,9 +103,7 @@ private slots:
     void generateXPFPackager();
     void generateLeadStack();
     void generateRandomPatch();
-    void generateDrumArchitect();
-    
-    // --- NEW SLOT ---
+    void generateDrumXpf();
     void generatePhoneticFormula();
     void generateStepGate();
 
@@ -166,13 +164,14 @@ private:
     QDoubleSpinBox *noiseRes;
     QTextEdit *xpfInput;
 
-    QComboBox *drumType;
-    QComboBox *drumBuildMode;
-    QSlider *drumFreqSlider;
-    QSlider *drumPunchSlider;
-    QSlider *drumDecaySlider;
-    QSlider *drumToneSlider;
-    QLabel *drumFilterWarning;
+    // --- DRUM DESIGNER REDO ---
+    QComboBox *drumTypeCombo;
+    QComboBox *drumWaveCombo;
+    QSlider *drumPitchSlider, *drumDecaySlider, *drumToneSlider, *drumSnapSlider;
+    QSlider *drumNoiseSlider, *drumPitchDropSlider, *drumPWMSlider;
+    QSlider *drumExpSlider; // Added for exponential decay
+     QPushButton *btnGenerateDrum, *btnSaveDrumXpf;
+    QString getXpfTemplate();
 
     QDoubleSpinBox *leadUnisonCount;
     QDoubleSpinBox *leadDetuneAmount;
