@@ -9,6 +9,7 @@ This is still very much work in progress.
 The suite is divided into several tabs each targeting a specific era or style of sound design.
 
 **Tab Breakdown & Progress**
+
 SID Architect	- Build complex C64-style oscillator chains with decay and frequency offsets. STABLE but will benefit from more features.
 
 PCM Sampler	- Converts WAV files into optimized math expressions for playback. STABLE working close to my original MATLAB script now with modern and legacy mode.
@@ -39,7 +40,7 @@ Lead Stacker - Generate Supersaws etc. WIP.
 
 Randomiser - Semi random expressions. WIP working.
 
-Phonetic Lab	A text-to-speech engine using SAM phoneme tables to generate vocal formulas. WIP.
+Phonetic Lab	- A text-to-speech engine using SAM phoneme tables to generate vocal formulas. WIP.
 
 Logic Converter	- Migrates code between Xpressive versions (e.g., Time t to Samples s). WIP only works for PCM samples and only with very short ones.
 
