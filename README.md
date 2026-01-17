@@ -28,7 +28,7 @@ Harmonic Lab - Generate harmonics with sliders. STABLE.
 
 Drum Designer	- Architect classic percussion (Kicks, Snares, Hats) using code based envelopes and internal LMMS filters. WIP.
 
-Velocilogic	- Maps different expressions to MIDI velocity layers for dynamic playing. BROKEN.
+Velocilogic	- Maps different expressions to MIDI velocity layers for dynamic playing. WIP only tested with legacy.
 
 Noise Forge - Sample rate control of noise. STABLE.
 
