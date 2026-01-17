@@ -10,23 +10,41 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 **Tab Breakdown & Progress**
 SID Architect	- Build complex C64-style oscillator chains with decay and frequency offsets. STABLE but will benefit from more features.
+
 PCM Sampler	- Converts WAV files into optimized math expressions for playback. STABLE working close to my original MATLAB script now with modern and legacy mode.
+
 Console Lab - Generate console chip sounds. WIP requires more features.
+
 SFX Macro - Generate sweeps. STABLE.
+
 Arp Animator - Generate synchronised arpeggios. STABLE.
+
 Wavetable Forge	- An interface for sequencing waveforms and pitches. STABLE but will benefit from more features.
+
 Bessel FM - Generate FM sounds. STABLE.
+
 Harmonic Lab - Generate harmonics with sliders. STABLE.
+
 Drum Designer	- Architect classic percussion (Kicks, Snares, Hats) using code based envelopes and internal LMMS filters. WIP.
+
 Velocilogic	- Maps different expressions to MIDI velocity layers for dynamic playing. BROKEN.
+
 Noise Forge - Sample rate control of noise. STABLE.
+
 XPF Packagaer - Placeholder. WIP
+
 Filter Forge	Generates mathematical approximations of FIR filters using last(n) logic. WIP limited success with FIR.
+
 Lead Stacker - Generate Supersaws etc. WIP.
+
 Randomiser - Semi random expressions. WIP working.
+
 Phonetic Lab	A text-to-speech engine using SAM phoneme tables to generate vocal formulas. WIP.
+
 Logic Converter	- Migrates code between Xpressive versions (e.g., Time t to Samples s). WIP only works for PCM samples and only with very short ones.
+
 Key Mapper	- Splits the keyboard into zones so you can play different logic on different keys. BROKEN.
+
 Step Gate	- A 16-step rhythmic gate to pulse your sounds in sync with the BPM. WIP tested working on legacy.
 
 **Technical**
