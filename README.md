@@ -36,7 +36,7 @@ XPF Packagaer - Placeholder. WIP
 
 Filter Forge	Generates mathematical approximations of FIR filters using last(n) logic. WIP limited success with FIR.
 
-Lead Stacker - Generate Supersaws etc. WIP.
+Lead Stacker - Generate Supersaws etc. WIP only tested with legacy.
 
 Randomiser - Semi random expressions. WIP working.
 
@@ -44,7 +44,7 @@ Phonetic Lab	- A text-to-speech engine using SAM phoneme tables to generate voca
 
 Logic Converter	- Migrates code between Xpressive versions (e.g., Time t to Samples s). WIP only works for PCM samples and only with very short ones.
 
-Key Mapper	- Splits the keyboard into zones so you can play different logic on different keys. BROKEN.
+Key Mapper	- Splits the keyboard into zones so you can play different logic on different keys. WIP only tested with legacy.
 
 Step Gate	- A 16-step rhythmic gate to pulse your sounds in sync with the BPM. WIP tested working on legacy.
 
