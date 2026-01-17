@@ -503,8 +503,8 @@ void MainWindow::setupUI() {
 
     // 1. Disclaimer
     velDisclaimer = new QLabel("⚠ VELOCILOGIC: DYNAMIC LAYERING.\n"
-                               "Placeholder.\n"
-                               "Code not working at present.");
+                               "Checked working with Legacy only.\n"
+                               "");
     velDisclaimer->setStyleSheet("QLabel { color: blue; font-weight: bold; font-size: 14px; border: 2px solid blue; padding: 10px; background-color: #eeeeff; }");
     velDisclaimer->setAlignment(Qt::AlignCenter);
     velDisclaimer->setFixedHeight(80);
@@ -772,7 +772,7 @@ void MainWindow::setupUI() {
     keyMapDisclaimer = new QLabel("⚠ DISCLAIMER: EXPERIMENTAL KEY MAPPING.\n"
                                   "This feature allows splitting logic across the keyboard.\n"
                                   "Requires further development.\n"
-                                  "Is not working yet.");
+                                  "Only tested with legacy");
     keyMapDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
     keyMapDisclaimer->setAlignment(Qt::AlignCenter);
     keyMapDisclaimer->setFixedHeight(80);
@@ -826,7 +826,7 @@ void MainWindow::setupUI() {
 
     // Add Default Splits (Bass / Lead)
     addZone(60, "saww(t*f*0.5)"); // Bass (Below Middle C)
-    addZone(128, "pulse(t*f)");   // Lead (Everything else)
+    addZone(128, "squarew(t*f)");   // Lead (Everything else)
 
     // 18 STEP GATE
     QWidget *gateTab = new QWidget();
@@ -896,7 +896,64 @@ void MainWindow::setupUI() {
 
     connect(btnGenGate, &QPushButton::clicked, this, &MainWindow::generateStepGate);
 
-    // 19. NEED TO KNOW / NOTES TAB
+    // 19. --- NUMBERS 1981 TAB ---
+    QWidget *numTab = new QWidget();
+    auto *numLayout = new QVBoxLayout(numTab);
+
+    // 1. Top Controls
+    auto *numCtrlLayout = new QHBoxLayout();
+    numModeCombo = new QComboBox(); numModeCombo->addItems({"Random Stream", "Pattern Editor"});
+    numStepsCombo = new QComboBox(); numStepsCombo->addItems({"16 Steps", "32 Steps"}); numStepsCombo->setCurrentIndex(1); // Default 32
+    numDuration = new QDoubleSpinBox(); numDuration->setRange(0.01, 1.0); numDuration->setValue(0.2); numDuration->setSingleStep(0.05);
+
+    numCtrlLayout->addWidget(new QLabel("Mode:")); numCtrlLayout->addWidget(numModeCombo);
+    numCtrlLayout->addWidget(new QLabel("Steps:")); numCtrlLayout->addWidget(numStepsCombo);
+    numCtrlLayout->addWidget(new QLabel("Note Dur:")); numCtrlLayout->addWidget(numDuration);
+    numLayout->addLayout(numCtrlLayout);
+
+    // 2. Pattern Editor (Table)
+    numPatternTable = new QTableWidget();
+    numPatternTable->setRowCount(1);
+    numPatternTable->setColumnCount(32); // Max 32
+    numPatternTable->setFixedHeight(70);
+    numPatternTable->verticalHeader()->setVisible(false);
+    numPatternTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+
+    // Fill with default zeros
+    for(int i=0; i<32; ++i) numPatternTable->setItem(0, i, new QTableWidgetItem("0"));
+
+    numLayout->addWidget(new QLabel("<b>Pattern Editor:</b> (Semitones +/- 12). Only used if 'Pattern Editor' mode selected."));
+    numLayout->addWidget(numPatternTable);
+
+    // 3. Outputs (O1 & O2)
+    auto *numOutLayout = new QHBoxLayout();
+    auto *g1 = new QGroupBox("O1: Pan Left (Main)"); auto *l1 = new QVBoxLayout(g1);
+    numOut1 = new QTextEdit(); l1->addWidget(numOut1);
+
+    auto *g2 = new QGroupBox("O2: Pan Right (Detuned+Vib)"); auto *l2 = new QVBoxLayout(g2);
+    numOut2 = new QTextEdit(); l2->addWidget(numOut2);
+
+    numOutLayout->addWidget(g1);
+    numOutLayout->addWidget(g2);
+    numLayout->addLayout(numOutLayout);
+
+    // 4. Generate Button
+    auto *btnGenNum = new QPushButton("GENERATE NUMBERS 1981");
+    btnGenNum->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
+    numLayout->addWidget(btnGenNum);
+
+    modeTabs->addTab(numTab, "Numbers 1981");
+    connect(btnGenNum, &QPushButton::clicked, this, &MainWindow::generateNumbers1981);
+
+    // Logic to hide/show pattern table based on mode
+    connect(numModeCombo, &QComboBox::currentIndexChanged, [=](int idx){
+        numPatternTable->setVisible(idx == 1);
+    });
+    // Default visibility check
+    numPatternTable->setVisible(false);
+
+
+    // 20. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -951,6 +1008,9 @@ void MainWindow::setupUI() {
     connect(btnLead, &QPushButton::clicked, this, &MainWindow::generateLeadStack);
     connect(btnRand, &QPushButton::clicked, this, &MainWindow::generateRandomPatch);
 }
+
+// The workings ------------------------
+
 
 void MainWindow::loadBesselPreset(int idx) {
     if (idx == 0 || idx == 9 || idx == 18 || idx == 28) return;
@@ -1100,9 +1160,6 @@ void MainWindow::generateLeadStack() {
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(s.join(" + ")));
 }
 
-// ---------------------------------------------------------
-// GENERATOR: VELOCILOGIC (DYNAMICS)
-// ---------------------------------------------------------
 void MainWindow::generateVelocilogic() {
     int rows = velMapTable->rowCount();
     if (rows == 0) return;
@@ -1110,9 +1167,7 @@ void MainWindow::generateVelocilogic() {
     QString finalFormula;
 
     // --- MODE A: NIGHTLY (Nested Ternary) ---
-    // Structure: (vel < 0.5 ? Soft : (vel < 0.8 ? Med : Hard))
     if (velMapMode->currentIndex() == 0) {
-
         QString nestedBody = "0";
         int startIdx = rows - 1;
 
@@ -1123,13 +1178,14 @@ void MainWindow::generateVelocilogic() {
         }
 
         for (int i = startIdx; i >= 0; --i) {
-            // Convert 0-127 to 0.0-1.0
+            // Convert MIDI (0-127) to Volume (0.0-1.0)
             double rawLimit = velMapTable->item(i, 0)->text().toDouble();
             double normLimit = rawLimit / 127.0;
 
             QString code = velMapTable->item(i, 1)->text();
 
-            nestedBody = QString("(vel < %1 ? %2 : %3)")
+            // USE 'v' INSTEAD OF 'vel'
+            nestedBody = QString("(v < %1 ? %2 : %3)")
                              .arg(normLimit, 0, 'f', 3)
                              .arg(code)
                              .arg(nestedBody);
@@ -1138,34 +1194,43 @@ void MainWindow::generateVelocilogic() {
     }
 
     // --- MODE B: LEGACY (Additive) ---
-    // Structure: ((vel < 0.5) * Soft) + ...
     else {
         QStringList segments;
         double lowerBound = 0.0;
 
         for (int i = 0; i < rows; ++i) {
+            // Convert MIDI (0-127) to Volume (0.0-1.0)
             double rawLimit = velMapTable->item(i, 0)->text().toDouble();
             double upperBound = rawLimit / 127.0;
             QString code = velMapTable->item(i, 1)->text();
 
             QString rangeCheck;
-            if (i == rows - 1 && rawLimit >= 127) {
-                rangeCheck = QString("(vel >= %1)").arg(lowerBound, 0, 'f', 3);
-            } else {
-                rangeCheck = QString("(vel >= %1 & vel < %2)")
+
+            // 1. First Zone
+            if (i == 0 && lowerBound <= 0.001) {
+                rangeCheck = QString("(v < %1)").arg(upperBound, 0, 'f', 3);
+            }
+            // 2. Last Zone
+            else if (i == rows - 1 && rawLimit >= 127) {
+                rangeCheck = QString("(v >= %1)").arg(lowerBound, 0, 'f', 3);
+            }
+            // 3. Middle Zones (Use * for AND)
+            else {
+                rangeCheck = QString("((v >= %1) * (v < %2))")
                 .arg(lowerBound, 0, 'f', 3)
                     .arg(upperBound, 0, 'f', 3);
             }
 
-            segments << QString("(%1 * %2)").arg(rangeCheck).arg(code);
+            segments << QString("(%1 * (%2))").arg(rangeCheck).arg(code);
             lowerBound = upperBound;
         }
         finalFormula = segments.join(" + ");
     }
 
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalFormula));
+    QString result = QString("clamp(-1, %1, 1)").arg(finalFormula);
+    statusBox->setText(result);
+    QApplication::clipboard()->setText(result);
 }
-
 void MainWindow::generateNoiseForge() {
     statusBox->setText(QString("randv(floor(t * %1))").arg(noiseRes->value()));
 }
@@ -2193,73 +2258,66 @@ void MainWindow::saveXpfInstrument() {
 // ---------------------------------------------------------
 void MainWindow::generateKeyMapper() {
     int rows = keyMapTable->rowCount();
-    if (rows == 0) return;
+    if (rows == 0) {
+        statusBox->setText("Error: Key Map Table is empty.");
+        return;
+    }
 
     QString finalFormula;
 
     // --- MODE A: NIGHTLY (Nested Ternary) ---
-    // Structure: (key < Limit1 ? Code1 : (key < Limit2 ? Code2 : Code3))
     if (keyMapMode->currentIndex() == 0) {
-
-        // Start with the last zone (The "Else" case)
         QString nestedBody = "0";
-
-        // We iterate backwards.
-        // The last row is usually the "Rest of the keyboard" (Limit 127/128)
-        // But for nesting, we build from the bottom up.
-
-        // Optimization: If the last row goes to 128, it's the base case.
         int startIdx = rows - 1;
+
+        // Base case: If last row goes to 127, it captures everything else
         if (keyMapTable->item(startIdx, 0)->text().toInt() >= 127) {
             nestedBody = keyMapTable->item(startIdx, 1)->text();
-            startIdx--; // We consumed this row as the base
+            startIdx--;
         }
 
         for (int i = startIdx; i >= 0; --i) {
             QString limit = keyMapTable->item(i, 0)->text();
             QString code = keyMapTable->item(i, 1)->text();
-
-            // Format: (key < LIMIT ? CODE : NEXT_BLOCK)
-            nestedBody = QString("(key < %1 ? %2 : %3)")
-                             .arg(limit)
-                             .arg(code)
-                             .arg(nestedBody);
+            nestedBody = QString("(key < %1 ? %2 : %3)").arg(limit).arg(code).arg(nestedBody);
         }
         finalFormula = nestedBody;
     }
 
     // --- MODE B: LEGACY (Additive) ---
-    // Structure: ((key < 60) * Bass) + ((key >= 60 & key < 84) * Pad) ...
     else {
         QStringList segments;
-        int lowerBound = 0; // Start at MIDI 0
+        int lowerBound = 0;
 
         for (int i = 0; i < rows; ++i) {
             int upperBound = keyMapTable->item(i, 0)->text().toInt();
             QString code = keyMapTable->item(i, 1)->text();
 
-            // Range Logic
             QString rangeCheck;
-            if (i == rows - 1 && upperBound >= 127) {
-                // Last segment goes to end: (key >= lower)
+
+            // Logic to match your working example exactly
+            if (i == 0 && lowerBound == 0) {
+                // First Zone: Just check Upper Limit (e.g. key < 60)
+                rangeCheck = QString("(key < %1)").arg(upperBound);
+            }
+            else if (i == rows - 1 && upperBound >= 127) {
+                // Last Zone: Just check Lower Limit (e.g. key >= 60)
                 rangeCheck = QString("(key >= %1)").arg(lowerBound);
-            } else {
-                // Middle segment: (key >= lower & key < upper)
-                rangeCheck = QString("(key >= %1 & key < %2)")
-                                 .arg(lowerBound)
-                                 .arg(upperBound);
+            }
+            else {
+                // Middle Zone: Check Both (e.g. key >= 40 * key < 60)
+                rangeCheck = QString("((key >= %1) * (key < %2))").arg(lowerBound).arg(upperBound);
             }
 
-            // Combine: (Range * Code)
-            segments << QString("(%1 * %2)").arg(rangeCheck).arg(code);
-
-            // Set up next loop
+            segments << QString("((%1) * (%2))").arg(rangeCheck).arg(code);
             lowerBound = upperBound;
         }
         finalFormula = segments.join(" + ");
     }
 
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalFormula));
+    QString result = QString("clamp(-1, %1, 1)").arg(finalFormula);
+    statusBox->setText(result);
+    QApplication::clipboard()->setText(result);
 }
 
 // ---------------------------------------------------------
@@ -2390,4 +2448,60 @@ void MainWindow::generateDrumXpf() {
         QApplication::clipboard()->setText(xpf);
         statusBox->setText("Drum XPF copied to clipboard!");
     }
+}
+
+
+void MainWindow::generateNumbers1981() {
+    int steps = (numStepsCombo->currentIndex() == 0) ? 16 : 32;
+    double dur = numDuration->value();
+    bool isRandom = (numModeCombo->currentIndex() == 0);
+
+    // Formula: (tempo / 15) is roughly 4 steps per beat if tempo is 60.
+    QString speedMath = "(tempo / 15.0)";
+
+    // 1. Determine the Pitch Source
+    QString pitchSource;
+
+    if (isRandom) {
+        // Random Logic: randv(-1 to 1) * 12 gives +/- 12 semitones
+        pitchSource = QString("randv(floor(mod(t * %1, %2))) * 12")
+                          .arg(speedMath).arg(steps);
+    } else {
+        // Pattern Editor Logic
+        QString nested = "0"; // Default
+
+        // Iterate BACKWARDS to build the nest
+        for(int i = steps - 1; i >= 0; --i) {
+            QString val = numPatternTable->item(0, i)->text();
+            if(val.isEmpty()) val = "0";
+            nested = QString("(s == %1 ? %2 : %3)").arg(i).arg(val).arg(nested);
+        }
+
+        pitchSource = QString("var s := floor(mod(t * %1, %2));\n%3")
+                          .arg(speedMath).arg(steps).arg(nested);
+    }
+
+    // 2. Gate Logic
+    QString gate = QString("(mod(t * %1, 1) < %2)").arg(speedMath).arg(dur);
+
+    // 3. O1 (Left)
+    QString o1 = QString("squarew(integrate(f * semitone(%1))) * %2")
+                     .arg(pitchSource).arg(gate);
+
+    // 4. O2 (Right) - Detuned + Vibrato
+    QString pitchSourceO2 = pitchSource;
+
+    if (isRandom) {
+        pitchSourceO2 = QString("randv(floor(mod(t * %1, %2))) * 12 + 0.5 * sinew(t * 12)")
+        .arg(speedMath).arg(steps);
+    } else {
+        pitchSourceO2 += " + 0.5 * sinew(t * 12)";
+    }
+
+    QString o2 = QString("squarew(integrate(f * 1.02 * semitone(%1))) * %2")
+                     .arg(pitchSourceO2).arg(gate);
+
+    // 5. Output
+    numOut1->setText(o1);
+    numOut2->setText(o2);
 }
