@@ -952,8 +952,66 @@ void MainWindow::setupUI() {
     // Default visibility check
     numPatternTable->setVisible(false);
 
+    // --- INSERT IN mainwindow.cpp (Inside setupUI) ---
 
-    // 20. NEED TO KNOW / NOTES TAB
+    // 20. DELAY ARCHITECT
+    QWidget *delayTab = new QWidget();
+    auto *delayLayout = new QVBoxLayout(delayTab);
+
+    // Disclaimer
+    QLabel *delayWarn = new QLabel("⚠ DISCLAIMER: LEGACY / PLACEHOLDER\n"
+                                   "This feature is not working properly yet.\n"
+                                   "Note: handwritten code clamp(-1, (trianglew(integrate(f)) * exp(-t * 20))+(0.6 * last(8000) * (t > 0.2)), 1) worked");
+
+    // Style it red
+    delayWarn->setStyleSheet("QLabel { color: red; font-weight: bold; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    delayWarn->setAlignment(Qt::AlignCenter);
+    delayWarn->setFixedHeight(80);
+
+    delayLayout->addWidget(delayWarn);
+
+    // Controls
+    auto *delayForm = new QFormLayout();
+
+    delayWaveCombo = new QComboBox();
+    delayWaveCombo->addItems({"Plucky Triangle (Default)", "Sawtooth Sweep", "Simple Square", "Custom (Below)"});
+
+    delayCustomInput = new QTextEdit();
+    delayCustomInput->setPlaceholderText("Paste custom source here (e.g., sinew(integrate(f)))...");
+    delayCustomInput->setMaximumHeight(60);
+
+    delayTimeSpin = new QDoubleSpinBox();
+    delayTimeSpin->setRange(0.01, 2.0); delayTimeSpin->setValue(0.2); delayTimeSpin->setSuffix(" s");
+
+    delayRateSpin = new QDoubleSpinBox();
+    delayRateSpin->setRange(1000, 44100); delayRateSpin->setValue(8000); delayRateSpin->setSuffix(" Hz");
+
+    delayFeedbackSpin = new QDoubleSpinBox();
+    delayFeedbackSpin->setRange(0.1, 0.99); delayFeedbackSpin->setValue(0.6); delayFeedbackSpin->setSingleStep(0.1);
+
+    delayTapsSpin = new QSpinBox();
+    delayTapsSpin->setRange(1, 16); delayTapsSpin->setValue(4);
+
+    delayForm->addRow("Source:", delayWaveCombo);
+    delayForm->addRow("Custom Code:", delayCustomInput);
+    delayForm->addRow("Delay Time:", delayTimeSpin);
+    delayForm->addRow("Sample Rate:", delayRateSpin); // Needed to calc 'last(n)'
+    delayForm->addRow("Feedback:", delayFeedbackSpin);
+    delayForm->addRow("Echo Count:", delayTapsSpin);
+
+    delayLayout->addLayout(delayForm);
+
+    auto *btnGenDelay = new QPushButton("GENERATE DELAY CHAIN");
+    btnGenDelay->setStyleSheet("font-weight: bold; height: 40px; background-color: #444; color: white;");
+    delayLayout->addWidget(btnGenDelay);
+
+    modeTabs->addTab(delayTab, "Delay Architect");
+
+    connect(btnGenDelay, &QPushButton::clicked, this, &MainWindow::generateDelayArchitect);
+
+
+
+    // 21. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -2504,4 +2562,46 @@ void MainWindow::generateNumbers1981() {
     // 5. Output
     numOut1->setText(o1);
     numOut2->setText(o2);
+}
+
+void MainWindow::generateDelayArchitect() {
+    // 1. Determine Source Audio
+    QString source;
+    int idx = delayWaveCombo->currentIndex();
+    if (idx == 0) source = "(trianglew(integrate(f)) * exp(-t * 20))"; // Pluck
+    else if (idx == 1) source = "(saww(integrate(f)) * exp(-t * 5))";
+    else if (idx == 2) source = "(squarew(integrate(f)) * exp(-t * 10))";
+    else source = QString("(%1)").arg(delayCustomInput->toPlainText());
+
+    // 2. Calculate Delay Variables
+    double time = delayTimeSpin->value();       // e.g. 0.2s
+    double rate = delayRateSpin->value();       // e.g. 8000Hz
+    double fb = delayFeedbackSpin->value();     // e.g. 0.6
+    int taps = delayTapsSpin->value();          // e.g. 4
+
+    int samples = (int)(time * rate);           // Convert Time to Sample Count (e.g. 1600)
+
+    // 3. Build Multitap Chain
+    // Formula: Source + Tap1 + Tap2...
+    // Tap N: last(samples * N) * (feedback ^ N) * (t > time * N)
+
+    QStringList chain;
+    chain << source; // The dry signal
+
+    for(int i = 1; i <= taps; ++i) {
+        int offset = samples * i;
+        double gain = std::pow(fb, i);
+        double startTime = time * i;
+
+        // We check (t > startTime) to prevent garbage data from looking back before t=0
+        QString tap = QString("(%1 * last(%2) * (t > %3))")
+                          .arg(gain, 0, 'f', 3)
+                          .arg(offset)
+                          .arg(startTime, 0, 'f', 3);
+        chain << tap;
+    }
+
+    // 4. Output
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(chain.join(" + ")));
+    QApplication::clipboard()->setText(statusBox->toPlainText());
 }
