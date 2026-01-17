@@ -1,6 +1,8 @@
 **Xpressive Sound Design Suite**
 
-A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive. This suite is designed to designed to make life easier when working with the Xpressive instrument by generating complex mathematical audio expressions (selectable between both Legacy and ExprTk parsing). Instead of manually wrestling with complex XML files or trying to write math formulas from scratch, this suite lets you generate high-quality patches, percussion, and phonetic speech strings using a proper UI.
+A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive. This suite is designed to make life easier when working with the Xpressive instrument by generating complex mathematical audio expressions (selectable between both Legacy and ExprTk parsing). Instead of manually working with complex XML files or trying to write math formulas from scratch, this suite lets you generate high-quality patches, percussion, and phonetic speech strings using a proper UI.
+
+This is still very much work in progress.
 
 **Key Features**
 
@@ -41,13 +43,15 @@ ADSR: The drum generator sets the internal Volume Envelope Amount (AMT) to 0. Th
 
 **Usage**
 
-Select a Mode: Use the top tabs to choose your sound design environment (e.g., Bessel FM for pads, Drum Architect for percussion).
+Select a Mode: Use the top tabs to choose your sound design environment (e.g., Bessel FM).
 
 Configure Parameters: Adjust sliders and drop-downs to shape the sound.
 
 Generate: Click the "Generate" button to produce the mathematical expression.
 
-Export: Use the Copy Clipboard function to take the generated string and paste it directly into your Xpressive engine environment.
+Export: Use the Copy Clipboard function to take the generated string and paste it directly into your Xpressive engine environment in O1.
+
+For Drum Generator generate the .xpf file and save it to your instruments folder. Drum generator workss differently so that it can control the instrument filters external to the expression (as I have had limited success with FIR with last(n).
 
 **License**
 
