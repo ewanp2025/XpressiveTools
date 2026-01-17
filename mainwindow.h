@@ -205,6 +205,18 @@ private:
     QComboBox *wtPresetCombo;
     QCheckBox *wtLoopCheck;
 
+    // --- NUMBERS 1981 VARIABLES ---
+    QComboBox *numModeCombo;       // Random vs Pattern
+    QComboBox *numStepsCombo;      // 16 or 32 Steps
+    QDoubleSpinBox *numDuration;   // Note length
+    QTableWidget *numPatternTable; // The manual editor
+    QTextEdit *numOut1;            // Output Box Left
+    QTextEdit *numOut2;            // Output Box Right
+
+    void generateNumbers1981();    // Renamed function
+
+
+
     // Key Mapper Variables
     QTableWidget *keyMapTable;
     QComboBox *keyMapMode;
