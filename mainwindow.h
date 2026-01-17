@@ -256,6 +256,21 @@ private:
     QString convertLegacyToNightly(QString input);
     QString convertNightlyToLegacy(QString input);
 
+
+
+    // DELAY ARCHITECT VARIABLES
+    QComboBox *delayWaveCombo;
+    QTextEdit *delayCustomInput;
+    QDoubleSpinBox *delayTimeSpin;   // Delay time in seconds
+    QDoubleSpinBox *delayFeedbackSpin; // Decay amount (0.0 - 1.0)
+    QSpinBox *delayTapsSpin;         // Number of echoes
+    QDoubleSpinBox *delayRateSpin;   // Internal sample rate reference (e.g., 8000)
+
+
+    void generateDelayArchitect();
+
+
+
     // ... end of class ...
 
 };
