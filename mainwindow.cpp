@@ -421,62 +421,81 @@ void MainWindow::setupUI() {
     modeTabs->addTab(harTab, "Harmonic Lab");
 
     // 9. --- DRUM ARCHITECT TAB ---
-    QWidget *drumTab = new QWidget();
+    QWidget *drumWidget = new QWidget();
+    QVBoxLayout *drumLayout = new QVBoxLayout(drumWidget);
 
-    // 1. CHANGE: Main layout is now VERTICAL
-    auto *drumMainLayout = new QVBoxLayout(drumTab);
+    // Disclaimer regarding Panning and Filter behavior
+    drumDisclaimer = new QLabel("⚠️ NOTICE: Panning must be set manually in the Instrument Editor due to XML parsing issues. "
+                                "Filters may require manual adjustment (0 Frequency = Silence).");
+    drumDisclaimer->setStyleSheet("color: red; font-weight: bold; border: 1px solid red; padding: 5px;");
+    drumDisclaimer->setWordWrap(true);
+    drumLayout->addWidget(drumDisclaimer);
 
-    // 2. NEW: The Red Disclaimer Label
-    drumDisclaimer = new QLabel("⚠ DISCLAIMER: PLACEHOLDER FEATURE.\n"
-                                "The intent is to suggest and automate the instrument filter external to the expression\n"
-                                "via exporting an instrument .xpf in Legacy or Nightly build format.\n"
-                                "This will be an additional part of the project.");
-    drumDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
-    drumDisclaimer->setAlignment(Qt::AlignCenter);
-    drumDisclaimer->setFixedHeight(80); // Consistent height
+    drumTypeCombo = new QComboBox();
+    drumTypeCombo->addItems({"Kick (LPF)", "Snare (BPF)", "Hi-Hat (HPF)", "Tom (LPF)", "Cowbell (BPF)", "Rimshot (HPF)", "Clap (BPF)"});
 
-    drumMainLayout->addWidget(drumDisclaimer); // Add to top
+    drumWaveCombo = new QComboBox();
+    drumWaveCombo->addItems({"Sine", "Triangle", "Square", "Sawtooth"});
 
-    // 3. The Drum Controls (Sub-Layout)
-    auto *drumForm = new QFormLayout();
+    QFormLayout *fLayout = new QFormLayout();
 
-    // Re-create the controls (Standard setup)
-    drumType = new QComboBox();
-    drumType->addItems({"Kick (808 Style)", "Snare (Noise+Tone)", "Hi-Hat (Metal)", "Tom (Low)", "Clap (Digital)"});
+    // Instantiating all sliders
+    drumPitchSlider = new QSlider(Qt::Horizontal); drumPitchSlider->setRange(20, 100);
+    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(1, 200);
+    drumPitchDropSlider = new QSlider(Qt::Horizontal); drumPitchDropSlider->setRange(0, 500);
+    drumToneSlider = new QSlider(Qt::Horizontal);  drumToneSlider->setRange(100, 14000); // Min 100 for audibility
+    drumSnapSlider = new QSlider(Qt::Horizontal);  drumSnapSlider->setRange(10, 100);    // Min 10 for HPF bite
+    drumNoiseSlider = new QSlider(Qt::Horizontal); drumNoiseSlider->setRange(0, 100);
+    drumPWMSlider = new QSlider(Qt::Horizontal);   drumPWMSlider->setRange(0, 100);
+    drumExpSlider = new QSlider(Qt::Horizontal);   drumExpSlider->setRange(1, 10);      // Exponential factor
 
-    drumBuildMode = new QComboBox();
-    drumBuildMode->addItems({"Nightly (Nested)", "Legacy (Additive)"});
+    fLayout->addRow("Body Waveform:", drumWaveCombo);
+    fLayout->addRow("Base Pitch:", drumPitchSlider);
+    fLayout->addRow("Decay Speed:", drumDecaySlider);
+    fLayout->addRow("Exponential Curve:", drumExpSlider);
+    fLayout->addRow("Pitch Punch (Drop):", drumPitchDropSlider);
+    fLayout->addRow("Filter Cutoff:", drumToneSlider);
+    fLayout->addRow("Filter Res (Snap):", drumSnapSlider);
+    fLayout->addRow("Noise Mix:", drumNoiseSlider);
+    fLayout->addRow("Pulse Width:", drumPWMSlider);
 
-    // Sliders
-    drumFreqSlider = new QSlider(Qt::Horizontal); drumFreqSlider->setRange(0, 100); drumFreqSlider->setValue(50);
-    drumPunchSlider = new QSlider(Qt::Horizontal); drumPunchSlider->setRange(0, 100); drumPunchSlider->setValue(80);
-    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(0, 100); drumDecaySlider->setValue(40);
-    drumToneSlider = new QSlider(Qt::Horizontal); drumToneSlider->setRange(0, 100); drumToneSlider->setValue(20);
+    btnGenerateDrum = new QPushButton("Copy XPF to Clipboard");
+    btnSaveDrumXpf = new QPushButton("Save Drum as .XPF File");
 
-    // Filter Warning (The small yellow one we had before)
-    drumFilterWarning = new QLabel("Note: Filters must be applied manually in this version.");
-    drumFilterWarning->setStyleSheet("color: orange; font-style: italic;");
+    drumLayout->addWidget(new QLabel("<b>Internal Filter Drum Designer</b>"));
+    drumLayout->addLayout(fLayout);
+    drumLayout->addWidget(drumTypeCombo);
+    drumLayout->addWidget(btnGenerateDrum);
+    drumLayout->addWidget(btnSaveDrumXpf);
+    drumLayout->addStretch();
 
-    // Add rows to the form
-    drumForm->addRow("Drum Type:", drumType);
-    drumForm->addRow("Build Mode:", drumBuildMode);
-    drumForm->addRow("Base Freq:", drumFreqSlider);
-    drumForm->addRow("Punch/Snap:", drumPunchSlider);
-    drumForm->addRow("Decay Length:", drumDecaySlider);
-    drumForm->addRow("Tone/Click:", drumToneSlider);
-    drumForm->addRow("", drumFilterWarning);
+    // SUGGESTION LOGIC
+    connect(drumTypeCombo, &QComboBox::currentIndexChanged, [=](int idx){
+        switch(idx) {
+        case 0: // Kick
+            drumWaveCombo->setCurrentText("Sine"); drumPitchSlider->setValue(40);
+            drumPitchDropSlider->setValue(350); drumDecaySlider->setValue(40); drumExpSlider->setValue(2); break;
+        case 1: // Snare
+            drumWaveCombo->setCurrentText("Triangle"); drumNoiseSlider->setValue(70);
+            drumToneSlider->setValue(1200); drumDecaySlider->setValue(80); drumExpSlider->setValue(4); break;
+        case 2: // Hi-Hat
+            drumWaveCombo->setCurrentText("Square"); drumPitchSlider->setValue(80);
+            drumDecaySlider->setValue(160); drumNoiseSlider->setValue(100); drumToneSlider->setValue(8000); break;
+        case 4: // Cowbell
+            drumWaveCombo->setCurrentText("Square"); drumPitchSlider->setValue(80);
+            drumPitchDropSlider->setValue(0); drumToneSlider->setValue(3000); drumExpSlider->setValue(3); break;
+        case 5: // Rimshot
+            drumWaveCombo->setCurrentText("Square"); drumPitchSlider->setValue(95);
+            drumNoiseSlider->setValue(20); drumToneSlider->setValue(5000); drumExpSlider->setValue(8); break;
+        case 6: // Clap
+            drumWaveCombo->setCurrentText("Sawtooth"); drumNoiseSlider->setValue(90);
+            drumDecaySlider->setValue(120); drumToneSlider->setValue(1000); drumExpSlider->setValue(5); break;
+        }
+    });
 
-    auto *btnDrum = new QPushButton("Generate Drum");
-    drumForm->addRow(btnDrum);
-
-    // Add the form to the main layout
-    drumMainLayout->addLayout(drumForm);
-    drumMainLayout->addStretch(); // Push to top
-
-    modeTabs->addTab(drumTab, "Drum Architect");
-
-    // Connect the button
-    connect(btnDrum, &QPushButton::clicked, this, &MainWindow::generateDrumArchitect);
+    modeTabs->addTab(drumWidget, "Drum Designer");
+    connect(btnGenerateDrum, &QPushButton::clicked, this, &MainWindow::generateDrumXpf);
+    connect(btnSaveDrumXpf, &QPushButton::clicked, this, &MainWindow::generateDrumXpf);
 
     // 10. VELOCILOGIC (DYNAMICS MAPPER)
     QWidget *velTab = new QWidget();
@@ -1347,40 +1366,6 @@ void MainWindow::removeSidSegment() {
 
 void MainWindow::copyToClipboard() { QApplication::clipboard()->setText(statusBox->toPlainText()); }
 
-void MainWindow::generateDrumArchitect() {
-    double freq = drumFreqSlider->value();
-    double punch = drumPunchSlider->value() / 100.0;
-    double decay = drumDecaySlider->value() / 100.0;
-    double tone = drumToneSlider->value() / 100.0;
-
-    // Core Drum Math based on your CR78 and XR90 files
-    // Pitch Env: Starts high, drops fast to base freq
-    QString pitchEnv = QString("(%1 * (1 + %2 * exp(-t * 120)))").arg(freq).arg(punch * 15);
-    // Amplitude Env: Exponential decay
-    QString ampEnv = QString("exp(-t * %1)").arg(1.0 / (decay + 0.01) * 8);
-
-    // Saturation/Body Tone logic (CR71 style)
-    QString waveType = (tone > 0.5) ? "saww" : "sinew";
-    QString rawExpr = QString("%1(integrate(%2)) * %3").arg(waveType, pitchEnv, ampEnv);
-
-    QString finalExpr;
-    if (drumBuildMode->currentIndex() == 0) { // Modern
-        finalExpr = QString("var drum := %1;\nclamp(-1, drum, 1)").arg(rawExpr);
-    } else { // Legacy
-        finalExpr = QString("clamp(-1, %1, 1)").arg(rawExpr);
-    }
-
-    statusBox->setText(finalExpr);
-
-    // Dynamic Filter Suggestions
-    if (freq < 60) {
-        drumFilterWarning->setText("SUGGESTION: Add Low-Pass @ 350Hz + subtle High-Pass @ 30Hz to clear sub-mud.");
-    } else if (tone > 0.5) {
-        drumFilterWarning->setText("SUGGESTION: Add aggressive Band-Pass @ 1kHz to simulate Snare/Tom shell.");
-    } else {
-        drumFilterWarning->setText("SUGGESTION: Add Low-Pass @ 500Hz for a classic clean analog kick.");
-    }
-}
 
 // --- NEW IMPLEMENTATION: PHONETIC LAB (SAM) ---
 
@@ -2340,4 +2325,69 @@ void MainWindow::generateStepGate() {
 
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(gateLogic));
     QApplication::clipboard()->setText(statusBox->toPlainText());
+}
+
+QString MainWindow::getXpfTemplate() {
+    QStringList lines;
+    lines << "<?xml version=\"1.0\"?>"
+          << "<!DOCTYPE lmms-project>"
+          << "<lmms-project version=\"20\" creator=\"WaveConv\" type=\"instrumenttracksettings\">"
+          << "<head/>"
+          << "<instrumenttracksettings name=\"%1\" muted=\"0\" solo=\"0\">"
+          << "<instrumenttrack vol=\"100\" pan=\"0\" basenote=\"%2\" pitchrange=\"1\">"
+          << "<instrument name=\"xpressive\">"
+          << "<xpressive version=\"0.1\" O1=\"%3\" O2=\"0\" bin=\"\">"
+          << "<key/></xpressive></instrument>"
+          << "<eldata fcut=\"%4\" fres=\"%5\" ftype=\"%6\" fwet=\"1\">"
+          << "<elvol rel=\"0.1\" dec=\"0.5\" sustain=\"0\" amt=\"0\"/>" // AMT=0 for manual ADSR
+          << "</eldata></instrumenttrack></instrumenttracksettings></lmms-project>";
+    return lines.join("\n");
+}
+
+void MainWindow::generateDrumXpf() {
+    QString waveFunc = drumWaveCombo->currentText().toLower() + "w";
+    if(waveFunc == "sinew") waveFunc = "sinew";
+
+    double decayBase = drumDecaySlider->value();
+    double expFactor = drumExpSlider->value(); //
+
+    // Pitch Drop Formula
+    QString pitch = QString("(f + (%1 * exp(-t * %2)))").arg(drumPitchDropSlider->value()).arg(decayBase / 2.0);
+
+    // Osc + Noise Mix
+    double nMix = drumNoiseSlider->value() / 100.0;
+    QString source = QString("((%1(integrate(%2)) * %3) + (randv(t*10000) * %4))")
+                         .arg(waveFunc).arg(pitch).arg(1.0 - nMix).arg(nMix);
+
+    // Final Exponential Volume Shape
+    QString formula = QString("(%1 * exp(-t * %2))").arg(source).arg(decayBase * expFactor);
+    formula = formula.replace("\"", "&quot;");
+
+    int typeIndex = drumTypeCombo->currentIndex();
+    int filterType = 0; // Default LPF (0)
+    if (typeIndex == 1 || typeIndex == 4 || typeIndex == 6) filterType = 2; // BPF
+    if (typeIndex == 2 || typeIndex == 5) filterType = 1; // HPF
+
+    QString xpf = getXpfTemplate()
+                      .arg(drumTypeCombo->currentText()).arg(drumPitchSlider->value())
+                      .arg(formula).arg(drumToneSlider->value())
+                      .arg(drumSnapSlider->value() / 100.0).arg(filterType)
+                      .arg(0.1).arg(0.5);
+
+    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
+    if (clickedButton == btnSaveDrumXpf) {
+        QString fileName = QFileDialog::getSaveFileName(this, "Save Drum", "", "LMMS Preset (*.xpf)");
+        if (!fileName.isEmpty()) {
+            QFile file(fileName);
+            if (file.open(QIODevice::WriteOnly)) {
+                QTextStream stream(&file);
+                stream << xpf;
+                file.close();
+                statusBox->setText("Drum saved: " + fileName);
+            }
+        }
+    } else {
+        QApplication::clipboard()->setText(xpf);
+        statusBox->setText("Drum XPF copied to clipboard!");
+    }
 }
