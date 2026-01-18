@@ -270,8 +270,31 @@ private:
     void generateDelayArchitect();
 
 
+    // --- MACRO MORPH VARIABLES ---
+    QComboBox *macroStyleCombo;
+    QComboBox *macroBuildMode;   // NEW: Legacy/Nightly Selector
 
-    // ... end of class ...
+    QSlider *macroWonkySlider;   // Swing/Sidechain
+    QSlider *macroColorSlider;   // Timbre
+    QSlider *macroTimeSlider;    // Envelope
+    QSlider *macroBitcrushSlider; // RENAMED: Was macroDegradeSlider
+    QSlider *macroTextureSlider; // Noise/Grain
+    QSlider *macroWidthSlider;   // Stereo/Detune
 
+    QSpinBox *macroDetuneSpin;
+    void generateMacroMorph();
+
+    // --- STRING MACHINE VARIABLES (UPDATED) ---
+    QComboBox *stringModelCombo;
+    QComboBox *stringChordCombo;
+
+    QSlider *stringEnsembleSlider;  // Chorus/Detune
+    QSlider *stringAttackSlider;    // Volume Swell
+    QSlider *stringEvolveSlider;    // NEW: Brightness Swell (Filter Env)
+    QSlider *stringMotionSlider;    // NEW: Phase Drift (Visual Fix)
+    QSlider *stringSpaceSlider;     // Reverb-ish Release
+    QSlider *stringAgeSlider;       // Pitch Wobble
+
+    void generateStringMachine();
 };
 #endif
