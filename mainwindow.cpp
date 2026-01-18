@@ -1009,9 +1009,153 @@ void MainWindow::setupUI() {
 
     connect(btnGenDelay, &QPushButton::clicked, this, &MainWindow::generateDelayArchitect);
 
+    // 21. --- MACRO MORPH
+    QWidget *macroTab = new QWidget;
+    QVBoxLayout *macroLayout = new QVBoxLayout(macroTab);
 
+    // Header
+    QLabel *fluxDesc = new QLabel("<b></b> \n"
+                                  "Use 'Texture' for vinyl noise and 'Wonk' for off-grid swing.");
+    fluxDesc->setStyleSheet("color: #333; padding: 10px; background-color: #eee; border-radius: 5px;");
+    macroLayout->addWidget(fluxDesc);
 
-    // 21. NEED TO KNOW / NOTES TAB
+    // --- TOP BAR: BUILD MODE ---
+    QHBoxLayout *topBar = new QHBoxLayout();
+    topBar->addWidget(new QLabel("Parsing Engine:"));
+
+    macroBuildMode = new QComboBox();
+    macroBuildMode->addItems({"Nightly (Clean / Variables)", "Legacy (Inline / Safe)"});
+    macroBuildMode->setToolTip("Legacy Mode removes variables for compatibility with older engines.");
+    topBar->addWidget(macroBuildMode);
+    topBar->addStretch();
+    macroLayout->addLayout(topBar);
+
+    // --- GROUP 1: PRESET SELECTOR (Renamed) ---
+    QGroupBox *sourceGroup = new QGroupBox("1. Select Vibe");
+    sourceGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #666; margin-top: 10px; }");
+    QVBoxLayout *sourceLay = new QVBoxLayout(sourceGroup);
+
+    macroStyleCombo = new QComboBox;
+    macroStyleCombo->addItems({
+        "0. Super Saws (Anthemic)",
+        "1. Formant Vocal Lead (Chops)",
+        "2. Wobbly Cassette Keys (Lo-Fi)",
+        "3. Granular Pad (Jitter)",
+        "4. Hollow Bass (Deep House)",
+        "5. Portamento Lead (Gliding)",
+        "6. Plucky Arp (Short)",
+        "7. Vinyl Atmosphere (Texture Only)"
+    });
+    sourceLay->addWidget(macroStyleCombo);
+    macroLayout->addWidget(sourceGroup);
+
+    // --- GROUP 2: THE MACRO CONSOLE ---
+    QGroupBox *macroGroup = new QGroupBox("2. Macro Controls");
+    macroGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #008080; background-color: #f4fcfc; margin-top: 10px; }");
+    QGridLayout *macroGrid = new QGridLayout(macroGroup);
+
+    // Helper to make sliders
+    auto addMacro = [&](QString name, QSlider*& slider, int row, int col, int def) {
+        slider = new QSlider(Qt::Horizontal);
+        slider->setRange(0, 100); slider->setValue(def);
+        macroGrid->addWidget(new QLabel(name), row * 2, col);
+        macroGrid->addWidget(slider, row * 2 + 1, col);
+    };
+
+    // Column 1: Tonal Character
+    addMacro("Color (Timbre)", macroColorSlider, 0, 0, 50);
+    addMacro("Texture (Noise/Grain)", macroTextureSlider, 1, 0, 20);
+    addMacro("Bitcrush (Lo-Fi)", macroBitcrushSlider, 2, 0, 0); // Renamed Label
+
+    // Column 2: Space & Time
+    addMacro("Time (Envelope)", macroTimeSlider, 0, 1, 50);
+    addMacro("Width (Stereo/Detune)", macroWidthSlider, 1, 1, 30);
+    addMacro("Wonk (Sidechain/Swing)", macroWonkySlider, 2, 1, 25);
+
+    macroLayout->addWidget(macroGroup);
+
+    // GENERATE BUTTON
+    QPushButton *btnGenMacro = new QPushButton("GENERATE FUTURE PATCH");
+    btnGenMacro->setStyleSheet("font-weight: bold; font-size: 14px; background-color: #008080; color: white; height: 50px; margin-top: 10px;");
+    connect(btnGenMacro, &QPushButton::clicked, this, &MainWindow::generateMacroMorph);
+    macroLayout->addWidget(btnGenMacro);
+
+    macroLayout->addStretch();
+    modeTabs->addTab(macroTab, "Macro Morph");
+
+    // 22. --- TAB: STRING MACHINE (Evolving & Cinematic) ---
+    QWidget *stringTab = new QWidget;
+    QVBoxLayout *stringLayout = new QVBoxLayout(stringTab);
+
+    QLabel *strDesc = new QLabel("<b>\n"
+                                 "");
+    strDesc->setStyleSheet("color: #333; padding: 10px; background-color: #e6f7ff; border-radius: 5px;");
+    stringLayout->addWidget(strDesc);
+
+    // --- GROUP 1: MODEL & CHORD ---
+    QGroupBox *strModelGroup = new QGroupBox("1. Core Sound");
+    strModelGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #446688; margin-top: 10px; }");
+    QFormLayout *strModelForm = new QFormLayout(strModelGroup);
+
+    stringModelCombo = new QComboBox;
+    stringModelCombo->addItems({
+        "Solina String Ensemble (Classic)",
+        "Crumar Performer (Brassy)",
+        "Logan String Melody (Hollow)",
+        "$tinkworx Aquatic Pad (Deep/PWM)",  // NEW: Stinkworx Preset
+        "Roland VP-330 (Choral)",
+        "Amazing String (Saw Stack)"
+    });
+
+    stringChordCombo = new QComboBox;
+    stringChordCombo->addItems({
+        "OFF (Manual Play)",
+        "Octave Stack (8' + 4')",
+        "Fifth Stack (Power Chord)",
+        "Minor 9th (Amazing Stack)", // Your favorite
+        "$tinkworx Minor 11 (Deep)", // New chord type for deep techno
+        "Sus4 (Spacey)"
+    });
+
+    strModelForm->addRow("Model Inspiration:", stringModelCombo);
+    strModelForm->addRow("Chord Memory:", stringChordCombo);
+    stringLayout->addWidget(strModelGroup);
+
+    // --- GROUP 2: EVOLUTION DASHBOARD ---
+    QGroupBox *strDashGroup = new QGroupBox("2. Evolution & Motion");
+    strDashGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #446688; background-color: #f0f8ff; margin-top: 10px; }");
+    QGridLayout *strGrid = new QGridLayout(strDashGroup);
+
+    auto addStrSlider = [&](QString name, QSlider*& slider, int row, int col, int def) {
+        slider = new QSlider(Qt::Horizontal);
+        slider->setRange(0, 100); slider->setValue(def);
+        strGrid->addWidget(new QLabel(name), row * 2, col);
+        strGrid->addWidget(slider, row * 2 + 1, col);
+    };
+
+    // Row 1: The "Visual Fix" and Chorus
+    addStrSlider("Ensemble (Width)", stringEnsembleSlider, 0, 0, 60);
+    addStrSlider("Phase Motion (Visual Fix)", stringMotionSlider, 0, 1, 20); // Makes the scope dance
+
+    // Row 2: Evolution (The logic you asked for)
+    addStrSlider("Attack (Vol Swell)", stringAttackSlider, 1, 0, 40);
+    addStrSlider("Evolve (Filter Swell)", stringEvolveSlider, 1, 1, 50); // Brightness over time
+
+    // Row 3: Character
+    addStrSlider("Vintage Age (Wobble)", stringAgeSlider, 2, 0, 10);
+    addStrSlider("Space (Release)", stringSpaceSlider, 2, 1, 50);
+
+    stringLayout->addWidget(strDashGroup);
+
+    QPushButton *btnGenStr = new QPushButton("GENERATE STRING MACHINE");
+    btnGenStr->setStyleSheet("font-weight: bold; font-size: 14px; background-color: #446688; color: white; height: 50px; margin-top: 10px;");
+    connect(btnGenStr, &QPushButton::clicked, this, &MainWindow::generateStringMachine);
+    stringLayout->addWidget(btnGenStr);
+
+    stringLayout->addStretch();
+    modeTabs->addTab(stringTab, "String Machine");
+
+    // 23. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -2603,5 +2747,259 @@ void MainWindow::generateDelayArchitect() {
 
     // 4. Output
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(chain.join(" + ")));
+    QApplication::clipboard()->setText(statusBox->toPlainText());
+}
+
+void MainWindow::generateMacroMorph() {
+    int style = macroStyleCombo->currentIndex();
+    bool isLegacy = (macroBuildMode->currentIndex() == 1);
+
+    // Fetch Slider Values (0.0 to 1.0)
+    double mColor = macroColorSlider->value() / 100.0;
+    double mTime  = macroTimeSlider->value() / 100.0;
+    double mGrit  = macroBitcrushSlider->value() / 100.0; // Bitcrush
+    double mTex   = macroTextureSlider->value() / 100.0;
+    double mWidth = macroWidthSlider->value() / 100.0;
+    double mWonk  = macroWonkySlider->value() / 100.0;
+
+    QString osc, env;
+
+    // --- ALGORITHM LIBRARY ---
+    switch(style) {
+    case 0: // FUTURE SUPER SAWS
+        osc = QString("((saww(integrate(f)) + saww(integrate(f * %1)) + saww(integrate(f * %2))) / 3)")
+                  .arg(1.0 + (mWidth * 0.02))
+                  .arg(1.0 - (mWidth * 0.02));
+        // Filter Logic
+        osc = QString("(%1 * %2 + sinew(integrate(f)) * %3)")
+                  .arg(osc).arg(mColor).arg(1.0 - mColor);
+        env = QString("min(1, t * 20) * exp(-t * %1)").arg(5.0 - (mTime * 4.0));
+        break;
+
+    case 1: // FORMANT VOCAL LEAD
+    {
+        // Base: Triangle wave for body
+        QString base = "trianglew(integrate(f/2))";
+
+        // Formant Modulation (PWM-like effect)
+        // Nightly can use a variable for the LFO to keep it readable
+        // Legacy must inline the LFO math directly into the phase
+
+        double vibSpeed = 6.0;
+        double vibDepth = mTime * 0.05;
+
+        if (isLegacy) {
+            // Inline: f * (1 + sin(t*6)*depth)
+            QString lfo = QString("(1.0 + sinew(t*%1)*%2)").arg(vibSpeed).arg(vibDepth);
+
+            // Apply LFO to frequency inside the integrator
+            osc = QString("(%1 * (0.5 + 0.4 * sinew(integrate(f * %2 * %3))))")
+                      .arg(base)
+                      .arg(lfo) // Frequency mod
+                      .arg(2.0 + (mColor * 3.0)); // Formant shift
+        } else {
+            // Nightly: Cleaner variable
+            osc = QString("(%1 * (0.5 + 0.4 * sinew(integrate(f * %2))))")
+                      .arg(2.0 + (mColor * 3.0));
+
+            // Prepend Variable
+            if(mTime > 0) {
+                osc = QString("var vib:=sinew(t*%1)*%2; %3")
+                .arg(vibSpeed).arg(vibDepth)
+                    .arg(osc.replace("(f", "(f*(1+vib)"));
+            }
+        }
+        env = "1";
+        break;
+    }
+
+    case 2: // WOBBLY CASSETTE KEYS
+    {
+        double drift = 1.0 + (mWidth * 0.005);
+        osc = QString("(trianglew(integrate(f * %1)) + %2 * sinew(integrate(f * 4)))")
+                  .arg(drift).arg(mColor * 0.5);
+        env = QString("exp(-t * %1)").arg(10.0 - (mTime * 8.0));
+        break;
+    }
+
+    case 3: // GRANULAR PAD
+        osc = QString("(saww(integrate(f)) * (0.8 + 0.2 * randv(t * %1)))")
+                  .arg(50 + mTex * 500);
+        env = QString("min(1, t * %1)").arg(0.5 + mTime * 2.0);
+        break;
+
+    case 4: // HOLLOW BASS
+        osc = QString("(squarew(integrate(f)) * (1 - %1 * exp(-t*20)))")
+                  .arg(mColor);
+        env = "1";
+        break;
+
+    case 5: // PORTAMENTO LEAD
+        osc = QString("saww(integrate(f)) + %1 * saww(integrate(f * 1.01))").arg(mWidth);
+        env = "1";
+        break;
+
+    case 6: // PLUCKY ARP
+        osc = "squarew(integrate(f)) * (sinew(integrate(f*2)) > 0 ? 1 : 0)";
+        env = QString("exp(-t * %1)").arg(20.0 - mTime * 10.0);
+        break;
+
+    case 7: // VINYL ATMOSPHERE
+        osc = "0";
+        env = "1";
+        break;
+    }
+
+    // --- GLOBAL PROCESSING ---
+
+    // 1. Apply Envelope
+    if (style != 7) {
+        osc = QString("(%1 * %2)").arg(osc).arg(env);
+    }
+
+    // 2. TEXTURE LAYER (Noise)
+    if (mTex > 0 || style == 7) {
+        QString noise = QString("(randv(t * 8000) * %1)").arg(mTex * 0.15);
+        if (style == 7) osc = noise;
+        else osc = QString("(%1 + %2)").arg(osc).arg(noise);
+    }
+
+    // 3. WONK (Sidechain)
+    if (mWonk > 0) {
+        QString sidechain = QString("(1.0 - %1 * abs(sinew(t * 15)))").arg(mWonk * 0.8);
+        osc = QString("(%1 * %2)").arg(osc).arg(sidechain);
+    }
+
+    // 4. BITCRUSH (Formerly VHS Degrade)
+    if (mGrit > 0) {
+        double steps = 16.0 - (mGrit * 14.0);
+        // Both Legacy and Nightly handle 'floor' and 'steps' logic fine inline
+        osc = QString("floor(%1 * %2) / %2").arg(osc).arg(steps);
+    }
+
+    // Final Safety Clamp
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(osc));
+    QApplication::clipboard()->setText(statusBox->toPlainText());
+}
+void MainWindow::generateStringMachine() {
+    int model = stringModelCombo->currentIndex();
+    int chord = stringChordCombo->currentIndex();
+
+    // Normalized Values
+    double valEns    = stringEnsembleSlider->value() / 100.0;
+    double valAtt    = stringAttackSlider->value() / 100.0;
+    double valEvolve = stringEvolveSlider->value() / 100.0;
+    double valMotion = stringMotionSlider->value() / 100.0;
+    double valAge    = stringAgeSlider->value() / 100.0;
+    double valRel    = stringSpaceSlider->value() / 100.0;
+
+    // --- 1. DEFINE THE OSCILLATOR "CELL" ---
+    auto getOsc = [&](double detuneMult, double mix, double phaseOffset) {
+        QString shape;
+
+        // $tinkworx / Aquatic Logic:
+        // Uses PWM (Pulse Width Modulation) that drifts over time (t)
+        if (model == 3) {
+            // Pulse wave where width modulates from 50% (Square) to Thin
+            double pwmSpeed = 2.0 + (valMotion * 5.0);
+            shape = QString("(sinew(integrate(f*%1)) > (0.8 * sinew(t*%2 + %3)) ? 1 : -1)")
+                        .arg(detuneMult)
+                        .arg(pwmSpeed)
+                        .arg(phaseOffset); // Phase offset ensures lines don't overlap on scope
+        }
+        // Amazing String / Solina Logic:
+        else {
+            // EVOLUTION LOGIC:
+            // Mixes Triangle (Dark) -> Saw (Bright) over time based on 'Evolve' slider
+            // This replicates your "t" logic but makes it dynamic.
+
+            // Base Tone: Sawtooth
+            QString saw = QString("saww(integrate(f*%1))").arg(detuneMult);
+            // Dark Tone: Triangle
+            QString tri = QString("trianglew(integrate(f*%1))").arg(detuneMult);
+
+            // Evolve factor: 0 = Static Saw, 1 = Tri fading into Saw
+            if (valEvolve > 0) {
+                // Logic: (Dark * (1-env)) + (Bright * env)
+                double speed = 1.0 + (valEvolve * 4.0);
+                QString filterEnv = QString("(1 - exp(-t*%1))").arg(speed);
+                shape = QString("((%1 * (1-%3)) + (%2 * %3))").arg(tri).arg(saw).arg(filterEnv);
+            } else {
+                shape = saw; // Pure Amazing String style
+            }
+        }
+
+        // VISUAL FIX: PHASE MOTION
+        // We inject a tiny frequency modulation based on time to make the scope "dance"
+        // instead of locking into a static jagged line.
+        if (valMotion > 0) {
+            shape = shape.replace("(f*", QString("(f * (1 + %1 * sinew(t*3 + %2)) *")
+                                      .arg(valMotion * 0.002) // Subtle drift
+                                      .arg(phaseOffset));     // Unique per osc
+        }
+
+        // VINTAGE AGE (Wobble)
+        if (valAge > 0) {
+            shape = shape.replace("(f", QString("(f * (1 + %1 * sinew(t*6))").arg(valAge * 0.005));
+        }
+
+        return QString("(%1 * %2)").arg(shape).arg(mix);
+    };
+
+    // --- 2. BUILD THE ENSEMBLE ---
+    double spread = 1.0 + (valEns * 0.015);
+
+    // We pass distinct Phase Offsets (0, 2, 4) to ensure the visual lines separate
+    QString oscC = getOsc(1.0, 0.5, 0.0);
+    QString oscL = getOsc(spread, 0.25, 2.0);
+    QString oscR = getOsc(2.0 - spread, 0.25, 4.0);
+
+    QString cell = QString("(%1 + %2 + %3)").arg(oscC, oscL, oscR);
+
+    // --- 3. CHORD MEMORY LOGIC ---
+    QString stack;
+    if (chord == 0) stack = cell; // Manual
+    else if (chord == 1) stack = QString("(%1 + 0.5*%2)").arg(cell).arg(cell.replace("(f", "(f*2"));
+    else if (chord == 2) stack = QString("(%1 + 0.5*%2)").arg(cell).arg(cell.replace("(f", "(f*1.498"));
+    else if (chord == 3) { // Amazing String (m9)
+        QString c1=cell; QString c2=cell; c2.replace("(f","(f*1.189");
+        QString c3=cell; c3.replace("(f","(f*1.498");
+        QString c4=cell; c4.replace("(f","(f*1.781");
+        QString c5=cell; c5.replace("(f","(f*2.245");
+        stack = QString("(0.25*%1+0.2*%2+0.2*%3+0.15*%4+0.15*%5)").arg(c1,c2,c3,c4,c5);
+    }
+    else if (chord == 4) { // $tinkworx Minor 11 (Deep Dub Chord)
+        // Root, m3, 5, m7, 11 (No 9th)
+        QString c1=cell;
+        QString c2=cell; c2.replace("(f","(f*1.189"); // m3
+        QString c3=cell; c3.replace("(f","(f*1.498"); // 5
+        QString c4=cell; c4.replace("(f","(f*1.781"); // m7
+        QString c5=cell; c5.replace("(f","(f*2.669"); // 11 (Perfect 4th up an octave)
+        stack = QString("(0.3*%1+0.2*%2+0.2*%3+0.15*%4+0.15*%5)").arg(c1,c2,c3,c4,c5);
+    }
+    else if (chord == 5) { // Sus4
+        QString c1=cell; QString c2=cell; c2.replace("(f","(f*1.334");
+        QString c3=cell; c3.replace("(f","(f*1.498");
+        stack = QString("(0.4*%1+0.3*%2+0.3*%3)").arg(c1,c2,c3);
+    }
+
+    // --- 4. EVOLUTION ENVELOPE ---
+    // User requested "evolving strings" logic like: (t < 0.6) * (t/0.6)
+    // We make the '0.6' adjustable via Attack Slider.
+
+    double attTime = 0.01 + (valAtt * 2.0); // 0 to 2 seconds
+    double relTime = 0.1 + (valRel * 3.0);  // Release tail
+
+    // Attack Logic
+    QString envLogic = QString("min(1, t / %1)").arg(attTime);
+
+    // Release Logic (Simulated for raw code export)
+    // Note: True release requires note-off events which pure math formulas can't always see
+    // without a 'gate' variable, but we can simulate a "decay" curve if they hold the note.
+    // For now, we stick to the Attack Swell as requested for the "Amazing" evolution.
+
+    QString finalResult = QString("(%1 * %2)").arg(stack).arg(envLogic);
+
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalResult));
     QApplication::clipboard()->setText(statusBox->toPlainText());
 }
