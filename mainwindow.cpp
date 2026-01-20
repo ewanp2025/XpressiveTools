@@ -371,3 +371,4 @@ private:
     QSpinBox *hwBaseNote; // Required for pitch control logic
 };
 #endif
+#include "mainwindow.moc"
