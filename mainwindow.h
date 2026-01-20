@@ -22,6 +22,7 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QHeaderView>
+#include <QPainterPath>
 
 // --- NEW STRUCTURE FOR PHONETIC LAB ---
 struct SAMPhoneme {
@@ -37,6 +38,54 @@ struct SAMPhoneme {
     int length = 12;
 };
 // --------------------------------------
+
+// --- ENVELOPE VISUALIZER CLASS ---
+class EnvelopeDisplay : public QWidget {
+    Q_OBJECT
+public:
+    explicit EnvelopeDisplay(QWidget *parent = nullptr) : QWidget(parent) {
+        setMinimumHeight(120);
+        setBackgroundRole(QPalette::Base);
+        setAutoFillBackground(true);
+    }
+    void updateEnvelope(double a, double d, double s, double r) {
+        m_a = a; m_d = d; m_s = s; m_r = r;
+        update();
+    }
+protected:
+    void paintEvent(QPaintEvent *event) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        int w = width(), h = height();
+
+        // Background Grid
+        painter.setPen(QColor(45, 45, 45));
+        painter.drawLine(w/4, 0, w/4, h);
+        painter.drawLine(w/2, 0, w/2, h);
+        painter.drawLine(3*w/4, 0, 3*w/4, h);
+
+        QPainterPath path;
+        path.moveTo(0, h);
+
+        double x_a = m_a * (w/4.0);
+        double x_d = x_a + (m_d * (w/4.0));
+        double x_s = x_d + (w/4.0);
+        double x_r = x_s + (m_r * (w/4.0));
+        double y_s = h - (m_s * (h - 20));
+
+        path.lineTo(x_a, 10);    // Attack
+        path.lineTo(x_d, y_s);   // Decay
+        path.lineTo(x_s, y_s);   // Sustain
+        path.lineTo(x_r, h);     // Release
+
+        painter.setPen(QPen(QColor(0, 255, 120), 3));
+        painter.drawPath(path);
+    }
+private:
+    double m_a=0, m_d=0.5, m_s=0.5, m_r=0.1;
+};
+
+
 
 struct SidSegment {
     QComboBox* waveType;
@@ -78,23 +127,6 @@ private:
     std::vector<SidSegment> m_segments;
 };
 
-class EnvelopeDisplay : public QWidget {
-    Q_OBJECT
-public:
-    explicit EnvelopeDisplay(QWidget *parent = nullptr) : QWidget(parent) {
-        setMinimumHeight(100);
-    }
-    void updateEnvelope(double a, double d, double s, double r) {
-        // Logic to store ADSR values and call update()
-        update();
-    }
-protected:
-    void paintEvent(QPaintEvent *) override {
-        // Paint logic for the ADSR curve
-    }
-};
-
-
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -123,11 +155,6 @@ private slots:
     void generateDrumXpf();
     void generatePhoneticFormula();
     void generateStepGate();
-
-    void loadHardwarePreset(int index);
-    void generateRandomHardware();
-    void generateHardwareXpf();
-
 
 private:
     void setupUI();
@@ -192,7 +219,7 @@ private:
     QSlider *drumPitchSlider, *drumDecaySlider, *drumToneSlider, *drumSnapSlider;
     QSlider *drumNoiseSlider, *drumPitchDropSlider, *drumPWMSlider;
     QSlider *drumExpSlider; // Added for exponential decay
-     QPushButton *btnGenerateDrum, *btnSaveDrumXpf;
+    QPushButton *btnGenerateDrum, *btnSaveDrumXpf;
     QString getXpfTemplate();
 
     QDoubleSpinBox *leadUnisonCount;
@@ -319,15 +346,28 @@ private:
 
     void generateStringMachine();
 
-// --- HARDWARE LAB VARIABLES ---
+    //-vintage lab
+    void setupHardwareLab();
+    void generateHardwareXpf();
+    void loadHardwarePreset(int idx);
+    void generateRandomHardware();
+
+
     EnvelopeDisplay *adsrVisualizer;
-    QComboBox *hwPresetCombo, *hwBaseWave;
-    QSlider *hwAttack, *hwDecay, *hwSustain, *hwRelease;
-    QSlider *hwCutoff, *hwResonance, *hwPwmSpeed, *hwPwmDepth;
-    QSlider *hwVibSpeed, *hwVibDepth, *hwNoiseMix;
-    QSpinBox *hwBaseNote;
+    QComboBox *hwBaseWave;
+    QComboBox *hwPresetCombo;
+    QSlider *hwAttack;
+    QSlider *hwDecay;    // Required for the compiler error
+    QSlider *hwSustain;
+    QSlider *hwRelease;
+    QSlider *hwCutoff;   // Required for the compiler error
+    QSlider *hwResonance;
     QCheckBox *hwPeakBoost;
+    QSlider *hwPwmSpeed;
+    QSlider *hwPwmDepth;
+    QSlider *hwVibSpeed;
+    QSlider *hwVibDepth;
+    QSlider *hwNoiseMix;
+    QSpinBox *hwBaseNote; // Required for pitch control logic
 };
 #endif
-
-
