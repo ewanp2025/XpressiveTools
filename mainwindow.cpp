@@ -1155,7 +1155,106 @@ void MainWindow::setupUI() {
     stringLayout->addStretch();
     modeTabs->addTab(stringTab, "String Machine");
 
-    // 23. NEED TO KNOW / NOTES TAB
+    // --- 23. HARDWARE LAB (ANALOG SYNTHESIS SUITE) ---
+    QWidget *hwTab = new QWidget();
+    QVBoxLayout *hwLayout = new QVBoxLayout(hwTab);
+
+    QLabel *hwDisclaimer = new QLabel("⚠ HARDWARE LAB: DIRECT PARAMETER CONTROL\n"
+                                      "This module maps 40 Analog-Style Presets. Legacy. WIP, testing external ADSR");
+    hwDisclaimer->setStyleSheet("QLabel { color: #00ff78; font-weight: bold; font-size: 14px; border: 2px solid #00ff78; padding: 10px; background-color: #112211; }");
+    hwDisclaimer->setAlignment(Qt::AlignCenter);
+    hwLayout->addWidget(hwDisclaimer);
+
+    adsrVisualizer = new EnvelopeDisplay();
+    hwLayout->addWidget(adsrVisualizer);
+
+    QFormLayout *hwForm = new QFormLayout();
+
+    // --- POPULATE THE HARDWARE LIBRARY ---
+    hwPresetCombo = new QComboBox();
+    hwPresetCombo->addItem("-- STUDIO CLASSICS --");
+    hwPresetCombo->addItems({"01. Hissing Minimal (Signal)", "02. Analog Drift (Precision)", "03. Resonance Burner (Peak)",
+                             "04. Metallic Tick (Percussion)", "05. PWM Rubber (Low-End)", "06. Power Saw (Lead)",
+                             "07. Phase Mod (Keys)", "08. Deep Atmosphere (Pad)"});
+
+    hwPresetCombo->addItem("-- MODULAR MINIMAL --");
+    for(int i=9; i<=16; ++i) hwPresetCombo->addItem(QString("%1. Minimal Studio Tool %2").arg(i).arg(i-8));
+
+    hwPresetCombo->addItem("-- INDUSTRIAL WAREHOUSE --");
+    for(int i=17; i<=24; ++i) hwPresetCombo->addItem(QString("%1. Industrial Grit %2").arg(i).arg(i-16));
+
+    hwPresetCombo->addItem("-- ETHEREAL DRIFT --");
+    for(int i=25; i<=32; ++i) hwPresetCombo->addItem(QString("%1. Signal Drift %2").arg(i).arg(i-24));
+
+    hwPresetCombo->addItem("-- SIGNAL GLITCH --");
+    for(int i=33; i<=40; ++i) hwPresetCombo->addItem(QString("%1. Frequency Glitch %2").arg(i).arg(i-32));
+
+    hwBaseWave = new QComboBox();
+    hwBaseWave->addItems({"saww", "squarew", "trianglew", "sinew"});
+
+    hwAttack = new QSlider(Qt::Horizontal); hwAttack->setRange(0, 100);
+    hwDecay = new QSlider(Qt::Horizontal); hwDecay->setRange(0, 100);
+    hwSustain = new QSlider(Qt::Horizontal); hwSustain->setRange(0, 100);
+    hwRelease = new QSlider(Qt::Horizontal); hwRelease->setRange(0, 100);
+    hwCutoff = new QSlider(Qt::Horizontal); hwCutoff->setRange(100, 14000);
+    hwResonance = new QSlider(Qt::Horizontal); hwResonance->setRange(0, 100);
+
+    hwPwmSpeed = new QSlider(Qt::Horizontal); hwPwmSpeed->setRange(0, 100);
+    hwPwmDepth = new QSlider(Qt::Horizontal); hwPwmDepth->setRange(0, 100);
+    hwVibSpeed = new QSlider(Qt::Horizontal); hwVibSpeed->setRange(0, 100);
+    hwVibDepth = new QSlider(Qt::Horizontal); hwVibDepth->setRange(0, 100);
+    hwNoiseMix = new QSlider(Qt::Horizontal); hwNoiseMix->setRange(0, 100);
+
+    hwBaseNote = new QSpinBox(); hwBaseNote->setRange(0, 127); hwBaseNote->setValue(57); // Middle A
+    hwPeakBoost = new QCheckBox("Resonance Peak Boost (Saturator)");
+
+    hwForm->addRow("Preset Library:", hwPresetCombo);
+    hwForm->addRow("Oscillator Wave:", hwBaseWave);
+    hwForm->addRow("Attack Time:", hwAttack);
+    hwForm->addRow("Decay Time:", hwDecay);
+    hwForm->addRow("Sustain Level:", hwSustain);
+    hwForm->addRow("Release Time:", hwRelease);
+    hwForm->addRow("Filter Frequency:", hwCutoff);
+    hwForm->addRow("Filter Q/Res:", hwResonance);
+    hwForm->addRow("PWM LFO Speed:", hwPwmSpeed);
+    hwForm->addRow("PWM LFO Depth:", hwPwmDepth);
+    hwForm->addRow("Pitch Vibrato Speed:", hwVibSpeed);
+    hwForm->addRow("Pitch Vibrato Depth:", hwVibDepth);
+    hwForm->addRow("Signal Noise Mix:", hwNoiseMix);
+    hwForm->addRow("Base MIDI Note:", hwBaseNote);
+    hwForm->addRow(hwPeakBoost);
+
+    hwLayout->addLayout(hwForm);
+
+    QHBoxLayout *hwBtnLayout = new QHBoxLayout();
+    QPushButton *btnRandHw = new QPushButton("RANDOMIZE HARDWARE");
+    QPushButton *btnSaveHw = new QPushButton("SAVE PATCH .XPF");
+    hwBtnLayout->addWidget(btnRandHw);
+    hwBtnLayout->addWidget(btnSaveHw);
+    hwLayout->addLayout(hwBtnLayout);
+
+    modeTabs->addTab(hwTab, "Hardware Lab");
+
+    // Live Visualizer Connection
+    auto updateHwPreview = [=]() {
+        adsrVisualizer->updateEnvelope(
+            hwAttack->value() / 100.0,
+            hwDecay->value() / 100.0,
+            hwSustain->value() / 100.0,
+            hwRelease->value() / 100.0
+            );
+    };
+
+    connect(hwAttack, &QSlider::valueChanged, updateHwPreview);
+    connect(hwDecay, &QSlider::valueChanged, updateHwPreview);
+    connect(hwSustain, &QSlider::valueChanged, updateHwPreview);
+    connect(hwRelease, &QSlider::valueChanged, updateHwPreview);
+    connect(hwPresetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::loadHardwarePreset);
+    connect(btnRandHw, &QPushButton::clicked, this, &MainWindow::generateRandomHardware);
+    connect(btnSaveHw, &QPushButton::clicked, this, &MainWindow::generateHardwareXpf);
+
+
+    // 24. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -3002,4 +3101,113 @@ void MainWindow::generateStringMachine() {
 
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalResult));
     QApplication::clipboard()->setText(statusBox->toPlainText());
+}
+
+void MainWindow::loadHardwarePreset(int idx) {
+    if (idx <= 0) return;
+    struct HardwarePatch { QString wave; int a, d, s, r, f, q, ps, pd, vs, vd, n; bool peak; };
+    QMap<int, HardwarePatch> lib;
+
+    // --- 1. THE STUDIO CLASSICS (1-8) ---
+    lib[1] = {"squarew", 0, 30, 0, 10, 1100, 20, 12, 15, 0, 0, 65, false};   // Hissing Minimal
+    lib[2] = {"saww", 5, 55, 40, 35, 3800, 30, 0, 0, 8, 10, 5, false};      // Analog Drift
+    lib[3] = {"squarew", 0, 25, 0, 10, 2800, 95, 35, 70, 5, 2, 0, true};     // Resonance Burner
+    lib[4] = {"trianglew", 0, 15, 0, 5, 4500, 60, 0, 0, 0, 0, 20, true};     // Metallic Tick
+    lib[5] = {"trianglew", 2, 45, 15, 20, 450, 45, 45, 40, 0, 0, 0, false};  // PWM Low-End
+    lib[6] = {"saww", 0, 70, 60, 30, 14000, 15, 0, 0, 10, 15, 10, true};     // Power Saw
+    lib[7] = {"sinew", 10, 80, 50, 60, 1200, 10, 5, 10, 15, 5, 2, false};    // Phase Mod Keys
+    lib[8] = {"saww", 60, 90, 80, 90, 900, 5, 10, 20, 12, 12, 15, false};    // Deep Pad
+
+    // --- 2. MODULAR MINIMAL (9-16) ---
+    for(int i=9; i<=16; ++i)
+        lib[i] = {"squarew", 0, 10+i, 10, 10, 2000+(i*100), 10+(i*2), 5, 5, 0, 0, 5, false};
+
+    // --- 3. INDUSTRIAL WAREHOUSE (17-24) ---
+    for(int i=17; i<=24; ++i)
+        lib[i] = {"squarew", 0, 20+(i-16)*5, 0, 15, 1000+(i*50), 85, 40, 60, 0, 0, 25, true};
+
+    // --- 4. SIGNAL DRIFT (25-32) ---
+    for(int i=25; i<=32; ++i)
+        lib[i] = {"saww", 40+(i-24)*5, 80, 70, 85, 1500, 10, 5, 10, 12, 25, 30, false};
+
+    // --- 5. FREQUENCY GLITCH (33-40) ---
+    for(int i=33; i<=40; ++i)
+        lib[i] = {"trianglew", 0, 5+(i-32)*2, 0, 2, 9000-(i*100), 50, 90, 95, 0, 0, 70, true};
+
+    if (lib.contains(idx)) {
+        HardwarePatch p = lib[idx];
+        hwBaseWave->setCurrentText(p.wave);
+        hwAttack->setValue(p.a); hwDecay->setValue(p.d);
+        hwSustain->setValue(p.s); hwRelease->setValue(p.r);
+        hwCutoff->setValue(p.f); hwResonance->setValue(p.q);
+        hwPwmSpeed->setValue(p.ps); hwPwmDepth->setValue(p.pd);
+        hwVibSpeed->setValue(p.vs); hwVibDepth->setValue(p.vd);
+        hwNoiseMix->setValue(p.n);
+        hwPeakBoost->setChecked(p.peak);
+
+        // Update the visualizer
+        adsrVisualizer->updateEnvelope(p.a/100.0, p.d/100.0, p.s/100.0, p.r/100.0);
+    }
+}
+
+void MainWindow::generateHardwareXpf() {
+    QString wave = hwBaseWave->currentText();
+    QString pitchMod = QString("(1 + sinew(t * %1) * %2)").arg(hwVibSpeed->value()/10.0).arg(hwVibDepth->value()/500.0);
+    QString osc = (wave == "squarew") ?
+                      QString("(sinew(integrate(f * %1)) > (sinew(t * %2) * %3) ? 1 : -1)").arg(pitchMod).arg(hwPwmSpeed->value()/10.0).arg(hwPwmDepth->value()/100.0) :
+                      QString("%1(integrate(f * %2))").arg(wave).arg(pitchMod);
+
+    double nMix = hwNoiseMix->value() / 100.0;
+    QString finalSource = QString("((%1 * %2) + (randv(t*10000) * %3))").arg(osc).arg(1.0 - nMix).arg(nMix);
+    if (hwPeakBoost->isChecked()) finalSource = QString("clamp(-1, %1 * 1.8, 1)").arg(finalSource);
+
+    QString xml =
+        "<?xml version=\"1.0\"?>\n<!DOCTYPE lmms-project>\n"
+        "<lmms-project version=\"20\" creator=\"WaveConv\" type=\"instrumenttracksettings\">\n"
+        "  <head/>\n"
+        "  <instrumenttracksettings name=\"Hardware_Patch\" muted=\"0\" solo=\"0\">\n"
+        "    <instrumenttrack vol=\"100\" pan=\"0\" basenote=\"" + QString::number(hwBaseNote->value()) + "\" pitchrange=\"1\">\n"
+                                                 "      <instrument name=\"xpressive\">\n"
+                                                 "        <xpressive version=\"0.1\" O1=\"" + finalSource.replace("\"", "&quot;") + "\" O2=\"0\" bin=\"\">\n"
+                                                "          <key/>\n"
+                                                "        </xpressive>\n"
+                                                "      </instrument>\n"
+                                                "      <eldata fcut=\"" + QString::number(hwCutoff->value()) + "\" fres=\"" + QString::number(hwResonance->value()/100.0) + "\" ftype=\"0\" fwet=\"1\">\n"
+                                                                                                              "        <elvol att=\"" + QString::number(hwAttack->value()/100.0) + "\" dec=\"" + QString::number(hwDecay->value()/100.0) + "\" sustain=\"" + QString::number(hwSustain->value()/100.0) + "\" rel=\"" + QString::number(hwRelease->value()/100.0) + "\" amt=\"1\"/>\n"
+                                                                                                                                                                                                                                             "      </eldata>\n"
+                                                                                                                                                                                                                                             "    </instrumenttrack>\n"
+                                                                                                                                                                                                                                             "  </instrumenttracksettings>\n"
+                                                                                                                                                                                                                                             "</lmms-project>\n";
+
+    QString fileName = QFileDialog::getSaveFileName(this, "Save Hardware Patch", "", "LMMS Patch (*.xpf)");
+    if (!fileName.isEmpty()) {
+        QFile file(fileName);
+        if (file.open(QIODevice::WriteOnly)) { QTextStream(&file) << xml; file.close(); }
+    }
+}
+
+void MainWindow::generateRandomHardware() {
+    // Randomize Waveform
+    hwBaseWave->setCurrentIndex(std::rand() % 4);
+
+    // Randomize ADSR for aggressive or soft tones
+    hwAttack->setValue(std::rand() % 40);
+    hwDecay->setValue(20 + (std::rand() % 60));
+    hwSustain->setValue(std::rand() % 80);
+    hwRelease->setValue(10 + (std::rand() % 50));
+
+    // Randomize Filter
+    hwCutoff->setValue(500 + (std::rand() % 8000));
+    hwResonance->setValue(std::rand() % 90);
+
+    // Randomize Movement
+    hwPwmSpeed->setValue(std::rand() % 100);
+    hwPwmDepth->setValue(std::rand() % 70);
+    hwVibSpeed->setValue(std::rand() % 50);
+    hwVibDepth->setValue(std::rand() % 30);
+
+    // Randomize Noise Mix
+    hwNoiseMix->setValue(std::rand() % 40);
+
+    statusBox->setText("Hardware Parameters Randomized!");
 }
