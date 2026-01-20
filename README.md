@@ -13,7 +13,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 SID Architect	- Build complex C64-style oscillator chains with decay and frequency offsets. STABLE but will benefit from more features.
 
 PCM Sampler	- Converts WAV files into optimized math expressions for playback. WIP modern and legacy mode.
-* Under closer inspection I can only get the PCM Sampler to work in 1.5-bit (Ternary) logic. My Original Matlab script was 4 bit but I just can't get this right yet*
+* Under closer inspection I can only get the PCM Sampler to work in 1.5-bit (Ternary) logic. My Original Matlab script was 4 bit but I just can't get this right yet.
 
 Console Lab - Generate console chip sounds. WIP requires more features.
 
