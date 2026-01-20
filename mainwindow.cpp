@@ -1320,21 +1320,6 @@ void MainWindow::setupUI() {
 // The workings ------------------------
 
 
-class EnvelopeDisplay : public QWidget {
-    Q_OBJECT
-public:
-    explicit EnvelopeDisplay(QWidget *parent = nullptr) : QWidget(parent) {
-        setMinimumHeight(100);
-    }
-    void updateEnvelope(double a, double d, double s, double r) {
-        // Logic to store ADSR values and call update()
-        update();
-    }
-protected:
-    void paintEvent(QPaintEvent *) override {
-        // Paint logic for the ADSR curve
-    }
-};
 
 void MainWindow::loadBesselPreset(int idx) {
     if (idx == 0 || idx == 9 || idx == 18 || idx == 28) return;
@@ -3234,5 +3219,6 @@ void MainWindow::generateRandomHardware() {
 
     statusBox->setText("Hardware Parameters Randomized!");
 }
+
 
 
