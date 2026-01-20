@@ -107,6 +107,11 @@ private slots:
     void generatePhoneticFormula();
     void generateStepGate();
 
+    void loadHardwarePreset(int index);
+    void generateRandomHardware();
+    void generateHardwareXpf();
+
+
 private:
     void setupUI();
     // --- NEW INIT FUNCTION ---
@@ -296,5 +301,15 @@ private:
     QSlider *stringAgeSlider;       // Pitch Wobble
 
     void generateStringMachine();
+
+// --- HARDWARE LAB VARIABLES ---
+    EnvelopeDisplay *adsrVisualizer;
+    QComboBox *hwPresetCombo, *hwBaseWave;
+    QSlider *hwAttack, *hwDecay, *hwSustain, *hwRelease;
+    QSlider *hwCutoff, *hwResonance, *hwPwmSpeed, *hwPwmDepth;
+    QSlider *hwVibSpeed, *hwVibDepth, *hwNoiseMix;
+    QSpinBox *hwBaseNote;
+    QCheckBox *hwPeakBoost;
 };
 #endif
+
