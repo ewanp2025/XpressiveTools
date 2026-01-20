@@ -78,6 +78,23 @@ private:
     std::vector<SidSegment> m_segments;
 };
 
+class EnvelopeDisplay : public QWidget {
+    Q_OBJECT
+public:
+    explicit EnvelopeDisplay(QWidget *parent = nullptr) : QWidget(parent) {
+        setMinimumHeight(100);
+    }
+    void updateEnvelope(double a, double d, double s, double r) {
+        // Logic to store ADSR values and call update()
+        update();
+    }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        // Paint logic for the ADSR curve
+    }
+};
+
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -312,4 +329,5 @@ private:
     QCheckBox *hwPeakBoost;
 };
 #endif
+
 
