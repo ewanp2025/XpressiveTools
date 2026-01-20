@@ -10,6 +10,13 @@
 #include <cstdlib>
 #include <QRegularExpression>
 
+#include <QClipboard>     // Required for copyToClipboard()
+#include <QApplication>   // Required for clipboard access and global app logic
+#include <QTextStream>    // Required for saving .xpf files in saveXpfInstrument()
+#include <QFrame>         // Required for creating UI segments in addSidSegment()
+#include <QMessageBox>    // Recommended for error reporting during file saves
+
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     initSamLibrary(); // Initialize the new SAM library
     setupUI();
@@ -3211,3 +3218,4 @@ void MainWindow::generateRandomHardware() {
 
     statusBox->setText("Hardware Parameters Randomized!");
 }
+
