@@ -98,6 +98,8 @@ void MainWindow::setupUI() {
     mainHLayout->addLayout(rightLayout, 3);
     rightLayout->addWidget(modeTabs);
 
+
+
     // 1. SID ARCHITECT
     QWidget *sidTab = new QWidget(); auto *sidLayout = new QVBoxLayout(sidTab);
     auto *sidOptGrid = new QGridLayout();
@@ -1087,12 +1089,25 @@ void MainWindow::setupUI() {
     QWidget *stringTab = new QWidget;
     QVBoxLayout *stringLayout = new QVBoxLayout(stringTab);
 
-    QLabel *strDesc = new QLabel("<b>\n"
-                                 "");
+    // 1. VISUALIZER (Must be created first!)
+    stringScope = new UniversalScope();
+    stringLayout->addWidget(stringScope);
+
+    // 2. ZOOM SLIDER
+    auto *zoomLay = new QHBoxLayout();
+    zoomLay->addWidget(new QLabel("Scope Zoom:"));
+    stringZoomSlider = new QSlider(Qt::Horizontal);
+    stringZoomSlider->setRange(0, 100);
+    stringZoomSlider->setValue(10);
+    zoomLay->addWidget(stringZoomSlider);
+    stringLayout->addLayout(zoomLay);
+
+    // 3. DESCRIPTION
+    QLabel *strDesc = new QLabel("<b>\nUse 'Age' to introduce vintage instability...</b>");
     strDesc->setStyleSheet("color: #333; padding: 10px; background-color: #e6f7ff; border-radius: 5px;");
     stringLayout->addWidget(strDesc);
 
-    // --- GROUP 1: MODEL & CHORD ---
+    // 4. GROUP 1: MODEL & CHORD
     QGroupBox *strModelGroup = new QGroupBox("1. Core Sound");
     strModelGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #446688; margin-top: 10px; }");
     QFormLayout *strModelForm = new QFormLayout(strModelGroup);
@@ -1102,7 +1117,7 @@ void MainWindow::setupUI() {
         "Solina String Ensemble (Classic)",
         "Crumar Performer (Brassy)",
         "Logan String Melody (Hollow)",
-        "$tinkworx Aquatic Pad (Deep/PWM)",  // NEW: Stinkworx Preset
+        "$tinkworx Aquatic Pad (Deep/PWM)",
         "Roland VP-330 (Choral)",
         "Amazing String (Saw Stack)"
     });
@@ -1112,8 +1127,8 @@ void MainWindow::setupUI() {
         "OFF (Manual Play)",
         "Octave Stack (8' + 4')",
         "Fifth Stack (Power Chord)",
-        "Minor 9th (Amazing Stack)", // Your favorite
-        "$tinkworx Minor 11 (Deep)", // New chord type for deep techno
+        "Minor 9th (Amazing Stack)",
+        "$tinkworx Minor 11 (Deep)",
         "Sus4 (Spacey)"
     });
 
@@ -1121,7 +1136,7 @@ void MainWindow::setupUI() {
     strModelForm->addRow("Chord Memory:", stringChordCombo);
     stringLayout->addWidget(strModelGroup);
 
-    // --- GROUP 2: EVOLUTION DASHBOARD ---
+    // 5. GROUP 2: EVOLUTION DASHBOARD (SLIDERS)
     QGroupBox *strDashGroup = new QGroupBox("2. Evolution & Motion");
     strDashGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #446688; background-color: #f0f8ff; margin-top: 10px; }");
     QGridLayout *strGrid = new QGridLayout(strDashGroup);
@@ -1135,11 +1150,11 @@ void MainWindow::setupUI() {
 
     // Row 1: The "Visual Fix" and Chorus
     addStrSlider("Ensemble (Width)", stringEnsembleSlider, 0, 0, 60);
-    addStrSlider("Phase Motion (Visual Fix)", stringMotionSlider, 0, 1, 20); // Makes the scope dance
+    addStrSlider("Phase Motion (Visual Fix)", stringMotionSlider, 0, 1, 20);
 
-    // Row 2: Evolution (The logic you asked for)
+    // Row 2: Evolution
     addStrSlider("Attack (Vol Swell)", stringAttackSlider, 1, 0, 40);
-    addStrSlider("Evolve (Filter Swell)", stringEvolveSlider, 1, 1, 50); // Brightness over time
+    addStrSlider("Evolve (Filter Swell)", stringEvolveSlider, 1, 1, 50);
 
     // Row 3: Character
     addStrSlider("Vintage Age (Wobble)", stringAgeSlider, 2, 0, 10);
@@ -1147,10 +1162,70 @@ void MainWindow::setupUI() {
 
     stringLayout->addWidget(strDashGroup);
 
+    // --- PRESET LOGIC: CONNECT DROPDOWN TO SLIDERS ---
+    connect(stringModelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int index){
+        auto setVals = [&](int ens, int att, int evo, int mot, int age, int spc) {
+            stringEnsembleSlider->setValue(ens);
+            stringAttackSlider->setValue(att);
+            stringEvolveSlider->setValue(evo);
+            stringMotionSlider->setValue(mot);
+            stringAgeSlider->setValue(age);
+            stringSpaceSlider->setValue(spc);
+        };
+        switch(index) {
+        case 0: setVals(80, 40, 0,  20, 10, 50); break; // Solina
+        case 1: setVals(60, 20, 70, 10, 5,  40); break; // Crumar
+        case 2: setVals(90, 60, 30, 30, 20, 60); break; // Logan
+        case 3: setVals(50, 50, 20, 80, 5,  80); break; // Aquatic
+        case 4: setVals(100,30, 40, 10, 0,  40); break; // VP-330
+        case 5: setVals(70, 10, 100,0,  0,  50); break; // Amazing
+        }
+    });
+
+    // 6. GENERATE BUTTON
     QPushButton *btnGenStr = new QPushButton("GENERATE STRING MACHINE");
     btnGenStr->setStyleSheet("font-weight: bold; font-size: 14px; background-color: #446688; color: white; height: 50px; margin-top: 10px;");
     connect(btnGenStr, &QPushButton::clicked, this, &MainWindow::generateStringMachine);
     stringLayout->addWidget(btnGenStr);
+
+    // 7. SIMULATION LOGIC (Visualizer Math)
+    auto updateStringScope = [=]() {
+        if (!stringEnsembleSlider || !stringAttackSlider) return;
+
+        double detune = stringEnsembleSlider->value() / 100.0;
+        double attack = stringAttackSlider->value() / 100.0;
+        double zoom = stringZoomSlider->value() / 100.0;
+
+        std::function<double(double)> simFunc = [=](double t) {
+            double f = 220.0;
+            // Main Saw
+            double phase1 = std::fmod(t * f, 1.0);
+            double saw1 = (phase1 * 2.0) - 1.0;
+            // Detuned Saw
+            double f2 = f * (1.0 + (detune * 0.015));
+            double phase2 = std::fmod(t * f2, 1.0);
+            double saw2 = (phase2 * 2.0) - 1.0;
+            // Mix
+            double signal = (saw1 + saw2) * 0.5;
+            // Attack Envelope
+            if (attack > 0) {
+                double attTime = 0.01 + (attack * 2.0);
+                double env = (t < attTime) ? (t / attTime) : 1.0;
+                signal *= env;
+            }
+            return signal;
+        };
+        stringScope->updateScope(simFunc, 2.0, zoom);
+    };
+
+    // 8. CONNECT SIGNALS (Live Update)
+    connect(stringEnsembleSlider, &QSlider::valueChanged, updateStringScope);
+    connect(stringAttackSlider, &QSlider::valueChanged, updateStringScope);
+    connect(stringZoomSlider, &QSlider::valueChanged, updateStringScope);
+    connect(stringEvolveSlider, &QSlider::valueChanged, updateStringScope);
+
+    // Trigger once to draw initial line (Requires #include <QTimer>)
+    QTimer::singleShot(100, [=](){ updateStringScope(); });
 
     stringLayout->addStretch();
     modeTabs->addTab(stringTab, "String Machine");
@@ -1253,8 +1328,210 @@ void MainWindow::setupUI() {
     connect(btnRandHw, &QPushButton::clicked, this, &MainWindow::generateRandomHardware);
     connect(btnSaveHw, &QPushButton::clicked, this, &MainWindow::generateHardwareXpf);
 
+    // 24. WEST COAST LAB (Buchla Emulation) ---
+    QWidget *westTab = new QWidget();
+    QVBoxLayout *westLayout = new QVBoxLayout(westTab);
 
-    // 24. NEED TO KNOW / NOTES TAB
+    // 1. VISUALIZER
+    westScope = new UniversalScope();
+    westLayout->addWidget(westScope);
+
+    // 2. ZOOM SLIDER
+    auto *westZoomLay = new QHBoxLayout();
+    westZoomLay->addWidget(new QLabel("Oscilloscope Zoom:"));
+    westZoomSlider = new QSlider(Qt::Horizontal);
+    westZoomSlider->setRange(0, 100);
+    westZoomSlider->setValue(20); // Default to seeing waves
+    westZoomLay->addWidget(westZoomSlider);
+    westLayout->addLayout(westZoomLay);
+
+    // 3. DESCRIPTION
+    QLabel *westDesc = new QLabel("<b>WEST COAST LAB</b><br>Nonlinear waveshaping based on Buchla 259/208 topologies.");
+    westDesc->setStyleSheet("color: #d4af37; padding: 10px; background-color: #222; border-radius: 5px;");
+    westLayout->addWidget(westDesc);
+
+    // 4. CONTROLS
+    QFormLayout *westForm = new QFormLayout();
+
+    westBuildMode = new QComboBox();
+    westBuildMode->addItems({"Legacy (Additive)", "Nightly (Nested)"});
+
+    westModelSelect = new QComboBox();
+    westModelSelect->addItems({
+        "Model 259 (Parallel Deadband)",
+        "Model 208 (Series Rectifier)",
+        "Serge VCM (Odd Harmonic Sweep)",
+        "Lockhart Folder (Differential Pair)"
+    });
+
+    westTimbreSlider = new QSlider(Qt::Horizontal); westTimbreSlider->setRange(1, 100); westTimbreSlider->setValue(30);
+    westSymmetrySlider = new QSlider(Qt::Horizontal); westSymmetrySlider->setRange(-100, 100); westSymmetrySlider->setValue(0);
+    westOrderSlider = new QSlider(Qt::Horizontal); westOrderSlider->setRange(0, 100); westOrderSlider->setValue(50);
+    westVactrolSim = new QCheckBox("Vactrol 'LPG' Decay (Buchla Bongo)");
+    westVactrolSim->setChecked(true);
+
+    westForm->addRow("Build Mode:", westBuildMode);
+    westForm->addRow("Circuit Topology:", westModelSelect);
+    westForm->addRow("Timbre (Fold Gain):", westTimbreSlider);
+    westForm->addRow("Symmetry (DC Bias):", westSymmetrySlider);
+    westForm->addRow("Order (Harmonics):", westOrderSlider);
+    westForm->addRow(westVactrolSim);
+
+    westModFreqSlider = new QSlider(Qt::Horizontal); westModFreqSlider->setRange(1, 100); westModFreqSlider->setValue(10);
+    westModIndexSlider = new QSlider(Qt::Horizontal); westModIndexSlider->setRange(0, 100); westModIndexSlider->setValue(0);
+    westFoldStages = new QSlider(Qt::Horizontal); westFoldStages->setRange(1, 8); westFoldStages->setValue(3);
+    westHalfWaveFold = new QCheckBox("Half-Wave Symmetry (Serge Bias)");
+
+    westForm->addRow("Mod Osc Freq (Ratio):", westModFreqSlider);
+    westForm->addRow("FM Index (Timbre Mod):", westModIndexSlider);
+    westForm->addRow("Folding Stages (Series):", westFoldStages);
+    westForm->addRow(westHalfWaveFold);
+
+    westLayout->addLayout(westForm);
+
+    // 5. BUTTONS
+    QPushButton *btnBongo = new QPushButton("LOAD BUCHLA BONGO PRESET");
+    btnBongo->setStyleSheet("background-color: #444; color: #d4af37;");
+    westLayout->addWidget(btnBongo);
+
+    QPushButton *btnLiquid = new QPushButton("LOAD 259 LIQUID METAL");
+    btnLiquid->setStyleSheet("background-color: #444; color: #00ffff;");
+    westLayout->addWidget(btnLiquid);
+
+    QPushButton *btnGenWest = new QPushButton("GENERATE WEST COAST FORMULA");
+    btnGenWest->setStyleSheet("font-weight: bold; background-color: #d4af37; color: black; height: 40px;");
+    westLayout->addWidget(btnGenWest);
+
+    // 6. VISUALIZER LOGIC (C++ SIMULATION)
+    auto updateWestScope = [=]() {
+        if (!westTimbreSlider || !westScope) return; // Safety
+
+        // Fetch Values
+        int model = westModelSelect->currentIndex();
+        double gain = westTimbreSlider->value() / 10.0;
+        double bias = westSymmetrySlider->value() / 100.0;
+        double modRatio = westModFreqSlider->value() / 10.0;
+        double modIndex = westModIndexSlider->value() / 10.0;
+        double order = westOrderSlider->value() / 100.0;
+        int stages = westFoldStages->value();
+        bool useVactrol = westVactrolSim->isChecked();
+        bool halfWave = westHalfWaveFold->isChecked();
+        double zoom = westZoomSlider->value() / 100.0;
+
+        // The Math Lambda
+        std::function<double(double)> simFunc = [=](double t) {
+            double baseFreq = 60.0; // Low frequency to see the folds clearly
+            double pi = 3.14159265;
+
+            // 1. FM Modulator
+            // Standard FM: sin(c*t + I*sin(m*t))
+            double mod = modIndex * std::sin(t * baseFreq * modRatio * 2 * pi);
+
+            // 2. Core Oscillator (Triangle or Sine)
+            // We use Phase Modulation (t + mod) to simulate FM for stability in the scope
+            double phase = (t * baseFreq * 2 * pi) + mod;
+            double core = 0.0;
+
+            if (model == 1) { // Triangle (208)
+                // Arccos of Cos gives a triangle wave roughly
+                core = (2.0 / pi) * std::asin(std::sin(phase));
+            } else { // Sine (259 / Serge)
+                core = std::sin(phase);
+            }
+
+            // 3. Pre-Conditioning (Gain + Bias)
+            double signal = (core * gain) + bias;
+
+            // 4. Wavefolding Algorithms
+            if (model == 2) { // Serge VCM (Iterative)
+                for(int i = 0; i < stages; ++i) {
+                    double thresh = 0.2 + (i * 0.1);
+                    // Fold logic: x - 2 * clamp(...)
+                    double cl = signal;
+                    if (cl > thresh) cl = thresh;
+                    if (cl < -thresh) cl = -thresh;
+                    signal = signal - 2.0 * cl;
+                }
+            }
+            else if (model == 0) { // Model 259 (Parallel Deadband)
+                auto deadband = [](double x, double limit) {
+                    if (x > limit) return limit;
+                    if (x < -limit) return -limit;
+                    return x;
+                };
+                // Parallel mix of different clipped versions creates complex folds
+                signal = signal
+                         - 2.0 * deadband(signal, 0.2)
+                         + 2.0 * deadband(signal, 0.4)
+                         - 2.0 * deadband(signal, 0.6);
+            }
+            else { // Model 208 (Rectifier/Crossfade)
+                // (1-order)*signal + order*(folded)
+                double folded = 2.0 * std::abs(signal) - 1.0; // Full rectification
+                signal = ((1.0 - order) * signal) + (order * folded);
+            }
+
+            // 5. Half-Wave
+            if (halfWave) {
+                if (signal < 0) signal = 0;
+            }
+
+            // 6. Vactrol Envelope
+            if (useVactrol) {
+                double env = std::exp(-t * 15.0); // <--- MATCHES XPRESSIVE GENERATOR
+                signal *= env;
+            }
+
+            return signal;
+        };
+
+        // Update Scope
+        // 1.0s duration is enough to see the "Bongo" decay
+        westScope->updateScope(simFunc, 1.0, zoom);
+    };
+
+    // 7. CONNECTIONS
+    // Connect EVERYTHING to the scope updater
+    connect(westTimbreSlider, &QSlider::valueChanged, updateWestScope);
+    connect(westSymmetrySlider, &QSlider::valueChanged, updateWestScope);
+    connect(westOrderSlider, &QSlider::valueChanged, updateWestScope);
+    connect(westModFreqSlider, &QSlider::valueChanged, updateWestScope);
+    connect(westModIndexSlider, &QSlider::valueChanged, updateWestScope);
+    connect(westFoldStages, &QSlider::valueChanged, updateWestScope);
+    connect(westZoomSlider, &QSlider::valueChanged, updateWestScope);
+    connect(westModelSelect, QOverload<int>::of(&QComboBox::currentIndexChanged), updateWestScope);
+    connect(westVactrolSim, &QCheckBox::toggled, updateWestScope);
+    connect(westHalfWaveFold, &QCheckBox::toggled, updateWestScope);
+
+    // Connect Generator Buttons
+    connect(btnGenWest, &QPushButton::clicked, this, &MainWindow::generateWestCoast);
+
+    // Presets need to trigger the update manually after setting values
+    connect(btnBongo, &QPushButton::clicked, [=](){
+        westModelSelect->setCurrentIndex(0); // 259 Parallel
+        westTimbreSlider->setValue(85);      // High Gain
+        westSymmetrySlider->setValue(15);    // Slight Offset
+        westVactrolSim->setChecked(true);    // Natural Decay
+        updateWestScope();
+    });
+
+    connect(btnLiquid, &QPushButton::clicked, [=](){
+        westModelSelect->setCurrentIndex(0); // 259
+        westModFreqSlider->setValue(45);     // High ratio
+        westModIndexSlider->setValue(60);    // Deep FM
+        westTimbreSlider->setValue(70);      // Heavy Fold
+        westVactrolSim->setChecked(false);
+        updateWestScope();
+    });
+
+    // Initial Draw
+    QTimer::singleShot(200, [=](){ updateWestScope(); });
+
+    westLayout->addStretch();
+    modeTabs->addTab(westTab, "West Coast Lab");
+
+
+    // 25. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -3210,4 +3487,56 @@ void MainWindow::generateRandomHardware() {
     hwNoiseMix->setValue(std::rand() % 40);
 
     statusBox->setText("Hardware Parameters Randomized!");
+}
+
+void MainWindow::generateWestCoast() {
+    int model = westModelSelect->currentIndex();
+    double gain = westTimbreSlider->value() / 10.0;
+    double bias = westSymmetrySlider->value() / 100.0;
+    double modRatio = westModFreqSlider->value() / 10.0;
+    double modIndex = westModIndexSlider->value() / 10.0;
+    int stages = westFoldStages->value();
+
+    // 1. MODULATION ENGINE (FM)
+    // The modulator frequency is relative to the fundamental 'f' [cite: 177]
+    QString modulator = QString("(%1 * sinew(integrate(f * %2)))").arg(modIndex).arg(modRatio);
+
+    // 2. CORE OSCILLATOR (Principal)
+    // FM is applied by adding the modulator to the frequency inside the integrator [cite: 220]
+    QString core = (model == 1) ? "trianglew(integrate(f + " + modulator + "))"
+                                : "sinew(integrate(f + " + modulator + "))";
+
+    // 3. INPUT PRE-CONDITIONING
+    QString input = QString("(%1 * %2 + %3)").arg(core).arg(gain).arg(bias);
+
+    // 4. ADVANCED CIRCUIT EMULATION
+    QString folder;
+    if (model == 2) { // Serge Middle VCM (Series Diode String)
+        // Series topology: output iterates through multiple folds based on 'stages' [cite: 124, 129]
+        folder = input;
+        for(int i = 0; i < stages; ++i) {
+            double thresh = 0.2 + (i * 0.1);
+            folder = QString("(%1 - 2*clamp(-%2, %1, %2))").arg(folder).arg(thresh);
+        }
+    } else if (model == 0) { // Model 259 (Parallel Deadband)
+        // Parallel topology: staggering 5 non-identical cells [cite: 55, 57]
+        folder = QString("(%1 - 2*clamp(-0.2, %1, 0.2) + 2*clamp(-0.4, %1, 0.4) - 2*clamp(-0.6, %1, 0.6))").arg(input);
+    } else { // Default / 208 logic
+        folder = QString("((1-%1)*%2 + %1*(2*abs(%2)-1))").arg(westOrderSlider->value()/100.0).arg(input);
+    }
+
+    // 5. HALF-WAVE MODIFICATION
+    // Emulates clipping or folding only the positive excursion
+    if (westHalfWaveFold->isChecked()) {
+        folder = QString("max(0, %1)").arg(folder);
+    }
+
+    // 6. VACTROL LPG SIMULATION
+    if (westVactrolSim->isChecked()) {
+        // High spectral brightness at attack, rapid darkening via exponential decay [cite: 180, 181]
+        folder = QString("(%1 * exp(-t * 15))").arg(folder);
+    }
+
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(folder));
+    QApplication::clipboard()->setText(statusBox->toPlainText());
 }
