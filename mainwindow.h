@@ -23,6 +23,7 @@
 #include <QTableWidgetItem>
 #include <QHeaderView>
 #include <QPainterPath>
+#include <QTimer>
 
 // --- NEW STRUCTURE FOR PHONETIC LAB ---
 struct SAMPhoneme {
@@ -85,7 +86,99 @@ private:
     double m_a=0, m_d=0.5, m_s=0.5, m_r=0.1;
 };
 
+// --- UNIVERSAL OSCILLOSCOPE (ScopeWidget) ---
+// Reusable visualizer for any tab.
+// Usage: scope->updateScope([](double t){ return sin(t*440); }, 1.0);
+#include <functional>
 
+class UniversalScope : public QWidget {
+    Q_OBJECT
+public:
+    explicit UniversalScope(QWidget *parent = nullptr) : QWidget(parent) {
+        setMinimumHeight(120);
+        setBackgroundRole(QPalette::Base);
+        setAutoFillBackground(true);
+        // Default: flat line
+        m_generator = [](double){ return 0.0; };
+    }
+
+    // Call this from your tab to update the visual
+    // waveFunc: A lambda function representing your math (t is time)
+    // duration: Total length of the sound in seconds (e.g., 2.0s)
+    // zoom: 0.0 = Single Cycle (Zoomed In), 1.0 = Full Duration (Zoomed Out)
+    void updateScope(std::function<double(double)> waveFunc, double duration, double zoom) {
+        m_generator = waveFunc;
+        m_duration = duration;
+        m_zoom = zoom;
+        update(); // Trigger repaint
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.fillRect(rect(), QColor(20, 20, 20)); // Dark Background
+
+        int w = width();
+        int h = height();
+        int midY = h / 2;
+
+        // Draw Grid Center Line
+        painter.setPen(QPen(QColor(60, 60, 60), 1, Qt::DashLine));
+        painter.drawLine(0, midY, w, midY);
+
+        if (w < 1) return;
+
+        // 1. Calculate Time Window
+        // If zoom is 0, we view ~0.02s (approx 50Hz cycle).
+        // If zoom is 1, we view m_duration.
+        double windowSize = 0.02 + (m_duration - 0.02) * m_zoom;
+        if(windowSize <= 0) windowSize = 0.01;
+
+        // 2. Generate Points
+        QPainterPath path;
+        bool started = false;
+
+        // Resolution: We don't need infinite points, just enough for the pixel width
+        int resolution = w;
+
+        painter.setPen(QPen(QColor(0, 255, 255), 2)); // Cyan Line
+
+        for (int x = 0; x < resolution; ++x) {
+            // Map pixel X to Time T
+            double t = (double)x / (double)resolution * windowSize;
+
+            // Execute the passed Math Function
+            double sample = m_generator(t);
+
+            // Clamp sample to -1..1 for safety
+            if (sample > 1.0) sample = 1.0;
+            if (sample < -1.0) sample = -1.0;
+
+            // Map Amplitude to Y pixels
+            // (Negative because Y grows downwards in UI coords)
+            double y = midY - (sample * (midY - 10));
+
+            if (!started) {
+                path.moveTo(x, y);
+                started = true;
+            } else {
+                path.lineTo(x, y);
+            }
+        }
+        painter.drawPath(path);
+
+        // Draw Info Text
+        painter.setPen(QColor(200, 200, 200));
+        QString info = QString("Window: %1s").arg(windowSize, 0, 'f', 3);
+        painter.drawText(5, 15, info);
+    }
+
+private:
+    std::function<double(double)> m_generator;
+    double m_duration = 1.0;
+    double m_zoom = 0.0; // 0 = Cycles, 1 = Full
+};
 
 struct SidSegment {
     QComboBox* waveType;
@@ -155,6 +248,7 @@ private slots:
     void generateDrumXpf();
     void generatePhoneticFormula();
     void generateStepGate();
+    void generateWestCoast();
 
 private:
     void setupUI();
@@ -369,5 +463,25 @@ private:
     QSlider *hwVibDepth;
     QSlider *hwNoiseMix;
     QSpinBox *hwBaseNote; // Required for pitch control logic
+
+
+    QComboBox *westBuildMode;
+    QComboBox *westModelSelect;
+    QSlider *westTimbreSlider;   // Input Gain (Wavefolding Depth)
+    QSlider *westSymmetrySlider; // DC Offset (Even Harmonics)
+    QSlider *westOrderSlider;    // Harmonic Balance / Crossfade
+    QCheckBox *westVactrolSim;   // LPG "Bongo" Decay
+    QSlider *westModFreqSlider;  // Modulation Oscillator Frequency (FM)
+    QSlider *westModIndexSlider; // FM Index (Depth)
+    QCheckBox *westHalfWaveFold; // Toggle for Half-Wave vs Full-Wave folding
+    QSlider *westFoldStages;     // Number of cascaded folding stages (Serge-style)
+
+    // Universal Scope
+    UniversalScope *stringScope;
+    QSlider *stringZoomSlider;
+    UniversalScope *westScope;
+    QSlider *westZoomSlider;
+
+
 };
 #endif
