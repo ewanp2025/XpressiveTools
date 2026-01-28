@@ -122,21 +122,66 @@ void MainWindow::setupUI() {
     modeTabs->addTab(sidTab, "SID Architect");
 
     // 2. PCM SAMPLER
-    QWidget *pcmTab = new QWidget(); auto *pcmLayout = new QVBoxLayout(pcmTab);
+    QWidget *pcmTab = new QWidget();
+    auto *pcmLayout = new QVBoxLayout(pcmTab);
+
+    // VISUALIZER
+    pcmScope = new UniversalScope();
+    pcmLayout->addWidget(pcmScope);
+
+    // ZOOM SLIDER
+    auto *pcmZoomLay = new QHBoxLayout();
+    pcmZoomLay->addWidget(new QLabel("Scope Zoom:"));
+    pcmZoomSlider = new QSlider(Qt::Horizontal);
+    pcmZoomSlider->setRange(0, 100);
+    pcmZoomSlider->setValue(10);
+    pcmZoomLay->addWidget(pcmZoomSlider);
+    pcmLayout->addLayout(pcmZoomLay);
+
+    //DISCLAIMER (The Warning)
+    pcmDisclaimer = new QLabel("⚠ NOTICE: 1.5 BIT TERNARY ONLY.\n"
+                               "This module currently only works in 1.5-bit ternary mode.\n"
+                               "I can't get it to work in 4-bit like my original Matlab script.");
+    pcmDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
+    pcmDisclaimer->setAlignment(Qt::AlignCenter);
+    pcmDisclaimer->setFixedHeight(80);
+    pcmLayout->addWidget(pcmDisclaimer);
+
+    // CONTROLS
     auto *btnLoad = new QPushButton("Load WAV");
     btnSave = new QPushButton("Generate String");
     btnCopy = new QPushButton("Copy Clipboard");
-    pcmLayout->addWidget(btnLoad); pcmLayout->addWidget(btnSave); pcmLayout->addWidget(btnCopy);
+    pcmLayout->addWidget(btnLoad);
+    pcmLayout->addWidget(btnSave);
+    pcmLayout->addWidget(btnCopy);
+
     auto *pcmGrid = new QGridLayout();
     buildModeCombo = new QComboBox(); buildModeCombo->addItems({"Modern", "Legacy"});
     sampleRateCombo = new QComboBox(); sampleRateCombo->addItems({"8000", "4000", "2000"});
     maxDurSpin = new QDoubleSpinBox(); maxDurSpin->setRange(0.01, 600.0); maxDurSpin->setValue(2.0);
     normalizeCheck = new QCheckBox("Normalize 4-bit"); normalizeCheck->setChecked(true);
+
     pcmGrid->addWidget(new QLabel("Build Mode:"), 0, 0); pcmGrid->addWidget(buildModeCombo, 0, 1);
     pcmGrid->addWidget(new QLabel("Rate:"), 1, 0); pcmGrid->addWidget(sampleRateCombo, 1, 1);
     pcmGrid->addWidget(new QLabel("Max(s):"), 2, 0); pcmGrid->addWidget(maxDurSpin, 2, 1);
-    pcmLayout->addLayout(pcmGrid); pcmLayout->addWidget(normalizeCheck);
+
+    pcmLayout->addLayout(pcmGrid);
+    pcmLayout->addWidget(normalizeCheck);
+
     modeTabs->addTab(pcmTab, "PCM Sampler");
+
+    // SCOPE ZOOM LOGIC
+    // This allows the slider to update the view even if we don't reload the file
+    connect(pcmZoomSlider, &QSlider::valueChanged, [=]() {
+        if(originalData.empty()) return;
+        double dur = (double)originalData.size() / fileFs;
+        double zoom = pcmZoomSlider->value() / 100.0;
+        pcmScope->updateScope([=](double t){
+            int idx = (int)(t * fileFs);
+            if(idx >= 0 && idx < originalData.size()) return originalData[idx];
+            return 0.0;
+        }, dur, zoom);
+    });
 
     // 3. CONSOLE LAB
     QWidget *consoleTab = new QWidget(); auto *consoleLayout = new QFormLayout(consoleTab);
@@ -1896,14 +1941,34 @@ void MainWindow::clearAllSid() {
 void MainWindow::loadWav() {
     QString path = QFileDialog::getOpenFileName(this, "Select WAV", "", "WAV (*.wav)");
     if (path.isEmpty()) return;
+
     QFile file(path);
     if (file.open(QIODevice::ReadOnly)) {
-        file.seek(24); file.read(reinterpret_cast<char*>(&fileFs), 4);
-        file.seek(44); QByteArray raw = file.readAll();
-        originalData.clear(); const int16_t* samples = reinterpret_cast<const int16_t*>(raw.data());
-        for(int i=0; i < (int)raw.size()/2; ++i) originalData.push_back(samples[i] / 32768.0);
+        // Basic WAV parsing (Header skip)
+        file.seek(24);
+        file.read(reinterpret_cast<char*>(&fileFs), 4);
+        file.seek(44);
+        QByteArray raw = file.readAll();
+
+        // Convert bytes to doubles for processing
+        originalData.clear();
+        const int16_t* samples = reinterpret_cast<const int16_t*>(raw.data());
+        for(int i=0; i < (int)raw.size()/2; ++i) {
+            originalData.push_back(samples[i] / 32768.0);
+        }
+
+        // Update UI Limits
         maxDurSpin->setValue((double)originalData.size() / fileFs);
         btnSave->setEnabled(true);
+
+        // --- NEW: UPDATE THE OSCILLOSCOPE ---
+        double dur = (double)originalData.size() / fileFs;
+        double zoom = pcmZoomSlider->value() / 100.0;
+        pcmScope->updateScope([=](double t){
+            int idx = (int)(t * fileFs);
+            if(idx >= 0 && idx < originalData.size()) return originalData[idx];
+            return 0.0;
+        }, dur, zoom);
     }
 }
 
