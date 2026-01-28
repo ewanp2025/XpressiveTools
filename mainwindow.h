@@ -381,6 +381,7 @@ private:
     QLabel *drumDisclaimer;
     QLabel *xpfDisclaimer;
     QPushButton *btnSaveXpf;
+    QLabel *pcmDisclaimer;
 
     void saveXpfInstrument();
 
@@ -481,6 +482,9 @@ private:
     QSlider *stringZoomSlider;
     UniversalScope *westScope;
     QSlider *westZoomSlider;
+    UniversalScope *pcmScope;
+    QSlider *pcmZoomSlider;
+
 
 
 };
