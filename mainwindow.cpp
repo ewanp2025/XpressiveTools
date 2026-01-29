@@ -14,7 +14,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     initSamLibrary(); // Initialize the new SAM library
     setupUI();
     setWindowTitle("Xpressive Sound Design Suite - Ewan Pettigrew - Uses parts of SAM phonetics code for text to speech test");
+
+    m_ghostSynth = new SynthEngine(this); // TEST
 }
+
 
 void WaveformDisplay::updateData(const std::vector<SidSegment>& segments) {
     m_segments = segments;
@@ -139,9 +142,9 @@ void MainWindow::setupUI() {
     pcmLayout->addLayout(pcmZoomLay);
 
     //DISCLAIMER (The Warning)
-    pcmDisclaimer = new QLabel("⚠ NOTICE: 1.5 BIT TERNARY ONLY.\n"
-                               "This module currently only works in 1.5-bit ternary mode.\n"
-                               "I can't get it to work in 4-bit like my original Matlab script.");
+    pcmDisclaimer = new QLabel("\n"
+                               "\n"
+                               "");
     pcmDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
     pcmDisclaimer->setAlignment(Qt::AlignCenter);
     pcmDisclaimer->setFixedHeight(80);
@@ -184,16 +187,158 @@ void MainWindow::setupUI() {
     });
 
     // 3. CONSOLE LAB
-    QWidget *consoleTab = new QWidget(); auto *consoleLayout = new QFormLayout(consoleTab);
+    QWidget *consoleTab = new QWidget();
+    auto *consoleLayout = new QVBoxLayout(consoleTab); // CHANGED to VBox for better stacking
+
+    // A. SHARED ROUTINE: OSCILLOSCOPE
+    consoleScope = new UniversalScope();
+    consoleScope->setMinimumHeight(150);
+    consoleLayout->addWidget(consoleScope);
+
+    // B. CONTROLS
+    auto *cForm = new QFormLayout();
     buildModeConsole = new QComboBox(); buildModeConsole->addItems({"Modern", "Legacy"});
-    consoleWaveType = new QComboBox(); consoleWaveType->addItems({"NES Triangle", "4-Bit Saw"});
+    consoleWaveType = new QComboBox();
+    consoleWaveType->addItems({
+        "00. NES Triangle (Pseudo-Tri)",
+        "01. NES Pulse 12.5% (Thin)",
+        "02. NES Pulse 25% (Classic)",
+        "03. NES Pulse 50% (Square)",
+        "04. Gameboy Soft Saw (No DC)",
+        "05. Gameboy Noise (Polynomial)",
+        "06. C64 Sawtooth (Ramp)",
+        "07. C64 Triangle (Analogue)",
+        "08. C64 Pulse (Width Sweep)",
+        "09. C64 Ring Mod (Bell)",
+        "10. VRC6 Sawtooth (Expanded)",
+        "11. VRC6 Pulse (Duty Cycle)",
+        "12. Famicom Disk System (Mod)",
+        "13. Master System Tone (Flat)",
+        "14. PC Engine Organ (50/50)",
+        "15. 2600 Pitched Noise",
+        "16. 2600 Pure Square",
+        "17. Konami SCC (Wavetable Sim)",
+        "18. Namco 163 (4-bit Sine)",
+        "19. Sega Genesis (FM Bass)",
+        "20. Sega Genesis (FM Bell)",
+        "21. Amiga 500 (Sample Hold)"
+    });
+
     consoleSteps = new QDoubleSpinBox(); consoleSteps->setValue(16);
-    consoleLayout->addRow("Build Mode:", buildModeConsole);
-    consoleLayout->addRow("Type:", consoleWaveType);
-    consoleLayout->addRow("Steps:", consoleSteps);
-    auto *btnGenConsole = new QPushButton("Generate Console String");
-    consoleLayout->addRow(btnGenConsole);
+
+    cForm->addRow("Build Mode:", buildModeConsole);
+    cForm->addRow("Type:", consoleWaveType);
+    cForm->addRow("Quantize Steps:", consoleSteps);
+    consoleLayout->addLayout(cForm);
+
+    // C. PLAY / GENERATE BUTTONS
+    auto *cBtnLayout = new QHBoxLayout();
+
+    auto *btnPlayConsole = new QPushButton("▶ Play A-5 (880Hz)");
+    btnPlayConsole->setCheckable(true); // Acts as Start/Stop toggle
+    btnPlayConsole->setStyleSheet("background-color: #335533; color: white; font-weight: bold;");
+
+    auto *btnGenConsole = new QPushButton("Generate String");
+
+    cBtnLayout->addWidget(btnPlayConsole);
+    cBtnLayout->addWidget(btnGenConsole);
+    consoleLayout->addLayout(cBtnLayout);
+
+    consoleLayout->addStretch();
     modeTabs->addTab(consoleTab, "Console Lab");
+
+    // D. PLAY BUTTON LOGIC (Audio + Visual)
+    connect(btnPlayConsole, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlayConsole->setText("▶ Play A-5 (880Hz)");
+            btnPlayConsole->setStyleSheet("background-color: #335533; color: white;");
+            return;
+        }
+
+        btnPlayConsole->setText("⏹ Stop");
+        btnPlayConsole->setStyleSheet("background-color: #338833; color: white;");
+        m_ghostSynth->start();
+
+        int type = consoleWaveType->currentIndex();
+        double steps = consoleSteps->value();
+        double f = 880.0; // A-5 Frequency
+
+        // THE MATH ROUTINE
+        std::function<double(double)> audioRoutine = [=](double t) {
+            double signal = 0.0;
+            double pi = 3.14159;
+            double ph = t * f; // Basic Phase
+
+            // Helper for Pulse Width: (sin(ph) > width ? 1 : -1)
+            auto pulse = [&](double w) { return std::sin(2.0*pi*ph) > w ? 1.0 : -1.0; };
+            // Helper for Triangle
+            auto tri = [&]() { return (2.0/pi)*std::asin(std::sin(2.0*pi*ph)); };
+            // Helper for Saw
+            auto saw = [&]() { return 2.0 * (ph - std::floor(0.5 + ph)); };
+
+            switch(type) {
+            // --- NINTENDO (NES) ---
+            case 0: signal = tri(); break; // NES Tri
+            case 1: signal = pulse(0.75); break; // 12.5%
+            case 2: signal = pulse(0.5); break;  // 25%
+            case 3: signal = pulse(0.0); break;  // 50%
+
+            // --- GAMEBOY ---
+            case 4: signal = saw() * 0.8; break; // Soft Saw
+            case 5: signal = ((std::rand() % 100) / 50.0) - 1.0; break; // Noise
+
+            // --- COMMODORE 64 ---
+            case 6: signal = saw(); break; // Sharp Saw
+            case 7: signal = tri() + (0.1 * saw()); break; // Dirty Tri
+            case 8: signal = pulse(std::sin(t * 3.0)); break; // PWM Sweep
+            case 9: signal = pulse(0.0) * pulse(0.95); break; // Ring Mod
+
+            // --- EXPANSION CHIPS (VRC6) ---
+            case 10: signal = (saw() * 0.5) + (pulse(0.0) * 0.5); break; // VRC Saw
+            case 11: signal = pulse(0.8); break; // VRC Pulse (Extreme)
+
+            // --- OTHER CONSOLES ---
+            case 12: signal = std::sin(2.0*pi*ph + std::sin(2.0*pi*t*6.0)); break; // FDS (Mod)
+            case 13: signal = pulse(-0.2); break; // Master System (Flat)
+            case 14: signal = (pulse(0.0) + pulse(0.1)) * 0.5; break; // PC Engine Organ
+            case 15: signal = ((std::rand()%100 > 50 ? 1 : -1) * pulse(0.0)); break; // 2600 Pitched
+            case 16: signal = pulse(0.0); break; // 2600 Square
+            case 17: signal = saw() * (tri() > 0 ? 1 : -1); break; // SCC Wavetable
+            case 18: signal = std::sin(2.0*pi*ph); break; // Namco Sine
+
+            // --- 16-BIT ERA (FM SIMULATION) ---
+            case 19: signal = std::sin(2.0*pi*ph + 3.0*std::sin(2.0*pi*ph*0.5)); break; // Genesis Bass
+            case 20: signal = std::sin(2.0*pi*ph) * std::exp(-t*10.0); break; // Genesis Bell
+            case 21: signal = saw(); break; // Amiga (uses quantizer below)
+            }
+
+            // Bit-Crush / Quantize Logic
+            if (steps > 0) {
+                signal = std::floor(signal * steps) / steps;
+            }
+
+            return signal;
+        };
+
+        m_ghostSynth->setAudioSource(audioRoutine);
+
+        // Use the same routine for the visualizer, but slowed down
+        // so we can see the shape
+        std::function<double(double)> visRoutine = [=](double t) {
+            double oldF = f;
+            // Dirty hack: temporarily overwrite 'f' logic for visualizer
+            // We really should pass 'f' into the lambda, but this works for a quick fix
+            double visF = 80.0;
+            double ratio = visF / oldF;
+            return audioRoutine(t * ratio);
+        };
+
+        consoleScope->updateScope(visRoutine, 1.0, 0.1);
+    });
+
+    connect(btnGenConsole, &QPushButton::clicked, this, &MainWindow::generateConsoleWave);
 
     // 4. SFX MACRO
     QWidget *sfxTab = new QWidget(); auto *sfxLayout = new QFormLayout(sfxTab);
@@ -425,6 +570,8 @@ void MainWindow::setupUI() {
 
     // 7. BESSEL FM
     QWidget *besselTab = new QWidget(); auto *besselLayout = new QVBoxLayout(besselTab);
+    besselSpectrum = new UniversalSpectrum();
+    besselLayout->addWidget(besselSpectrum);
     auto *bForm = new QFormLayout();
     buildModeBessel = new QComboBox(); buildModeBessel->addItems({"Modern", "Legacy"});
     besselPresetCombo = new QComboBox();
@@ -450,22 +597,116 @@ void MainWindow::setupUI() {
     besselLayout->addLayout(bForm);
     auto *btnBes = new QPushButton("Generate Bessel FM");
     besselLayout->addWidget(btnBes);
+
+    // This function calculates the FM math for the visualizer
+    auto updateBesselVisual = [=]() {
+        if (!besselSpectrum) return;
+
+        // 1. Get values from the UI
+        double cMult = besselCarrierMult->value();
+        double mMult = besselModMult->value();
+        double index = besselModIndex->value();
+
+        // 2. Define the Math (Standard FM Synthesis)
+        // t = time, f = frequency (we use 220Hz for visualization)
+        std::function<double(double)> fmAlgo = [=](double t) {
+            double f = 220.0;
+            double twoPi = 6.283185;
+
+            // Simple Sine FM: sin( c*t + I*sin(m*t) )
+            double modulator = index * std::sin(t * f * mMult * twoPi);
+            double carrier   = std::sin((t * f * cMult * twoPi) + modulator);
+
+            return carrier;
+        };
+
+        // 3. Send to Spectrum (Sample Rate 44100 for high detail)
+        besselSpectrum->updateSpectrum(fmAlgo, 44100.0);
+    };
+
+    // 4. Connect Sliders so it updates instantly
+    connect(besselCarrierMult, &QDoubleSpinBox::valueChanged, updateBesselVisual);
+    connect(besselModMult, &QDoubleSpinBox::valueChanged, updateBesselVisual);
+    connect(besselModIndex, &QDoubleSpinBox::valueChanged, updateBesselVisual);
+
+    // Run once to initialize
+    QTimer::singleShot(100, updateBesselVisual);
+
+
     modeTabs->addTab(besselTab, "Bessel FM");
 
     // 8. HARMONIC LAB
-    QWidget *harTab = new QWidget(); auto *harLayout = new QVBoxLayout(harTab);
-    buildModeHarmonic = new QComboBox(); buildModeHarmonic->addItems({"Modern", "Legacy"});
-    harLayout->addWidget(new QLabel("Build Mode:")); harLayout->addWidget(buildModeHarmonic);
+    QWidget *harTab = new QWidget();
+    auto *harLayout = new QVBoxLayout(harTab);
+
+    // --- A. ADD THE SPECTRUM ANALYZER ---
+    // We create a new instance of the class used in Bessel FM
+    harmonicSpectrum = new UniversalSpectrum();
+    harLayout->addWidget(harmonicSpectrum);
+
+    buildModeHarmonic = new QComboBox();
+    buildModeHarmonic->addItems({"Modern", "Legacy"});
+    harLayout->addWidget(new QLabel("Build Mode:"));
+    harLayout->addWidget(buildModeHarmonic);
+
     auto *harGrid = new QGridLayout();
+
+    // --- B. DEFINE THE "ROUTINE" (Audio Math) ---
+    // This function calculates Additive Synthesis: Summing sine waves
+    auto updateHarmonicVisual = [=]() {
+        if (!harmonicSpectrum) return;
+
+        // 1. Define the Math
+        // We use a lambda inside a lambda so the Spectrum class can call it repeatedly
+        std::function<double(double)> additiveAlgo = [=](double t) {
+            double signal = 0.0;
+            double f = 220.0; // Base frequency (A3) for visualization
+            double twoPi = 6.283185;
+
+            // Loop through all 16 sliders to sum the harmonics
+            for (int i = 0; i < 16; ++i) {
+                // Get value 0.0 to 1.0
+                double amp = harmonicSliders[i]->value() / 100.0;
+
+                if (amp > 0.0) {
+                    double harmonic = (double)(i + 1); // 1st, 2nd, 3rd harmonic...
+                    // sin( 2pi * f * harmonic * t )
+                    signal += amp * std::sin(t * f * harmonic * twoPi);
+                }
+            }
+            // Normalize slightly to prevent massive clipping on the visualizer
+            return signal * 0.3;
+        };
+
+        // 2. Send to Spectrum (44100 Hz resolution)
+        harmonicSpectrum->updateSpectrum(additiveAlgo, 44100.0);
+    };
+
+    // --- C. GENERATE SLIDERS & CONNECT THEM ---
     for(int i=0; i<16; ++i) {
-        harmonicSliders[i] = new QSlider(Qt::Vertical); harmonicSliders[i]->setRange(0, 100);
+        harmonicSliders[i] = new QSlider(Qt::Vertical);
+        harmonicSliders[i]->setRange(0, 100);
+
+        // Default: Set 1st Harmonic (Fundamental) to 100%
+        if(i == 0) harmonicSliders[i]->setValue(100);
+
         harGrid->addWidget(new QLabel(QString("H%1").arg(i+1)), 0, i);
         harGrid->addWidget(harmonicSliders[i], 1, i);
+
+        // Connect every slider to the visualizer routine
+        connect(harmonicSliders[i], &QSlider::valueChanged, updateHarmonicVisual);
     }
+
     harLayout->addLayout(harGrid);
     auto *btnHar = new QPushButton("Generate Harmonic Wave");
     harLayout->addWidget(btnHar);
     modeTabs->addTab(harTab, "Harmonic Lab");
+
+    // Connect the generation button (Keep original logic)
+    connect(btnHar, &QPushButton::clicked, this, &MainWindow::generateHarmonicLab);
+
+    // Trigger once to draw the initial state
+    QTimer::singleShot(200, updateHarmonicVisual);
 
     // 9. --- DRUM ARCHITECT TAB ---
     QWidget *drumWidget = new QWidget();
@@ -1658,9 +1899,71 @@ void MainWindow::loadBesselPreset(int idx) {
 }
 
 void MainWindow::generateConsoleWave() {
-    double s = consoleSteps->value();
-    QString base = (consoleWaveType->currentIndex() == 0) ? "trianglew(integrate(f))" : "saww(integrate(f))";
-    statusBox->setText(QString("floor(%1 * %2) / %2").arg(base).arg(s));
+    // Get the build mode (Modern vs Legacy)
+    int mode = buildModeConsole ? buildModeConsole->currentIndex() : 0;
+
+    QString result;
+    auto *rng = QRandomGenerator::global();
+
+    if (mode == 0) {
+        // --- MODERN (Float Math) ---
+        QStringList waves = {"sin", "cos", "tri", "saw", "sqr"};
+        QStringList mods = {
+            "",
+            "* (1.0 - t*0.5)",        // Decay
+            "* (0.5 + 0.5*sin(t*4))", // Tremolo
+            "+ 0.1*sin(t*50)",        // FM Grit
+            "* ((t*10 % 2) - 1)"      // Sample & Hold
+        };
+        QStringList quantizers = {
+            "",
+            "floor(x * 4)/4",    // 2-bit
+            "floor(x * 16)/16",  // 4-bit
+            "x > 0 ? 1 : -1"     // 1-bit Comparator
+        };
+
+        QString w = waves[rng->bounded(waves.size())];
+        QString m = mods[rng->bounded(mods.size())];
+        QString q = quantizers[rng->bounded(quantizers.size())];
+
+        // Randomize Frequency Multiplier
+        double freqMult = (rng->bounded(4) + 1) * 0.5; // 0.5, 1.0, 1.5, 2.0
+
+        // Build the Core: "sin(t * f * 1.5)"
+        QString core = QString("%1(t * f * %2)").arg(w).arg(freqMult);
+
+        // Add Modifiers
+        QString full = core + m;
+
+        // Add Quantizer
+        if (q.isEmpty()) {
+            result = full;
+        } else {
+            result = q.replace("x", "(" + full + ")");
+        }
+
+    } else {
+        // --- LEGACY (Bytebeat / Bitwise) ---
+        QStringList ops = {"&", "|", "^", ">>", "<<"};
+        QStringList vals = {"t", "t*2", "t/2", "t>>4", "t&128"};
+
+        QString a = vals[rng->bounded(vals.size())];
+        QString b = vals[rng->bounded(vals.size())];
+        QString op = ops[rng->bounded(ops.size())];
+
+        result = QString("(%1 %2 %3) & 255").arg(a, op, b);
+    }
+
+    // --- OUTPUT ---
+
+    // 1. Debug Print
+    qDebug() << "GENERATED:" << result;
+
+    // 2. Copy to Clipboard
+    QGuiApplication::clipboard()->setText(result);
+
+    // 3. VISUAL CONFIRMATION (This was missing!)
+    statusBox->setText(result);
 }
 
 void MainWindow::generateSFXMacro() {
@@ -1943,33 +2246,152 @@ void MainWindow::loadWav() {
     if (path.isEmpty()) return;
 
     QFile file(path);
-    if (file.open(QIODevice::ReadOnly)) {
-        // Basic WAV parsing (Header skip)
-        file.seek(24);
-        file.read(reinterpret_cast<char*>(&fileFs), 4);
-        file.seek(44);
-        QByteArray raw = file.readAll();
+    if (!file.open(QIODevice::ReadOnly)) return;
 
-        // Convert bytes to doubles for processing
-        originalData.clear();
-        const int16_t* samples = reinterpret_cast<const int16_t*>(raw.data());
-        for(int i=0; i < (int)raw.size()/2; ++i) {
-            originalData.push_back(samples[i] / 32768.0);
+    QDataStream stream(&file);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    // 1. Basic Header Checks
+    char riff[4], wave[4];
+    file.read(riff, 4);
+    file.seek(8);
+    file.read(wave, 4);
+
+    if (strncmp(riff, "RIFF", 4) != 0 || strncmp(wave, "WAVE", 4) != 0) {
+        statusBox->setText("Error: Not a valid WAV file.");
+        return;
+    }
+
+    // 2. Scan Chunks (robustly)
+    uint16_t audioFormat = 0; // 1=PCM, 3=Float
+    uint16_t numChannels = 0;
+    uint32_t sampleRate = 0;
+    uint16_t bitsPerSample = 0;
+    uint32_t dataSize = 0;
+    qint64 dataOffset = 0;
+
+    while (!file.atEnd()) {
+        char chunkID[4];
+        if (file.read(chunkID, 4) < 4) break;
+
+        uint32_t chunkSize;
+        stream >> chunkSize;
+        qint64 nextChunk = file.pos() + chunkSize;
+
+        // Correct for odd-sized chunks (WAV standard requires padding byte)
+        if (chunkSize % 2 != 0) nextChunk++;
+
+        if (strncmp(chunkID, "fmt ", 4) == 0) {
+            stream >> audioFormat;
+            stream >> numChannels;
+            stream >> sampleRate;
+            file.seek(file.pos() + 6); // Skip ByteRate & BlockAlign
+            stream >> bitsPerSample;
+        }
+        else if (strncmp(chunkID, "data", 4) == 0) {
+            dataSize = chunkSize;
+            dataOffset = file.pos();
+            break; // Stop scanning once data is found
         }
 
-        // Update UI Limits
-        maxDurSpin->setValue((double)originalData.size() / fileFs);
-        btnSave->setEnabled(true);
-
-        // --- NEW: UPDATE THE OSCILLOSCOPE ---
-        double dur = (double)originalData.size() / fileFs;
-        double zoom = pcmZoomSlider->value() / 100.0;
-        pcmScope->updateScope([=](double t){
-            int idx = (int)(t * fileFs);
-            if(idx >= 0 && idx < originalData.size()) return originalData[idx];
-            return 0.0;
-        }, dur, zoom);
+        file.seek(nextChunk);
     }
+
+    if (dataSize == 0) {
+        statusBox->setText("Error: No audio data found.");
+        return;
+    }
+
+    // 3. Prepare Data
+    fileFs = sampleRate;
+    originalData.clear();
+    file.seek(dataOffset);
+    QByteArray raw = file.read(dataSize);
+
+    // 4. Decode based on Format
+    // Format 3 = IEEE Float (0.0 to 1.0)
+    // Format 1 = PCM (Integers)
+
+    if (audioFormat == 3 && bitsPerSample == 32) {
+        // --- 32-BIT FLOAT ---
+        const float* samples = reinterpret_cast<const float*>(raw.data());
+        int count = raw.size() / 4;
+        for(int i = 0; i < count; i += numChannels) {
+            double val = samples[i]; // Float is already -1.0 to 1.0
+            // Mix Stereo
+            if (numChannels > 1 && (i+1 < count)) val = (val + samples[i+1]) * 0.5;
+            originalData.push_back(val);
+        }
+    }
+    else if (audioFormat == 1) {
+        // --- PCM INTEGERS ---
+
+        if (bitsPerSample == 16) {
+            const int16_t* samples = reinterpret_cast<const int16_t*>(raw.data());
+            int count = raw.size() / 2;
+            for(int i = 0; i < count; i += numChannels) {
+                double val = samples[i] / 32768.0;
+                if (numChannels > 1 && (i+1 < count))
+                    val = (val + (samples[i+1] / 32768.0)) * 0.5;
+                originalData.push_back(val);
+            }
+        }
+        else if (bitsPerSample == 8) {
+            const uint8_t* samples = reinterpret_cast<const uint8_t*>(raw.data());
+            int count = raw.size();
+            for(int i = 0; i < count; i += numChannels) {
+                // 8-bit is unsigned 0..255 (center 128)
+                double val = (samples[i] - 128) / 128.0;
+                if (numChannels > 1 && (i+1 < count))
+                    val = (val + ((samples[i+1] - 128) / 128.0)) * 0.5;
+                originalData.push_back(val);
+            }
+        }
+        else if (bitsPerSample == 24) {
+            // 24-bit is tricky: 3 bytes packed together
+            const uint8_t* bytes = reinterpret_cast<const uint8_t*>(raw.data());
+            int count = raw.size() / 3;
+            // We read blocks of (3 * numChannels) bytes
+            for(int i = 0; i < count; i += numChannels) {
+                int byteIdx = i * 3;
+
+                // Construct 32-bit int from 3 bytes (Little Endian)
+                int32_t val32 = (bytes[byteIdx] | (bytes[byteIdx+1] << 8) | (bytes[byteIdx+2] << 16));
+
+                // Sign Extension: If the 24th bit is 1, we make the upper byte 0xFF
+                if (val32 & 0x800000) val32 |= 0xFF000000;
+
+                double val = val32 / 8388608.0; // 2^23
+
+                if (numChannels > 1 && (i+1 < count)) {
+                    int b2 = (i+1) * 3;
+                    int32_t val32R = (bytes[b2] | (bytes[b2+1] << 8) | (bytes[b2+2] << 16));
+                    if (val32R & 0x800000) val32R |= 0xFF000000;
+                    val = (val + (val32R / 8388608.0)) * 0.5;
+                }
+                originalData.push_back(val);
+            }
+        }
+    }
+    else {
+        statusBox->setText("Error: Unsupported WAV format (ADPCM or Compressed).");
+        return;
+    }
+
+    // Update UI Limits and Scope (Same as before)
+    maxDurSpin->setValue((double)originalData.size() / fileFs);
+    btnSave->setEnabled(true);
+
+    double dur = (double)originalData.size() / fileFs;
+    double zoom = pcmZoomSlider->value() / 100.0;
+
+    pcmScope->updateScope([this](double t){
+        int idx = (int)(t * fileFs);
+        if(idx >= 0 && idx < (int)originalData.size()) return originalData[idx];
+        return 0.0;
+    }, dur, zoom);
+
+    statusBox->setText(QString("Loaded: %1Hz, %2-bit, %3 Ch").arg(sampleRate).arg(bitsPerSample).arg(numChannels));
 }
 
 // FIX: Outputting normalized floats (-1.0 to 1.0) but quantised to 4-bit steps.
@@ -2312,7 +2734,7 @@ int findScopeAwareChar(const QString &str, char target) {
 // * Solves the "Stack Overflow" / Bracket Pile-up error *
 // ---------------------------------------------------------
 // ---------------------------------------------------------
-// FUNCTION 1: Universal "Make it Nightly"
+// FUNCTION 1: QWidget *besselTab = new QWidget()l "Make it Nightly"
 // * Accepts 't' (Time) OR 's' (Samples)
 // * Outputs perfectly balanced 'var s' tree
 // ---------------------------------------------------------
