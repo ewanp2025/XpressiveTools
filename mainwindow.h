@@ -372,6 +372,7 @@ private:
     QComboBox *consoleWaveType;
     QDoubleSpinBox *consoleSteps;
     UniversalScope *consoleScope;
+    UniversalScope *sfxScope;
     QComboBox *buildModeSFX;
     QDoubleSpinBox *sfxStartFreq;
     QDoubleSpinBox *sfxEndFreq;
@@ -400,6 +401,7 @@ private:
     QCheckBox *wtLoopCheck;
     QComboBox *wtBase;
     QDoubleSpinBox *wtHarmonics;
+    UniversalScope *wtScope;
 
     // ------------------------------------
     // TAB 7: BESSEL FM
