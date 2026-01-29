@@ -5,6 +5,7 @@
 #include <QAudioSink>
 #include <QMediaDevices>
 #include <QAudioDevice>
+#include <QMutex> // <--- 1. ADD THIS INCLUDE
 #include <cmath>
 #include <functional>
 
@@ -19,8 +20,6 @@ public:
     void stop();
     void setAudioSource(std::function<double(double)> func);
 
-    // --- NEW REQUIRED OVERRIDES ---
-    // These tell Qt "I am a live stream, don't stop reading!"
     bool isSequential() const override;
     qint64 bytesAvailable() const override;
 
@@ -31,8 +30,9 @@ protected:
 private:
     QAudioSink *m_audioSink = nullptr;
     QAudioFormat m_format;
-    std::function<double(double)> m_oscillator = [](double t){ return 0.0; };
+    std::function<double(double)> m_oscillator = [](double){ return 0.0; };
 
+    QMutex m_mutex; // <--- 2. ADD THIS MUTEX
     double m_sampleRate = 44100.0;
     qint64 m_totalSamples = 0;
 };
