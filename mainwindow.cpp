@@ -188,7 +188,7 @@ void MainWindow::setupUI() {
 
     // 3. CONSOLE LAB
     QWidget *consoleTab = new QWidget();
-    auto *consoleLayout = new QVBoxLayout(consoleTab); // CHANGED to VBox for better stacking
+    auto *consoleLayout = new QVBoxLayout(consoleTab);
 
     // A. SHARED ROUTINE: OSCILLOSCOPE
     consoleScope = new UniversalScope();
@@ -235,7 +235,7 @@ void MainWindow::setupUI() {
     auto *cBtnLayout = new QHBoxLayout();
 
     auto *btnPlayConsole = new QPushButton("▶ Play A-5 (880Hz)");
-    btnPlayConsole->setCheckable(true); // Acts as Start/Stop toggle
+    btnPlayConsole->setCheckable(true);
     btnPlayConsole->setStyleSheet("background-color: #335533; color: white; font-weight: bold;");
 
     auto *btnGenConsole = new QPushButton("Generate String");
@@ -247,112 +247,198 @@ void MainWindow::setupUI() {
     consoleLayout->addStretch();
     modeTabs->addTab(consoleTab, "Console Lab");
 
-    // D. PLAY BUTTON LOGIC (Audio + Visual)
+    // --- LOGIC EXTRACTION: SHARED UPDATE FUNCTION ---
+    auto updateConsole = [=]() {
+        int type = consoleWaveType->currentIndex();
+        double steps = consoleSteps->value();
+        double f = 880.0; // A-5 Frequency
+
+        // THE MATH ROUTINE (Extracted)
+        std::function<double(double)> audioRoutine = [=](double t) {
+            double signal = 0.0;
+            double pi = 3.14159;
+            double ph = t * f; // Basic Phase
+
+            // Helper for Pulse Width
+            auto pulse = [&](double w) { return std::sin(2.0*pi*ph) > w ? 1.0 : -1.0; };
+            auto tri = [&]() { return (2.0/pi)*std::asin(std::sin(2.0*pi*ph)); };
+            auto saw = [&]() { return 2.0 * (ph - std::floor(0.5 + ph)); };
+
+            switch(type) {
+            case 0: signal = tri(); break; // NES Tri
+            case 1: signal = pulse(0.75); break; // 12.5%
+            case 2: signal = pulse(0.5); break;  // 25%
+            case 3: signal = pulse(0.0); break;  // 50%
+            case 4: signal = saw() * 0.8; break; // Soft Saw
+            case 5: signal = ((std::rand() % 100) / 50.0) - 1.0; break; // Noise
+            case 6: signal = saw(); break; // Sharp Saw
+            case 7: signal = tri() + (0.1 * saw()); break; // Dirty Tri
+            case 8: signal = pulse(std::sin(t * 3.0)); break; // PWM Sweep
+            case 9: signal = pulse(0.0) * pulse(0.95); break; // Ring Mod
+            case 10: signal = (saw() * 0.5) + (pulse(0.0) * 0.5); break; // VRC Saw
+            case 11: signal = pulse(0.8); break; // VRC Pulse
+            case 12: signal = std::sin(2.0*pi*ph + std::sin(2.0*pi*t*6.0)); break; // FDS
+            case 13: signal = pulse(-0.2); break; // Master System
+            case 14: signal = (pulse(0.0) + pulse(0.1)) * 0.5; break; // PC Engine
+            case 15: signal = ((std::rand()%100 > 50 ? 1 : -1) * pulse(0.0)); break; // 2600
+            case 16: signal = pulse(0.0); break; // 2600 Square
+            case 17: signal = saw() * (tri() > 0 ? 1 : -1); break; // SCC
+            case 18: signal = std::sin(2.0*pi*ph); break; // Namco Sine
+            case 19: signal = std::sin(2.0*pi*ph + 3.0*std::sin(2.0*pi*ph*0.5)); break; // Genesis Bass
+            case 20: signal = std::sin(2.0*pi*ph) * std::exp(-t*10.0); break; // Genesis Bell
+            case 21: signal = saw(); break; // Amiga
+            }
+
+            // Bit-Crush
+            if (steps > 0) signal = std::floor(signal * steps) / steps;
+
+            return signal;
+        };
+
+        // 1. Update Visualizer (Always)
+        // We use a slower "fake" frequency for the scope so the wave shape is visible
+        std::function<double(double)> visRoutine = [=](double t) {
+            double ratio = 80.0 / f; // Scale 880Hz down to 80Hz for viewing
+            return audioRoutine(t * ratio);
+        };
+        consoleScope->updateScope(visRoutine, 1.0, 0.1);
+
+        // 2. Update Audio (Only if playing)
+        if(btnPlayConsole->isChecked()) {
+            m_ghostSynth->setAudioSource(audioRoutine);
+        }
+    };
+
+    // D. CONNECTIONS (NOW LIVE UPDATING)
+    // Connecting these ensures the scope updates immediately when you change the dropdown
+    connect(consoleWaveType, QOverload<int>::of(&QComboBox::currentIndexChanged), updateConsole);
+    connect(consoleSteps, &QDoubleSpinBox::valueChanged, updateConsole);
+
+    // E. PLAY BUTTON LOGIC
     connect(btnPlayConsole, &QPushButton::toggled, [=](bool checked){
         if(!checked) {
             m_ghostSynth->setAudioSource([](double){ return 0.0; });
             m_ghostSynth->stop();
             btnPlayConsole->setText("▶ Play A-5 (880Hz)");
             btnPlayConsole->setStyleSheet("background-color: #335533; color: white;");
-            return;
+        } else {
+            btnPlayConsole->setText("⏹ Stop");
+            btnPlayConsole->setStyleSheet("background-color: #338833; color: white;");
+            m_ghostSynth->start();
+
+            // Trigger the update logic to start the sound
+            updateConsole();
         }
-
-        btnPlayConsole->setText("⏹ Stop");
-        btnPlayConsole->setStyleSheet("background-color: #338833; color: white;");
-        m_ghostSynth->start();
-
-        int type = consoleWaveType->currentIndex();
-        double steps = consoleSteps->value();
-        double f = 880.0; // A-5 Frequency
-
-        // THE MATH ROUTINE
-        std::function<double(double)> audioRoutine = [=](double t) {
-            double signal = 0.0;
-            double pi = 3.14159;
-            double ph = t * f; // Basic Phase
-
-            // Helper for Pulse Width: (sin(ph) > width ? 1 : -1)
-            auto pulse = [&](double w) { return std::sin(2.0*pi*ph) > w ? 1.0 : -1.0; };
-            // Helper for Triangle
-            auto tri = [&]() { return (2.0/pi)*std::asin(std::sin(2.0*pi*ph)); };
-            // Helper for Saw
-            auto saw = [&]() { return 2.0 * (ph - std::floor(0.5 + ph)); };
-
-            switch(type) {
-            // --- NINTENDO (NES) ---
-            case 0: signal = tri(); break; // NES Tri
-            case 1: signal = pulse(0.75); break; // 12.5%
-            case 2: signal = pulse(0.5); break;  // 25%
-            case 3: signal = pulse(0.0); break;  // 50%
-
-            // --- GAMEBOY ---
-            case 4: signal = saw() * 0.8; break; // Soft Saw
-            case 5: signal = ((std::rand() % 100) / 50.0) - 1.0; break; // Noise
-
-            // --- COMMODORE 64 ---
-            case 6: signal = saw(); break; // Sharp Saw
-            case 7: signal = tri() + (0.1 * saw()); break; // Dirty Tri
-            case 8: signal = pulse(std::sin(t * 3.0)); break; // PWM Sweep
-            case 9: signal = pulse(0.0) * pulse(0.95); break; // Ring Mod
-
-            // --- EXPANSION CHIPS (VRC6) ---
-            case 10: signal = (saw() * 0.5) + (pulse(0.0) * 0.5); break; // VRC Saw
-            case 11: signal = pulse(0.8); break; // VRC Pulse (Extreme)
-
-            // --- OTHER CONSOLES ---
-            case 12: signal = std::sin(2.0*pi*ph + std::sin(2.0*pi*t*6.0)); break; // FDS (Mod)
-            case 13: signal = pulse(-0.2); break; // Master System (Flat)
-            case 14: signal = (pulse(0.0) + pulse(0.1)) * 0.5; break; // PC Engine Organ
-            case 15: signal = ((std::rand()%100 > 50 ? 1 : -1) * pulse(0.0)); break; // 2600 Pitched
-            case 16: signal = pulse(0.0); break; // 2600 Square
-            case 17: signal = saw() * (tri() > 0 ? 1 : -1); break; // SCC Wavetable
-            case 18: signal = std::sin(2.0*pi*ph); break; // Namco Sine
-
-            // --- 16-BIT ERA (FM SIMULATION) ---
-            case 19: signal = std::sin(2.0*pi*ph + 3.0*std::sin(2.0*pi*ph*0.5)); break; // Genesis Bass
-            case 20: signal = std::sin(2.0*pi*ph) * std::exp(-t*10.0); break; // Genesis Bell
-            case 21: signal = saw(); break; // Amiga (uses quantizer below)
-            }
-
-            // Bit-Crush / Quantize Logic
-            if (steps > 0) {
-                signal = std::floor(signal * steps) / steps;
-            }
-
-            return signal;
-        };
-
-        m_ghostSynth->setAudioSource(audioRoutine);
-
-        // Use the same routine for the visualizer, but slowed down
-        // so we can see the shape
-        std::function<double(double)> visRoutine = [=](double t) {
-            double oldF = f;
-            // Dirty hack: temporarily overwrite 'f' logic for visualizer
-            // We really should pass 'f' into the lambda, but this works for a quick fix
-            double visF = 80.0;
-            double ratio = visF / oldF;
-            return audioRoutine(t * ratio);
-        };
-
-        consoleScope->updateScope(visRoutine, 1.0, 0.1);
     });
 
     connect(btnGenConsole, &QPushButton::clicked, this, &MainWindow::generateConsoleWave);
 
+    // Initial Trigger to draw the default wave
+    QTimer::singleShot(100, updateConsole);
+
     // 4. SFX MACRO
-    QWidget *sfxTab = new QWidget(); auto *sfxLayout = new QFormLayout(sfxTab);
+    QWidget *sfxTab = new QWidget();
+    auto *sfxLayout = new QVBoxLayout(sfxTab); // Changed to VBox for Scope
+
+    // A. OSCILLOSCOPE
+    sfxScope = new UniversalScope();
+    sfxScope->setMinimumHeight(150);
+    sfxLayout->addWidget(sfxScope);
+
+    // B. CONTROLS
+    auto *sfxForm = new QFormLayout();
     buildModeSFX = new QComboBox(); buildModeSFX->addItems({"Modern", "Legacy"});
     sfxStartFreq = new QDoubleSpinBox(); sfxStartFreq->setRange(20, 20000); sfxStartFreq->setValue(880);
     sfxEndFreq = new QDoubleSpinBox(); sfxEndFreq->setRange(20, 20000); sfxEndFreq->setValue(110);
     sfxDur = new QDoubleSpinBox(); sfxDur->setValue(0.2);
-    sfxLayout->addRow("Build Mode:", buildModeSFX);
-    sfxLayout->addRow("Start (Hz):", sfxStartFreq);
-    sfxLayout->addRow("End (Hz):", sfxEndFreq);
-    sfxLayout->addRow("Dur (s):", sfxDur);
+
+    sfxForm->addRow("Build Mode:", buildModeSFX);
+    sfxForm->addRow("Start (Hz):", sfxStartFreq);
+    sfxForm->addRow("End (Hz):", sfxEndFreq);
+    sfxForm->addRow("Dur (s):", sfxDur);
+    sfxLayout->addLayout(sfxForm);
+
+    // C. PLAY / GENERATE BUTTONS
+    auto *sfxBtnLay = new QHBoxLayout();
+
+    auto *btnPlaySFX = new QPushButton("▶ Play SFX Loop");
+    btnPlaySFX->setCheckable(true);
+    btnPlaySFX->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+
     auto *btnGenSFX = new QPushButton("Generate SFX String");
-    sfxLayout->addRow(btnGenSFX);
+    btnGenSFX->setStyleSheet("height: 40px;");
+
+    sfxBtnLay->addWidget(btnPlaySFX);
+    sfxBtnLay->addWidget(btnGenSFX);
+    sfxLayout->addLayout(sfxBtnLay);
+    sfxLayout->addStretch();
+
     modeTabs->addTab(sfxTab, "SFX Macro");
+
+    // D. LIVE UPDATE LOGIC
+    auto updateSFX = [=]() {
+        double fStart = sfxStartFreq->value();
+        double fEnd   = sfxEndFreq->value();
+        double dur    = sfxDur->value();
+
+        // C++ Math for Exponential Glide (Matches the generated formula)
+        std::function<double(double)> sfxAlgo = [=](double t) {
+            // Silence after duration
+            if (t > dur) return 0.0;
+            if (t < 0) return 0.0;
+            if (dur <= 0.001) return 0.0;
+
+            // Calculate 'k' for the exponential curve: f(t) = fStart * exp(k*t)
+            // If fEnd < fStart, k will be negative (decay)
+            double k = std::log(fEnd / fStart) / dur;
+
+            // Handle constant pitch (k ~= 0) to avoid divide-by-zero
+            if (std::abs(k) < 0.0001) {
+                return std::sin(t * fStart * 2.0 * 3.14159);
+            }
+
+            // Integral of f(t) is (1/k) * f(t)
+            double phase = (fStart / k) * (std::exp(k * t) - 1.0);
+            return std::sin(phase * 2.0 * 3.14159);
+        };
+
+        // 1. Update Scope
+        // We zoom out slightly (1.2x) so you can see the sound stop
+        sfxScope->updateScope(sfxAlgo, dur * 1.2, 1.0);
+
+        // 2. Update Audio (If Playing)
+        if (btnPlaySFX->isChecked()) {
+            // Create a loop with a small silence gap so you can hear the attack again
+            double loopLen = dur + 0.5;
+            m_ghostSynth->setAudioSource([=](double t){
+                return sfxAlgo(std::fmod(t, loopLen));
+            });
+        }
+    };
+
+    // E. CONNECTIONS
+    connect(sfxStartFreq, &QDoubleSpinBox::valueChanged, updateSFX);
+    connect(sfxEndFreq, &QDoubleSpinBox::valueChanged, updateSFX);
+    connect(sfxDur, &QDoubleSpinBox::valueChanged, updateSFX);
+
+    connect(btnPlaySFX, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlaySFX->setText("▶ Play SFX Loop");
+            btnPlaySFX->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+        } else {
+            m_ghostSynth->start();
+            btnPlaySFX->setText("⏹ Stop");
+            btnPlaySFX->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
+            updateSFX(); // Trigger the sound immediately
+        }
+    });
+
+    connect(btnGenSFX, &QPushButton::clicked, this, &MainWindow::generateSFXMacro);
+
+    // Initial draw
+    QTimer::singleShot(200, updateSFX);
 
     // 5. ARP ANIMATOR
     QWidget *arpTab = new QWidget();
@@ -447,81 +533,39 @@ void MainWindow::setupUI() {
     QWidget *wtTab = new QWidget();
     auto *wtLayout = new QVBoxLayout(wtTab);
 
-    // Header: Presets, Loop & Build Mode
-    auto *wtHeader = new QHBoxLayout();
+    // A. SCOPE
+    wtScope = new UniversalScope();
+    wtScope->setMinimumHeight(150);
+    wtLayout->addWidget(wtScope);
 
-    // 1. ADD: Build Mode Selection
+    // B. HEADER
+    auto *wtHeader = new QHBoxLayout();
     wtHeader->addWidget(new QLabel("Build Mode:"));
     buildModeWavetable = new QComboBox();
     buildModeWavetable->addItems({"Nightly (Nested)", "Legacy (Additive)"});
     wtHeader->addWidget(buildModeWavetable);
 
-
     wtHeader->addWidget(new QLabel("| Master Library:"));
     wtPresetCombo = new QComboBox();
-
-    // THE MASTER LIST
     QStringList presets;
     presets << "--- INIT ---" << "00. Empty / Init";
-
-    presets << "--- ROB HUBBARD ---"
-            << "01. Commando Bass (Glissando)" << "02. Monty Lead (Pulse+Vib)"
-            << "03. Delta Snare (Tri-Noise)" << "04. Zoids Metal (Ring Mod)"
-            << "05. Ace 2 Kick (Deep)" << "06. Crazy Comets (Echo)";
-
-    presets << "--- MARTIN GALWAY ---"
-            << "07. Wizball Arp (Bubble)" << "08. Parallax Bass (Slap)"
-            << "09. Comic Bakery (Lead)" << "10. Arkanoid (Dotted Echo)"
-            << "11. Green Beret (Military Snare)";
-
-    presets << "--- JEROEN TEL ---"
-            << "12. Cybernoid Metal Drum" << "13. Supremacy Lead (Vibrato)"
-            << "14. Turbo Outrun (Bass)" << "15. RoboCop 3 (Title Arp)";
-
-    presets << "--- CHRIS HUELSBECK ---"
-            << "16. Turrican I (Huge Arp)" << "17. Turrican II (Pad)"
-            << "18. Katakis (Space Lead)" << "19. Great Giana (Bass)";
-
-    presets << "--- TIM FOLLIN ---"
-            << "20. Solstice (Intro Lead)" << "21. Ghouls'n'Ghosts (Rain)"
-            << "22. Silver Surfer (Arp)" << "23. LED Storm (Bass)";
-
-    presets << "--- BEN DAGLISH ---"
-            << "24. Last Ninja (Dark Bass)" << "25. Deflektor (Lead)"
-            << "26. Trap (Fast Arp)";
-
-    presets << "--- DAVID WHITTAKER ---"
-            << "27. Glider Rider (Square)" << "28. Lazy Jones (Laser)";
-
-    presets << "--- YM / ATARI ST MASTERS ---"
-            << "29. YM Buzzer Envelope" << "30. YM Metal Bass"
-            << "31. YM 3-Voice Chord" << "32. Digi-Drum (SID-Style)";
-
-    presets << "--- FX / DRUMS (Utility) ---"
-            << "33. Coin (Mario Style)" << "34. Power Up"
-            << "35. Explosion (Noise Decay)" << "36. Laser (Pew Pew)"
-            << "37. 8-Bit Hi-Hat (Closed)" << "38. 8-Bit Hi-Hat (Open)"
-            << "39. Fake Chord (Minor)" << "40. Fake Chord (Major)"
-            << "--- SID DRUMS EXPANSION ---"
-            << "41. Heavy SID Kick (Square Drop)"
-            << "42. Snappy Snare (Tri+Noise)"
-            << "43. Tech Kick (Metal+Pulse)"
-            << "44. Glitch Snare (Ring Mod)";
-
-
-
+    presets << "--- ROB HUBBARD ---" << "01. Commando Bass (Glissando)" << "02. Monty Lead (Pulse+Vib)" << "03. Delta Snare (Tri-Noise)" << "04. Zoids Metal (Ring Mod)" << "05. Ace 2 Kick (Deep)" << "06. Crazy Comets (Echo)";
+    presets << "--- MARTIN GALWAY ---" << "07. Wizball Arp (Bubble)" << "08. Parallax Bass (Slap)" << "09. Comic Bakery (Lead)" << "10. Arkanoid (Dotted Echo)" << "11. Green Beret (Military Snare)";
+    presets << "--- JEROEN TEL ---" << "12. Cybernoid Metal Drum" << "13. Supremacy Lead (Vibrato)" << "14. Turbo Outrun (Bass)" << "15. RoboCop 3 (Title Arp)";
+    presets << "--- CHRIS HUELSBECK ---" << "16. Turrican I (Huge Arp)" << "17. Turrican II (Pad)" << "18. Katakis (Space Lead)" << "19. Great Giana (Bass)";
+    presets << "--- TIM FOLLIN ---" << "20. Solstice (Intro Lead)" << "21. Ghouls'n'Ghosts (Rain)" << "22. Silver Surfer (Arp)" << "23. LED Storm (Bass)";
+    presets << "--- BEN DAGLISH ---" << "24. Last Ninja (Dark Bass)" << "25. Deflektor (Lead)" << "26. Trap (Fast Arp)";
+    presets << "--- DAVID WHITTAKER ---" << "27. Glider Rider (Square)" << "28. Lazy Jones (Laser)";
+    presets << "--- YM / ATARI ST MASTERS ---" << "29. YM Buzzer Envelope" << "30. YM Metal Bass" << "31. YM 3-Voice Chord" << "32. Digi-Drum (SID-Style)";
+    presets << "--- FX / DRUMS (Utility) ---" << "33. Coin (Mario Style)" << "34. Power Up" << "35. Explosion (Noise Decay)" << "36. Laser (Pew Pew)" << "37. 8-Bit Hi-Hat (Closed)" << "38. 8-Bit Hi-Hat (Open)" << "39. Fake Chord (Minor)" << "40. Fake Chord (Major)" << "--- SID DRUMS EXPANSION ---" << "41. Heavy SID Kick (Square Drop)" << "42. Snappy Snare (Tri+Noise)" << "43. Tech Kick (Metal+Pulse)" << "44. Glitch Snare (Ring Mod)";
     wtPresetCombo->addItems(presets);
     wtHeader->addWidget(wtPresetCombo);
 
     wtLoopCheck = new QCheckBox("Loop Sequence");
     wtHeader->addWidget(wtLoopCheck);
-
     wtLayout->addLayout(wtHeader);
 
-    // ... (The rest of the Table/Button setup stays exactly the same) ...
-    // ... just keep the code below the header from the previous step ...
-
-    // The Tracker Table
+    // C. TABLE
     wtTrackerTable = new QTableWidget();
     wtTrackerTable->setColumnCount(4);
     wtTrackerTable->setHorizontalHeaderLabels({"Waveform", "Pitch (+/-)", "PWM %", "Dur (s)"});
@@ -529,44 +573,148 @@ void MainWindow::setupUI() {
     wtTrackerTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     wtLayout->addWidget(wtTrackerTable);
 
-    // Buttons
+    // D. BUTTONS
     auto *wtBtnLayout = new QHBoxLayout();
     auto *btnAddStep = new QPushButton("Add Step (+)");
     auto *btnRemStep = new QPushButton("Remove Step (-)");
+    auto *btnPlayWT = new QPushButton("▶ Play Sequence");
+    btnPlayWT->setCheckable(true);
+    btnPlayWT->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
     auto *btnGenWT = new QPushButton("GENERATE SEQUENCE");
-
-    // Style the big button to look cool
     btnGenWT->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
 
+    wtBtnLayout->addWidget(btnPlayWT);
     wtBtnLayout->addWidget(btnAddStep);
     wtBtnLayout->addWidget(btnRemStep);
     wtLayout->addLayout(wtBtnLayout);
     wtLayout->addWidget(btnGenWT);
-
     modeTabs->addTab(wtTab, "Wavetable Forge");
 
-    // Connections
-    connect(wtPresetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::loadWavetablePreset);
-    connect(btnGenWT, &QPushButton::clicked, this, &MainWindow::generateWavetableForge);
+    // E. UPDATE LOGIC (WITH NULLPTR SAFETY)
+    auto updateWavetable = [=]() {
+        int rows = wtTrackerTable->rowCount();
+        if (rows == 0) return;
 
-    // Table Editing Logic
+        struct StepData { int type; double pitchMult; double pwm; double duration; };
+        std::vector<StepData> sequence;
+        double totalDur = 0;
+
+        for(int i=0; i<rows; ++i) {
+            // --- CRITICAL SAFETY CHECK ---
+            // If any cell is missing (nullptr), skip this row to prevent crash
+            if (!wtTrackerTable->item(i, 0) || !wtTrackerTable->item(i, 1) ||
+                !wtTrackerTable->item(i, 2) || !wtTrackerTable->item(i, 3))
+                continue;
+
+            QString tStr = wtTrackerTable->item(i, 0)->text().toLower();
+            int pVal = wtTrackerTable->item(i, 1)->text().toInt();
+            double pwmVal = wtTrackerTable->item(i, 2)->text().toDouble() / 100.0;
+            double durVal = wtTrackerTable->item(i, 3)->text().toDouble();
+
+            totalDur += durVal;
+
+            int type = 0;
+            if (tStr.contains("tri") && tStr.contains("noise")) type = 5;
+            else if (tStr.contains("tri")) type = 1;
+            else if (tStr.contains("pulse")) type = 2;
+            else if (tStr.contains("noise")) type = 3;
+            else if (tStr.contains("metal")) type = 4;
+            else if (tStr.contains("sync")) type = 6;
+
+            sequence.push_back({type, std::pow(2.0, pVal/12.0), pwmVal, durVal});
+        }
+
+        bool loop = wtLoopCheck->isChecked();
+
+        // Audio Function
+        std::function<double(double)> audioRoutine = [=](double t) {
+            double localT = t;
+            if (loop && totalDur > 0) localT = std::fmod(t, totalDur);
+            else if (t > totalDur) return 0.0;
+
+            double scanT = 0;
+            int activeStep = -1;
+            for(size_t i=0; i<sequence.size(); ++i) {
+                if (localT >= scanT && localT < (scanT + sequence[i].duration)) {
+                    activeStep = i; break;
+                }
+                scanT += sequence[i].duration;
+            }
+            if (activeStep == -1) return 0.0;
+
+            const StepData& s = sequence[activeStep];
+            double f = 440.0; double pi = 3.14159;
+            double ph = localT * f * s.pitchMult;
+
+            auto saw = [](double x) { return 2.0 * (x - std::floor(0.5 + x)); };
+            auto tri = [&](double x) { return (2.0/pi)*std::asin(std::sin(2.0*pi*x)); };
+            auto pulse = [&](double x, double w) { return std::sin(2.0*pi*x) > w ? 1.0 : -1.0; };
+            // Thread-Safe Noise
+            auto noise = [](double x) { return std::sin(x * 43758.5453) * std::sin(x * 12.9898); };
+
+            switch(s.type) {
+            case 0: return saw(ph);
+            case 1: return tri(ph);
+            case 2: return pulse(ph, (s.pwm * 2.0) - 1.0);
+            case 3: return noise(localT * 10000.0);
+            case 4: return pulse(ph, 0.0) * pulse(ph * 2.41, 0.0);
+            case 5: return tri(ph) + (0.5 * noise(localT * 10000.0));
+            case 6: return saw(ph) * saw(ph * 0.5);
+            }
+            return 0.0;
+        };
+
+        wtScope->updateScope(audioRoutine, totalDur > 0 ? totalDur : 1.0, 1.0);
+        if(btnPlayWT->isChecked()) {
+            m_ghostSynth->setAudioSource(audioRoutine);
+        }
+    };
+
+    // F. CONNECTIONS
+    // Wrap the preset loader to update logic after loading
+    connect(wtPresetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int i){
+        loadWavetablePreset(i);
+        // Force the scope to update with the new data
+        updateWavetable();
+    });
+
+    connect(btnGenWT, &QPushButton::clicked, this, &MainWindow::generateWavetableForge);
+    connect(wtTrackerTable, &QTableWidget::cellChanged, updateWavetable);
+
+    connect(btnPlayWT, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlayWT->setText("▶ Play Sequence");
+            btnPlayWT->setStyleSheet("background-color: #335533; color: white;");
+        } else {
+            m_ghostSynth->start();
+            btnPlayWT->setText("⏹ Stop");
+            btnPlayWT->setStyleSheet("background-color: #338833; color: white;");
+            updateWavetable();
+        }
+    });
+
     connect(btnAddStep, &QPushButton::clicked, [=](){
         int row = wtTrackerTable->rowCount();
         wtTrackerTable->insertRow(row);
-        // Defaults: Saw, +0 semi, 50% PWM, 0.05s
         wtTrackerTable->setItem(row, 0, new QTableWidgetItem("Saw"));
         wtTrackerTable->setItem(row, 1, new QTableWidgetItem("0"));
         wtTrackerTable->setItem(row, 2, new QTableWidgetItem("50"));
         wtTrackerTable->setItem(row, 3, new QTableWidgetItem("0.05"));
+        updateWavetable();
     });
 
     connect(btnRemStep, &QPushButton::clicked, [=](){
-        if (wtTrackerTable->rowCount() > 0)
+        if (wtTrackerTable->rowCount() > 0) {
             wtTrackerTable->removeRow(wtTrackerTable->rowCount()-1);
+            updateWavetable();
+        }
     });
 
-    // Load default preset
-    loadWavetablePreset(1); // Load Hubbard Kick by default
+    // Initial Load
+    loadWavetablePreset(1);
+    QTimer::singleShot(200, updateWavetable);
 
     // 7. BESSEL FM
     QWidget *besselTab = new QWidget(); auto *besselLayout = new QVBoxLayout(besselTab);
@@ -2913,8 +3061,11 @@ QString MainWindow::convertNightlyToLegacy(QString input) {
 // PRESET LOADER: THE MASTERS COLLECTION
 // ---------------------------------------------------------
 void MainWindow::loadWavetablePreset(int index) {
-    // Helper lambda to make adding steps cleaner
-    // Args: Waveform, Semitones, PWM, Duration
+    // --- FIX: BLOCK SIGNALS TO PREVENT CRASH DURING LOAD ---
+    wtTrackerTable->blockSignals(true);
+
+    wtTrackerTable->setRowCount(0);
+
     auto add = [&](QString w, int p, int pwm, double d) {
         int r = wtTrackerTable->rowCount();
         wtTrackerTable->insertRow(r);
@@ -2924,222 +3075,86 @@ void MainWindow::loadWavetablePreset(int index) {
         wtTrackerTable->setItem(r, 3, new QTableWidgetItem(QString::number(d)));
     };
 
-    wtTrackerTable->setRowCount(0);
     QString txt = wtPresetCombo->currentText();
 
     // --- ROB HUBBARD ---
-    if (txt.contains("Commando")) { // Glissando Bass
+    if (txt.contains("Commando")) {
         add("Tri", 0, 0, 0.03); add("Tri", -1, 0, 0.03); add("Tri", -2, 0, 0.03);
         add("Tri", -3, 0, 0.03); add("Tri", -4, 0, 0.03); add("Tri", -5, 0, 0.03);
     }
-    else if (txt.contains("Monty")) { // Fast PWM Lead
+    else if (txt.contains("Monty")) {
         add("Pulse", 0, 10, 0.04); add("Pulse", 0, 50, 0.04); add("Pulse", 0, 90, 0.04);
-        add("Pulse", 0, 50, 0.04); // PWM Sweep loop
+        add("Pulse", 0, 50, 0.04);
     }
-    else if (txt.contains("Delta")) { // The classic SID Snare
-        add("Noise", 12, 0, 0.02); // Snap
-        add("TriNoise", 0, 0, 0.04); // Body (Tri mixed with Noise)
-        add("Tri", -5, 0, 0.05);   // Tonal tail
+    else if (txt.contains("Delta")) {
+        add("Noise", 12, 0, 0.02); add("TriNoise", 0, 0, 0.04); add("Tri", -5, 0, 0.05);
     }
-    else if (txt.contains("Zoids")) { // Ring Mod Simulation
+    else if (txt.contains("Zoids")) {
         add("Metal", 0, 0, 0.03); add("Metal", 1, 0, 0.03);
         add("Metal", -1, 0, 0.03); add("Metal", 0, 0, 0.03);
     }
-    else if (txt.contains("Ace 2")) { // Kick
+    else if (txt.contains("Ace 2")) {
         add("Square", 0, 50, 0.01); add("Tri", -12, 0, 0.02); add("Tri", -24, 0, 0.08);
     }
-    else if (txt.contains("Comets")) { // Echo
-        add("Saw", 0, 0, 0.06); add("Saw", 0, 0, 0.06); // Main
-        add("Saw", 0, 0, 0.06); // Space
-        add("Saw", 0, 0, 0.04); // Echo (simulated by decay in engine usually, but here distinct)
+    else if (txt.contains("Comets")) {
+        add("Saw", 0, 0, 0.06); add("Saw", 0, 0, 0.06);
+        add("Saw", 0, 0, 0.06); add("Saw", 0, 0, 0.04);
     }
-
     // --- MARTIN GALWAY ---
-    else if (txt.contains("Wizball")) { // Bubble Arp
-        add("Tri", 0, 0, 0.03); add("Tri", 4, 0, 0.03); add("Tri", 7, 0, 0.03);
-    }
-    else if (txt.contains("Parallax")) { // Slap Bass
-        add("Saw", 12, 0, 0.02); // Slap
-        add("Pulse", 0, 20, 0.05); // Body
-        add("Pulse", 0, 40, 0.10); // Open
-    }
-    else if (txt.contains("Comic")) { // Lead
-        add("Pulse", 0, 50, 0.03); add("Pulse", 0, 50, 0.03); // Wait
-        add("Pulse", 1, 50, 0.02); add("Pulse", 0, 50, 0.02); // Vibrato
-    }
-    else if (txt.contains("Arkanoid")) { // Dotted Echo Effect
-        add("Saw", 0, 0, 0.06); // Note
-        add("Saw", 0, 0, 0.06); // Space
-        add("Saw", 0, 0, 0.04); // Echo 1
-        add("Saw", 0, 0, 0.04); // Space
-        add("Saw", 0, 0, 0.02); // Echo 2
-    }
-    else if (txt.contains("Green Beret")) { // Military Snare
-        add("Noise", 10, 0, 0.02); // Crack
-        add("Noise", 5, 0, 0.03);  // Body
-        add("Noise", 0, 0, 0.05);  // Decay
-    }
+    else if (txt.contains("Wizball")) { add("Tri", 0, 0, 0.03); add("Tri", 4, 0, 0.03); add("Tri", 7, 0, 0.03); }
+    else if (txt.contains("Parallax")) { add("Saw", 12, 0, 0.02); add("Pulse", 0, 20, 0.05); add("Pulse", 0, 40, 0.10); }
+    else if (txt.contains("Comic")) { add("Pulse", 0, 50, 0.03); add("Pulse", 0, 50, 0.03); add("Pulse", 1, 50, 0.02); add("Pulse", 0, 50, 0.02); }
+    else if (txt.contains("Arkanoid")) { add("Saw", 0, 0, 0.06); add("Saw", 0, 0, 0.06); add("Saw", 0, 0, 0.04); add("Saw", 0, 0, 0.04); add("Saw", 0, 0, 0.02); }
+    else if (txt.contains("Green Beret")) { add("Noise", 10, 0, 0.02); add("Noise", 5, 0, 0.03); add("Noise", 0, 0, 0.05); }
     // --- JEROEN TEL ---
-    else if (txt.contains("Cybernoid")) { // Metallic Drum
-        add("Metal", 24, 0, 0.02); add("Metal", 12, 0, 0.02); add("Noise", 0, 0, 0.05);
-    }
-    else if (txt.contains("Supremacy")) { // Vibrato Lead
-        add("Saw", 0, 0, 0.05); add("Saw", 0, 0, 0.05);
-        add("Saw", 1, 0, 0.02); add("Saw", -1, 0, 0.02); // Late Vibrato
-    }
-    else if (txt.contains("Turbo Outrun")) { // Slap Bass
-        add("Metal", 0, 0, 0.02);   // Metallic Attack
-        add("Pulse", -12, 40, 0.04); // Deep Body
-        add("Pulse", -12, 60, 0.08); // PWM Open
-    }
-    else if (txt.contains("RoboCop 3")) { // Title Screen Arp
-        // Famous intro: Root -> +7 -> +12 -> +19
-        add("Saw", 0, 0, 0.02); add("Saw", 7, 0, 0.02);
-        add("Saw", 12, 0, 0.02); add("Saw", 19, 0, 0.02);
-    }
+    else if (txt.contains("Cybernoid")) { add("Metal", 24, 0, 0.02); add("Metal", 12, 0, 0.02); add("Noise", 0, 0, 0.05); }
+    else if (txt.contains("Supremacy")) { add("Saw", 0, 0, 0.05); add("Saw", 0, 0, 0.05); add("Saw", 1, 0, 0.02); add("Saw", -1, 0, 0.02); }
+    else if (txt.contains("Turbo Outrun")) { add("Metal", 0, 0, 0.02); add("Pulse", -12, 40, 0.04); add("Pulse", -12, 60, 0.08); }
+    else if (txt.contains("RoboCop 3")) { add("Saw", 0, 0, 0.02); add("Saw", 7, 0, 0.02); add("Saw", 12, 0, 0.02); add("Saw", 19, 0, 0.02); }
     // --- CHRIS HUELSBECK ---
-    else if (txt.contains("Turrican I")) { // Huge Arp
-        add("Pulse", 0, 50, 0.02); add("Pulse", 12, 50, 0.02);
-        add("Pulse", 0, 25, 0.02); add("Pulse", 19, 25, 0.02);
-    }
-    else if (txt.contains("Katakis")) { // Space Lead
-        add("SawSync", 0, 0, 0.04); add("SawSync", 0, 0, 0.04);
-    }
-    else if (txt.contains("Turrican II")) { // Pad / Sweep
-        add("Pulse", 0, 10, 0.05); add("Pulse", 0, 20, 0.05);
-        add("Pulse", 0, 30, 0.05); add("Pulse", 0, 40, 0.05);
-        add("Pulse", 0, 50, 0.20); // Sustain
-    }
-    else if (txt.contains("Great Giana")) { // Classic C64 Bass
-        add("Tri", 0, 0, 0.03);
-        add("Square", 0, 50, 0.10); // Solid square body
-    }
+    else if (txt.contains("Turrican I")) { add("Pulse", 0, 50, 0.02); add("Pulse", 12, 50, 0.02); add("Pulse", 0, 25, 0.02); add("Pulse", 19, 25, 0.02); }
+    else if (txt.contains("Katakis")) { add("SawSync", 0, 0, 0.04); add("SawSync", 0, 0, 0.04); }
+    else if (txt.contains("Turrican II")) { add("Pulse", 0, 10, 0.05); add("Pulse", 0, 20, 0.05); add("Pulse", 0, 30, 0.05); add("Pulse", 0, 40, 0.05); add("Pulse", 0, 50, 0.20); }
+    else if (txt.contains("Great Giana")) { add("Tri", 0, 0, 0.03); add("Square", 0, 50, 0.10); }
     // --- TIM FOLLIN ---
-    else if (txt.contains("Solstice")) { // Prog Lead
-        add("Pulse", 0, 15, 0.02); add("Pulse", 0, 20, 0.02);
-        add("Pulse", 0, 25, 0.02); add("Pulse", 0, 30, 0.02); // PWM Swell
-    }
-    else if (txt.contains("Ghouls")) { // Rain
-        add("Noise", 24, 0, 0.01); add("Noise", 12, 0, 0.02);
-    }
-    else if (txt.contains("Silver Surfer")) { // Insane Arp
-        // Follin often used irregular intervals
-        add("Pulse", 0, 25, 0.01); add("Pulse", 4, 25, 0.01);
-        add("Pulse", 7, 25, 0.01); add("Pulse", 11, 25, 0.01);
-        add("Pulse", 14, 25, 0.01); add("Pulse", 12, 50, 0.01);
-    }
-    else if (txt.contains("LED Storm")) { // Rolling Bass
-        add("Saw", 12, 0, 0.02); // Pick
-        add("Saw", 0, 0, 0.03);  // Low
-        add("Saw", 0, 0, 0.03);  // Low
-        add("Saw", 12, 0, 0.02); // Octave Jump
-    }
-
+    else if (txt.contains("Solstice")) { add("Pulse", 0, 15, 0.02); add("Pulse", 0, 20, 0.02); add("Pulse", 0, 25, 0.02); add("Pulse", 0, 30, 0.02); }
+    else if (txt.contains("Ghouls")) { add("Noise", 24, 0, 0.01); add("Noise", 12, 0, 0.02); }
+    else if (txt.contains("Silver Surfer")) { add("Pulse", 0, 25, 0.01); add("Pulse", 4, 25, 0.01); add("Pulse", 7, 25, 0.01); add("Pulse", 11, 25, 0.01); add("Pulse", 14, 25, 0.01); add("Pulse", 12, 50, 0.01); }
+    else if (txt.contains("LED Storm")) { add("Saw", 12, 0, 0.02); add("Saw", 0, 0, 0.03); add("Saw", 0, 0, 0.03); add("Saw", 12, 0, 0.02); }
     // --- BEN DAGLISH ---
-    else if (txt.contains("Last Ninja")) { // Dark Bass
-        add("Saw", 0, 0, 0.04);
-        add("Tri", 0, 0, 0.04); // Mixing waveforms for texture
-        add("Tri", -12, 0, 0.10);
-    }
-    else if (txt.contains("Deflektor")) { // Glide Lead
-        add("Pulse", 0, 50, 0.02); add("Pulse", 1, 50, 0.02);
-        add("Pulse", 2, 50, 0.02); add("Pulse", 3, 50, 0.02); // Slide up
-        add("Pulse", 4, 10, 0.10); // Thin Sustain
-    }
-    else if (txt.contains("Trap")) { // Fast Arp
-        add("Square", 0, 50, 0.02); add("Square", 4, 50, 0.02);
-        add("Square", 7, 50, 0.02); add("Square", 0, 50, 0.02);
-    }
-
+    else if (txt.contains("Last Ninja")) { add("Saw", 0, 0, 0.04); add("Tri", 0, 0, 0.04); add("Tri", -12, 0, 0.10); }
+    else if (txt.contains("Deflektor")) { add("Pulse", 0, 50, 0.02); add("Pulse", 1, 50, 0.02); add("Pulse", 2, 50, 0.02); add("Pulse", 3, 50, 0.02); add("Pulse", 4, 10, 0.10); }
+    else if (txt.contains("Trap")) { add("Square", 0, 50, 0.02); add("Square", 4, 50, 0.02); add("Square", 7, 50, 0.02); add("Square", 0, 50, 0.02); }
     // --- DAVID WHITTAKER ---
-    else if (txt.contains("Glider Rider")) { // Pure Square
-        add("Square", 0, 50, 0.05); add("Square", 0, 50, 0.05); // Just a pure, unmodulated tone
-    }
-    else if (txt.contains("Lazy Jones")) { // Laser
-        add("Saw", 24, 0, 0.01); add("Saw", 20, 0, 0.01);
-        add("Saw", 16, 0, 0.01); add("Saw", 12, 0, 0.01);
-        add("Saw", 8, 0, 0.01);  add("Saw", 4, 0, 0.01);
-    }
-
+    else if (txt.contains("Glider Rider")) { add("Square", 0, 50, 0.05); add("Square", 0, 50, 0.05); }
+    else if (txt.contains("Lazy Jones")) { add("Saw", 24, 0, 0.01); add("Saw", 20, 0, 0.01); add("Saw", 16, 0, 0.01); add("Saw", 12, 0, 0.01); add("Saw", 8, 0, 0.01); add("Saw", 4, 0, 0.01); }
     // --- YM / ATARI ---
-    else if (txt.contains("YM Buzzer")) { // YM Envelope
-        add("Saw", 0, 0, 0.02); add("Saw", 0, 0, 0.02); // Step
-        add("Pulse", 0, 50, 0.01); // Buzz
-    }
-    else if (txt.contains("YM Metal")) {
-        add("Metal", 0, 0, 0.05); add("Metal", -12, 0, 0.05);
-    }
-    else if (txt.contains("YM 3-Voice")) { // Fake Chord
-        // Rapidly cycling 3 notes to simulate a chord on one channel
-        add("Saw", 0, 0, 0.01); add("Saw", 4, 0, 0.01);
-        add("Saw", 7, 0, 0.01);
-    }
-    else if (txt.contains("Digi-Drum")) { // 4-bit Sample Emulation
-        // Rapid volume changes to simulate a sample curve
-        add("Pulse", -24, 50, 0.01); add("Pulse", -24, 50, 0.01);
-        add("Pulse", -24, 90, 0.01); // Thinner (quiet)
-        add("Pulse", -24, 10, 0.01); // Thinner (quiet)
-    }
+    else if (txt.contains("YM Buzzer")) { add("Saw", 0, 0, 0.02); add("Saw", 0, 0, 0.02); add("Pulse", 0, 50, 0.01); }
+    else if (txt.contains("YM Metal")) { add("Metal", 0, 0, 0.05); add("Metal", -12, 0, 0.05); }
+    else if (txt.contains("YM 3-Voice")) { add("Saw", 0, 0, 0.01); add("Saw", 4, 0, 0.01); add("Saw", 7, 0, 0.01); }
+    else if (txt.contains("Digi-Drum")) { add("Pulse", -24, 50, 0.01); add("Pulse", -24, 50, 0.01); add("Pulse", -24, 90, 0.01); add("Pulse", -24, 10, 0.01); }
     // --- FX ---
-    else if (txt.contains("Coin")) {
-        add("Pulse", 0, 50, 0.03); add("Pulse", 5, 50, 0.03);
-        add("Pulse", 10, 50, 0.03); add("Pulse", 15, 50, 0.10);
-    }
-    else if (txt.contains("Explosion")) {
-        add("Noise", 0, 0, 0.10); add("Noise", -5, 0, 0.10); add("Noise", -10, 0, 0.20);
-    }
-    else if (txt.contains("Fake Chord (Major)")) {
-        add("Saw", 0, 0, 0.01); add("Saw", 4, 0, 0.01); add("Saw", 7, 0, 0.01);
-    }
-    else if (txt.contains("Power Up")) {
-        add("Tri", 0, 0, 0.02); add("Tri", 2, 0, 0.02);
-        add("Tri", 4, 0, 0.02); add("Tri", 5, 0, 0.02);
-        add("Tri", 7, 0, 0.02); add("Tri", 12, 0, 0.10);
-    }
-    else if (txt.contains("Laser")) { // Pew Pew
-        add("Saw", 30, 0, 0.01); add("Saw", 20, 0, 0.01);
-        add("Saw", 10, 0, 0.01); add("Saw", 0, 0, 0.01);
-        add("Saw", -10, 0, 0.01);
-    }
-    else if (txt.contains("Hi-Hat (Closed)")) {
-        add("Metal", 40, 0, 0.01); // High pitch metal
-        add("Noise", 40, 0, 0.01);
-    }
-    else if (txt.contains("Hi-Hat (Open)")) {
-        add("Metal", 40, 0, 0.02);
-        add("Noise", 40, 0, 0.04); // Longer decay
-    }
-    else if (txt.contains("Fake Chord (Minor)")) {
-        add("Saw", 0, 0, 0.01); add("Saw", 3, 0, 0.01); add("Saw", 7, 0, 0.01);
-    }
-    // --- NEW SID DRUMS EXPANSION ---
-    else if (txt.contains("Heavy SID Kick")) {
-        // Classic "Bomp": High square click -> Rapid Triangle drop
-        add("Square", 36, 50, 0.01); // Click (High)
-        add("Tri", 12, 0, 0.01);     // Body Start
-        add("Tri", 0, 0, 0.02);      // Body Drop
-        add("Tri", -12, 0, 0.04);    // Low
-        add("Tri", -24, 0, 0.08);    // Sub Bass Tail
-    }
-    else if (txt.contains("Snappy Snare")) {
-        // The "Galway" Snare: Noise for the crack, Triangle for the body
-        add("Noise", 24, 0, 0.01);    // Sharp Crack
-        add("TriNoise", 12, 0, 0.02); // Body (Tone + Noise mixed)
-        add("TriNoise", 0, 0, 0.03);  // Decay
-        add("Noise", -12, 0, 0.05);   // Tail (Just noise)
-    }
-    else if (txt.contains("Tech Kick")) {
-        // Jeroen Tel Style: Metallic attack -> Solid Pulse body
-        add("Metal", 12, 0, 0.01);    // Ring Mod Attack (Crunchy)
-        add("Pulse", 0, 50, 0.02);    // Body
-        add("Pulse", -12, 50, 0.05);  // Low
-        add("Pulse", -24, 50, 0.10);  // Sub
-    }
-    else if (txt.contains("Glitch Snare")) {
-        // Sci-Fi / Industrial Snare using Ring Mod
-        add("Metal", 24, 0, 0.02);    // High Ring Mod
-        add("Metal", 12, 0, 0.03);    // Mid Ring Mod
-        add("Noise", 0, 0, 0.06);     // Noise Tail
+    else if (txt.contains("Coin")) { add("Pulse", 0, 50, 0.03); add("Pulse", 5, 50, 0.03); add("Pulse", 10, 50, 0.03); add("Pulse", 15, 50, 0.10); }
+    else if (txt.contains("Explosion")) { add("Noise", 0, 0, 0.10); add("Noise", -5, 0, 0.10); add("Noise", -10, 0, 0.20); }
+    else if (txt.contains("Fake Chord (Major)")) { add("Saw", 0, 0, 0.01); add("Saw", 4, 0, 0.01); add("Saw", 7, 0, 0.01); }
+    else if (txt.contains("Power Up")) { add("Tri", 0, 0, 0.02); add("Tri", 2, 0, 0.02); add("Tri", 4, 0, 0.02); add("Tri", 5, 0, 0.02); add("Tri", 7, 0, 0.02); add("Tri", 12, 0, 0.10); }
+    else if (txt.contains("Laser")) { add("Saw", 30, 0, 0.01); add("Saw", 20, 0, 0.01); add("Saw", 10, 0, 0.01); add("Saw", 0, 0, 0.01); add("Saw", -10, 0, 0.01); }
+    else if (txt.contains("Hi-Hat (Closed)")) { add("Metal", 40, 0, 0.01); add("Noise", 40, 0, 0.01); }
+    else if (txt.contains("Hi-Hat (Open)")) { add("Metal", 40, 0, 0.02); add("Noise", 40, 0, 0.04); }
+    else if (txt.contains("Fake Chord (Minor)")) { add("Saw", 0, 0, 0.01); add("Saw", 3, 0, 0.01); add("Saw", 7, 0, 0.01); }
+    // --- EXPANSION ---
+    else if (txt.contains("Heavy SID Kick")) { add("Square", 36, 50, 0.01); add("Tri", 12, 0, 0.01); add("Tri", 0, 0, 0.02); add("Tri", -12, 0, 0.04); add("Tri", -24, 0, 0.08); }
+    else if (txt.contains("Snappy Snare")) { add("Noise", 24, 0, 0.01); add("TriNoise", 12, 0, 0.02); add("TriNoise", 0, 0, 0.03); add("Noise", -12, 0, 0.05); }
+    else if (txt.contains("Tech Kick")) { add("Metal", 12, 0, 0.01); add("Pulse", 0, 50, 0.02); add("Pulse", -12, 50, 0.05); add("Pulse", -24, 50, 0.10); }
+    else if (txt.contains("Glitch Snare")) { add("Metal", 24, 0, 0.02); add("Metal", 12, 0, 0.03); add("Noise", 0, 0, 0.06); }
+
+    // 2. UNBLOCK AND UPDATE
+    wtTrackerTable->blockSignals(false);
+
+
+    if(wtTrackerTable->rowCount() > 0) {
+        // This forces the 'cellChanged' signal to fire safely now
+        wtTrackerTable->item(0,0)->setText(wtTrackerTable->item(0,0)->text());
     }
 }
 
