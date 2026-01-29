@@ -24,23 +24,67 @@
 #include <QHeaderView>
 #include <QPainterPath>
 #include <QTimer>
+#include <functional>
+#include <complex>
+#include <cmath>
+#include "synthengine.h"
+#include <QRandomGenerator>
+#include <QClipboard>
 
-// --- NEW STRUCTURE FOR PHONETIC LAB ---
+// ==============================================================================
+// 1. DATA STRUCTURES & STRUCTS
+// ==============================================================================
+
+// --- PHONETIC LAB STRUCTS ---
 struct SAMPhoneme {
     QString name;
     int f1, f2, f3;
     bool voiced;
-    // Amplitudes (Default standard roll-off)
     int a1 = 15;
     int a2 = 10;
     int a3 = 5;
-    // Relative Length in Frames (1 Frame ~ 12ms)
-    // Plosives = 5, Fricatives = 12, Vowels = 18+
     int length = 12;
 };
-// --------------------------------------
 
-// --- ENVELOPE VISUALIZER CLASS ---
+// --- SID ARCHITECT STRUCTS ---
+struct SidSegment {
+    QComboBox* waveType;
+    QDoubleSpinBox* duration;
+    QDoubleSpinBox* decay;
+    QDoubleSpinBox* freqOffset;
+    QPushButton* deleteBtn;
+    QWidget* container;
+};
+
+struct Modulator {
+    QComboBox* shape;
+    QDoubleSpinBox* rate;
+    QDoubleSpinBox* depth;
+    QCheckBox* sync;
+    QComboBox* multiplier;
+};
+
+struct ArpSettings {
+    QComboBox* wave;
+    QComboBox* chord;
+    QDoubleSpinBox* speed;
+    QCheckBox* sync;
+    QComboBox* multiplier;
+};
+
+// --- WAVETABLE STRUCTS ---
+struct WavetableStep {
+    QString shape;      // "Pulse", "Saw", "Tri", "Noise"
+    int semitones;      // Transpose
+    int pwm;            // Pulse Width
+    double duration;    // Seconds
+};
+
+// ==============================================================================
+// 2. CUSTOM SUB-WIDGETS
+// ==============================================================================
+
+// --- ENVELOPE VISUALIZER ---
 class EnvelopeDisplay : public QWidget {
     Q_OBJECT
 public:
@@ -83,14 +127,11 @@ protected:
         painter.drawPath(path);
     }
 private:
+
     double m_a=0, m_d=0.5, m_s=0.5, m_r=0.1;
 };
 
-// --- UNIVERSAL OSCILLOSCOPE (ScopeWidget) ---
-// Reusable visualizer for any tab.
-// Usage: scope->updateScope([](double t){ return sin(t*440); }, 1.0);
-#include <functional>
-
+// --- UNIVERSAL OSCILLOSCOPE ---
 class UniversalScope : public QWidget {
     Q_OBJECT
 public:
@@ -98,113 +139,121 @@ public:
         setMinimumHeight(120);
         setBackgroundRole(QPalette::Base);
         setAutoFillBackground(true);
-        // Default: flat line
         m_generator = [](double){ return 0.0; };
     }
-
-    // Call this from your tab to update the visual
-    // waveFunc: A lambda function representing your math (t is time)
-    // duration: Total length of the sound in seconds (e.g., 2.0s)
-    // zoom: 0.0 = Single Cycle (Zoomed In), 1.0 = Full Duration (Zoomed Out)
     void updateScope(std::function<double(double)> waveFunc, double duration, double zoom) {
         m_generator = waveFunc;
         m_duration = duration;
         m_zoom = zoom;
-        update(); // Trigger repaint
+        update();
     }
-
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.fillRect(rect(), QColor(20, 20, 20)); // Dark Background
+        painter.fillRect(rect(), QColor(20, 20, 20));
 
         int w = width();
         int h = height();
         int midY = h / 2;
 
-        // Draw Grid Center Line
         painter.setPen(QPen(QColor(60, 60, 60), 1, Qt::DashLine));
         painter.drawLine(0, midY, w, midY);
 
         if (w < 1) return;
 
-        // 1. Calculate Time Window
-        // If zoom is 0, we view ~0.02s (approx 50Hz cycle).
-        // If zoom is 1, we view m_duration.
         double windowSize = 0.02 + (m_duration - 0.02) * m_zoom;
         if(windowSize <= 0) windowSize = 0.01;
 
-        // 2. Generate Points
         QPainterPath path;
         bool started = false;
-
-        // Resolution: We don't need infinite points, just enough for the pixel width
         int resolution = w;
-
-        painter.setPen(QPen(QColor(0, 255, 255), 2)); // Cyan Line
+        painter.setPen(QPen(QColor(0, 255, 255), 2));
 
         for (int x = 0; x < resolution; ++x) {
-            // Map pixel X to Time T
             double t = (double)x / (double)resolution * windowSize;
-
-            // Execute the passed Math Function
             double sample = m_generator(t);
-
-            // Clamp sample to -1..1 for safety
             if (sample > 1.0) sample = 1.0;
             if (sample < -1.0) sample = -1.0;
-
-            // Map Amplitude to Y pixels
-            // (Negative because Y grows downwards in UI coords)
             double y = midY - (sample * (midY - 10));
-
-            if (!started) {
-                path.moveTo(x, y);
-                started = true;
-            } else {
-                path.lineTo(x, y);
-            }
+            if (!started) { path.moveTo(x, y); started = true; }
+            else { path.lineTo(x, y); }
         }
         painter.drawPath(path);
-
-        // Draw Info Text
         painter.setPen(QColor(200, 200, 200));
         QString info = QString("Window: %1s").arg(windowSize, 0, 'f', 3);
         painter.drawText(5, 15, info);
     }
-
 private:
     std::function<double(double)> m_generator;
     double m_duration = 1.0;
-    double m_zoom = 0.0; // 0 = Cycles, 1 = Full
+    double m_zoom = 0.0;
 };
 
-struct SidSegment {
-    QComboBox* waveType;
-    QDoubleSpinBox* duration;
-    QDoubleSpinBox* decay;
-    QDoubleSpinBox* freqOffset;
-    QPushButton* deleteBtn;
-    QWidget* container;
+// --- UNIVERSAL SPECTRUM ANALYZER (FFT) ---
+class UniversalSpectrum : public QWidget {
+    Q_OBJECT
+public:
+    explicit UniversalSpectrum(QWidget *parent = nullptr) : QWidget(parent) {
+        setMinimumHeight(120);
+        setBackgroundRole(QPalette::Base);
+        setAutoFillBackground(true);
+        m_generator = [](double){ return 0.0; };
+    }
+    void updateSpectrum(std::function<double(double)> waveFunc, double sampleRate) {
+        m_generator = waveFunc;
+        m_sampleRate = sampleRate;
+        update();
+    }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.fillRect(rect(), QColor(10, 10, 15));
+        int w = width(); int h = height();
+        if (w < 1) return;
+        const int N = 512;
+        std::vector<std::complex<double>> buffer(N);
+        for (int i = 0; i < N; ++i) {
+            double t = (double)i / m_sampleRate;
+            double sample = m_generator(t);
+            double window = 0.5 * (1.0 - std::cos(2.0 * 3.14159 * i / (N - 1)));
+            buffer[i] = std::complex<double>(sample * window, 0);
+        }
+        fft(buffer);
+        int numBars = N / 2;
+        double barWidth = (double)w / numBars;
+        for (int i = 0; i < numBars; ++i) {
+            double mag = std::abs(buffer[i]);
+            double db = 20.0 * std::log10(mag + 1.0);
+            double barHeight = (db * 4.0) * (h / 100.0) * 10.0;
+            if (barHeight > h) barHeight = h;
+            int r = std::min(255, (int)(i * 255.0 / numBars));
+            int g = 255 - r;
+            painter.setBrush(QColor(r, g, 100));
+            painter.setPen(Qt::NoPen);
+            painter.drawRect(QRectF(i * barWidth, h - barHeight, barWidth, barHeight));
+        }
+        painter.setPen(QColor(200, 200, 200));
+        painter.drawText(5, 15, "Spectrum (FFT)");
+    }
+private:
+    std::function<double(double)> m_generator;
+    double m_sampleRate = 44100.0;
+    void fft(std::vector<std::complex<double>>& x) {
+        int n = x.size();
+        if (n <= 1) return;
+        std::vector<std::complex<double>> even(n / 2), odd(n / 2);
+        for (int i = 0; i < n / 2; ++i) { even[i] = x[i * 2]; odd[i] = x[i * 2 + 1]; }
+        fft(even); fft(odd);
+        for (int k = 0; k < n / 2; ++k) {
+            std::complex<double> t = std::polar(1.0, -2 * 3.14159 * k / n) * odd[k];
+            x[k] = even[k] + t; x[k + n / 2] = even[k] - t;
+        }
+    }
 };
 
-struct Modulator {
-    QComboBox* shape;
-    QDoubleSpinBox* rate;
-    QDoubleSpinBox* depth;
-    QCheckBox* sync;
-    QComboBox* multiplier;
-};
-
-struct ArpSettings {
-    QComboBox* wave;
-    QComboBox* chord;
-    QDoubleSpinBox* speed;
-    QCheckBox* sync;
-    QComboBox* multiplier;
-};
-
+// --- SID WAVEFORM DISPLAY ---
 class WaveformDisplay : public QWidget {
     Q_OBJECT
 public:
@@ -220,172 +269,245 @@ private:
     std::vector<SidSegment> m_segments;
 };
 
+
+// ==============================================================================
+// 3. MAIN WINDOW CLASS
+// ==============================================================================
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     MainWindow(QWidget *parent = nullptr);
+
+    // --- SLOTS (Actions) ---
 private slots:
+    // General / IO
     void loadWav();
     void saveExpr();
     void copyToClipboard();
+
+    // SID Architect
     void addSidSegment();
     void removeSidSegment();
     void clearAllSid();
     void saveSidExpr();
+
+    // Generators (By Tab)
     void generateConsoleWave();
     void generateSFXMacro();
-    void generateFilterForge();
     void generateArpAnimator();
     void generateWavetableForge();
     void generateBesselFM();
-    void loadBesselPreset(int index);
     void generateHarmonicLab();
     void generateVelocilogic();
     void generateNoiseForge();
     void generateXPFPackager();
     void generateLeadStack();
     void generateRandomPatch();
+    void generateFilterForge();
     void generateDrumXpf();
     void generatePhoneticFormula();
     void generateStepGate();
+    void generateNumbers1981();
+    void generateDelayArchitect();
+    void generateMacroMorph();
+    void generateStringMachine();
+    void generateHardwareXpf();
+    void generateRandomHardware();
+    void generateKeyMapper();
     void generateWestCoast();
 
-private:
-    void setupUI();
-    // --- NEW INIT FUNCTION ---
-    void initSamLibrary();
+    // Logic/Preset Loading
+    void loadBesselPreset(int index);
+    void loadWavetablePreset(int index);
+    void loadHardwarePreset(int idx);
 
+private:
+    // --- CORE & HELPERS ---
+    void setupUI();
+    void initSamLibrary();
     QString generateLegacyPCM(const std::vector<double>& q, double sr);
     QString generateModernPCM(const std::vector<double>& q, double sr);
     QString getModulatorFormula(int index);
     QString getArpFormula(int index);
     QString getSegmentWaveform(const SidSegment& s, const QString& fBase);
+    QString getXpfTemplate();
+    QString convertLegacyToNightly(QString input);
+    QString convertNightlyToLegacy(QString input);
+    void saveXpfInstrument();
 
+    // --- GLOBAL UI ELEMENTS ---
     QTabWidget *modeTabs;
-    QDoubleSpinBox *maxDurSpin;
-    QComboBox *sampleRateCombo, *buildModeCombo, *buildModeSid;
-    QComboBox *buildModeConsole, *buildModeSFX, *buildModeFilter, *buildModeArp, *buildModeWavetable;
-    QComboBox *buildModeBessel, *buildModeHarmonic, *buildModeVeloci, *buildModeNoise;
-    QCheckBox *normalizeCheck;
     QTextEdit *statusBox;
-    QPushButton *btnSave, *btnCopy;
-    WaveformDisplay *waveVisualizer;
+    QPushButton *btnSave;
+    QPushButton *btnCopy;
 
-    std::vector<SidSegment> sidSegments;
+    // ------------------------------------
+    // TAB 1: SID ARCHITECT
+    // ------------------------------------
+    QComboBox *buildModeSid;
     QVBoxLayout *sidSegmentsLayout;
-
+    std::vector<SidSegment> sidSegments;
+    WaveformDisplay *waveVisualizer;
     Modulator mods[5];
     ArpSettings arps[2];
+
+    // ------------------------------------
+    // TAB 2: PCM SAMPLER
+    // ------------------------------------
+    QComboBox *buildModeCombo;
+    QComboBox *sampleRateCombo;
+    QDoubleSpinBox *maxDurSpin;
+    QCheckBox *normalizeCheck;
+    UniversalScope *pcmScope;
+    QSlider *pcmZoomSlider;
+    QLabel *pcmDisclaimer;
     std::vector<double> originalData;
     uint32_t fileFs = 44100;
 
+    // ------------------------------------
+    // TAB 3 & 4: CONSOLE LAB / SFX MACRO
+    // ------------------------------------
+    QComboBox *buildModeConsole;
     QComboBox *consoleWaveType;
     QDoubleSpinBox *consoleSteps;
-    QDoubleSpinBox *sfxStartFreq, *sfxEndFreq, *sfxDur;
+    UniversalScope *consoleScope;
+    QComboBox *buildModeSFX;
+    QDoubleSpinBox *sfxStartFreq;
+    QDoubleSpinBox *sfxEndFreq;
+    QDoubleSpinBox *sfxDur;
     QComboBox *sfxWave;
-    QComboBox *filterType;
-    QDoubleSpinBox *filterTaps;
-    QDoubleSpinBox *arpSpeed;
 
+    // ------------------------------------
+    // TAB 5: ARP ANIMATOR
+    // ------------------------------------
+    QComboBox *buildModeArp;
     QComboBox *arpWave;
-    QSlider *arpPwmSlider;      // The soul of the C64
-    QCheckBox *arpBpmSync;      // "Lock to BPM"
-    QDoubleSpinBox *arpBpmVal;  // The Song BPM
-    QComboBox *arpSpeedDiv;     // 1/16, 1/32, 1/64 (The "Hubbard Speed")
+    QComboBox *arpInterval1;
+    QComboBox *arpInterval2;
+    QSlider *arpPwmSlider;
+    QCheckBox *arpBpmSync;
+    QDoubleSpinBox *arpBpmVal;
+    QComboBox *arpSpeedDiv;
+    QDoubleSpinBox *arpSpeed; // Manual Hz
 
-
-    QComboBox *arpInterval1, *arpInterval2;
+    // ------------------------------------
+    // TAB 6: WAVETABLE FORGE
+    // ------------------------------------
+    QComboBox *buildModeWavetable;
+    QTableWidget *wtTrackerTable;
+    QComboBox *wtPresetCombo;
+    QCheckBox *wtLoopCheck;
     QComboBox *wtBase;
     QDoubleSpinBox *wtHarmonics;
 
+    // ------------------------------------
+    // TAB 7: BESSEL FM
+    // ------------------------------------
+    QComboBox *buildModeBessel;
     QComboBox *besselPresetCombo;
-    QComboBox *besselCarrierWave, *besselModWave;
-    QDoubleSpinBox *besselCarrierMult, *besselModMult, *besselModIndex;
+    QComboBox *besselCarrierWave;
+    QComboBox *besselModWave;
+    QDoubleSpinBox *besselCarrierMult;
+    QDoubleSpinBox *besselModMult;
+    QDoubleSpinBox *besselModIndex;
+    UniversalSpectrum *besselSpectrum;
 
+    // ------------------------------------
+    // TAB 8: HARMONIC LAB
+    // ------------------------------------
+    QComboBox *buildModeHarmonic;
     QSlider *harmonicSliders[16];
-    QComboBox *velociType;
-    QDoubleSpinBox *noiseRes;
-    QTextEdit *xpfInput;
+    UniversalSpectrum *harmonicSpectrum;
 
-    // --- DRUM DESIGNER REDO ---
+    // ------------------------------------
+    // TAB 9: DRUM DESIGNER
+    // ------------------------------------
     QComboBox *drumTypeCombo;
     QComboBox *drumWaveCombo;
-    QSlider *drumPitchSlider, *drumDecaySlider, *drumToneSlider, *drumSnapSlider;
-    QSlider *drumNoiseSlider, *drumPitchDropSlider, *drumPWMSlider;
-    QSlider *drumExpSlider; // Added for exponential decay
-    QPushButton *btnGenerateDrum, *btnSaveDrumXpf;
-    QString getXpfTemplate();
+    QSlider *drumPitchSlider;
+    QSlider *drumDecaySlider;
+    QSlider *drumToneSlider;
+    QSlider *drumSnapSlider;
+    QSlider *drumNoiseSlider;
+    QSlider *drumPitchDropSlider;
+    QSlider *drumPWMSlider;
+    QSlider *drumExpSlider;
+    QPushButton *btnGenerateDrum;
+    QPushButton *btnSaveDrumXpf;
+    QLabel *drumDisclaimer;
 
+    // ------------------------------------
+    // TAB 10: VELOCILOGIC
+    // ------------------------------------
+    QComboBox *buildModeVeloci; // aka velMapMode in logic
+    QComboBox *velMapMode;      // used in some logic, keeping both to be safe
+    QTableWidget *velMapTable;
+    QComboBox *velociType;
+    QLabel *velDisclaimer;
+
+    // ------------------------------------
+    // TAB 11: NOISE FORGE
+    // ------------------------------------
+    QComboBox *buildModeNoise;
+    QDoubleSpinBox *noiseRes;
+
+    // ------------------------------------
+    // TAB 12: XPF PACKAGER
+    // ------------------------------------
+    QTextEdit *xpfInput;
+    QLabel *xpfDisclaimer;
+    QPushButton *btnSaveXpf;
+
+    // ------------------------------------
+    // TAB 13: FILTER FORGE
+    // ------------------------------------
+    QComboBox *buildModeFilter;
+    QComboBox *filterType;
+    QDoubleSpinBox *filterTaps;
+    QLabel *filterDisclaimer;
+
+    // ------------------------------------
+    // TAB 14: LEAD STACKER
+    // ------------------------------------
     QDoubleSpinBox *leadUnisonCount;
     QDoubleSpinBox *leadDetuneAmount;
     QComboBox *leadWaveType;
+
+    // ------------------------------------
+    // TAB 15: RANDOMISER
+    // ------------------------------------
     QSlider *chaosSlider;
 
-    // --- NEW VARIABLES FOR PHONETIC LAB ---
+    // ------------------------------------
+    // TAB 16: PHONETIC LAB (SAM)
+    // ------------------------------------
     QTextEdit *phoneticInput;
-    QComboBox *parserModeCombo;   // Render Mode: HQ vs Retro
-    QComboBox *parsingStyleCombo; // Parsing Engine: Legacy vs Nightly
+    QComboBox *parserModeCombo;   // HQ vs Retro
+    QComboBox *parsingStyleCombo; // Legacy vs Nightly
     QPushButton *btnGenPhonetic;
     QLabel *phonemeRefLabel;
     QMap<QString, SAMPhoneme> samLibrary;
 
-    // --- NEW CONVERTER TAB VARIABLES ---
-    QTextEdit *convInput;       // The left box (Source)
-    QTextEdit *convOutput;      // The right box (Result)
-    QPushButton *btnToNightly;  // Button: Legacy -> Nightly
-    QPushButton *btnToLegacy;   // Button: Nightly -> Legacy
+    // ------------------------------------
+    // TAB 17: LOGIC CONVERTER
+    // ------------------------------------
+    QTextEdit *convInput;
+    QTextEdit *convOutput;
+    QPushButton *btnToNightly;
+    QPushButton *btnToLegacy;
+    QLabel *convDisclaimer;
 
-
-    // --- NEW WAVETABLE TRACKER STRUCTURES ---
-    struct WavetableStep {
-        QString shape;      // "Pulse", "Saw", "Tri", "Noise"
-        int semitones;      // Transpose (e.g., 0, +7, +12)
-        int pwm;            // Pulse Width (0-100)
-        double duration;    // How long to hold this step (in seconds)
-    };
-
-    QTableWidget *wtTrackerTable;
-    QComboBox *wtPresetCombo;
-    QCheckBox *wtLoopCheck;
-
-    // --- NUMBERS 1981 VARIABLES ---
-    QComboBox *numModeCombo;       // Random vs Pattern
-    QComboBox *numStepsCombo;      // 16 or 32 Steps
-    QDoubleSpinBox *numDuration;   // Note length
-    QTableWidget *numPatternTable; // The manual editor
-    QTextEdit *numOut1;            // Output Box Left
-    QTextEdit *numOut2;            // Output Box Right
-
-    void generateNumbers1981();    // Renamed function
-
-
-
-    // Key Mapper Variables
+    // ------------------------------------
+    // TAB 18: KEY MAPPER
+    // ------------------------------------
     QTableWidget *keyMapTable;
     QComboBox *keyMapMode;
     QLabel *keyMapDisclaimer;
-    void generateKeyMapper();
 
-    // Velocilogic Variables
-    QTableWidget *velMapTable;
-    QComboBox *velMapMode;
-    QLabel *velDisclaimer;
-
-
-    // Helper to load presets
-    void loadWavetablePreset(int index);
-
-    // Disclaimers
-    QLabel *convDisclaimer; //
-    QLabel *filterDisclaimer;
-    QLabel *drumDisclaimer;
-    QLabel *xpfDisclaimer;
-    QPushButton *btnSaveXpf;
-    QLabel *pcmDisclaimer;
-
-    void saveXpfInstrument();
-
-    // --- NEW STEP GATE VARIABLES ---
+    // ------------------------------------
+    // TAB 19: STEP GATE
+    // ------------------------------------
     QComboBox *gateBuildMode;
     QComboBox *gateSpeedCombo;
     QCheckBox *gateTripletCheck;
@@ -394,68 +516,63 @@ private:
     QPushButton *gateSteps[16];
     QSlider *gateMixSlider;
 
+    // ------------------------------------
+    // TAB 20: NUMBERS 1981
+    // ------------------------------------
+    QComboBox *numModeCombo;
+    QComboBox *numStepsCombo;
+    QDoubleSpinBox *numDuration;
+    QTableWidget *numPatternTable;
+    QTextEdit *numOut1;
+    QTextEdit *numOut2;
 
-
-    // Helper functions for the logic
-    QString convertLegacyToNightly(QString input);
-    QString convertNightlyToLegacy(QString input);
-
-
-
-    // DELAY ARCHITECT VARIABLES
+    // ------------------------------------
+    // TAB 21: DELAY ARCHITECT
+    // ------------------------------------
     QComboBox *delayWaveCombo;
     QTextEdit *delayCustomInput;
-    QDoubleSpinBox *delayTimeSpin;   // Delay time in seconds
-    QDoubleSpinBox *delayFeedbackSpin; // Decay amount (0.0 - 1.0)
-    QSpinBox *delayTapsSpin;         // Number of echoes
-    QDoubleSpinBox *delayRateSpin;   // Internal sample rate reference (e.g., 8000)
+    QDoubleSpinBox *delayTimeSpin;
+    QDoubleSpinBox *delayFeedbackSpin;
+    QSpinBox *delayTapsSpin;
+    QDoubleSpinBox *delayRateSpin;
 
-
-    void generateDelayArchitect();
-
-
-    // --- MACRO MORPH VARIABLES ---
+    // ------------------------------------
+    // TAB 22: MACRO MORPH
+    // ------------------------------------
     QComboBox *macroStyleCombo;
-    QComboBox *macroBuildMode;   // NEW: Legacy/Nightly Selector
-
-    QSlider *macroWonkySlider;   // Swing/Sidechain
-    QSlider *macroColorSlider;   // Timbre
-    QSlider *macroTimeSlider;    // Envelope
-    QSlider *macroBitcrushSlider; // RENAMED: Was macroDegradeSlider
-    QSlider *macroTextureSlider; // Noise/Grain
-    QSlider *macroWidthSlider;   // Stereo/Detune
-
+    QComboBox *macroBuildMode;
+    QSlider *macroWonkySlider;
+    QSlider *macroColorSlider;
+    QSlider *macroTimeSlider;
+    QSlider *macroBitcrushSlider;
+    QSlider *macroTextureSlider;
+    QSlider *macroWidthSlider;
     QSpinBox *macroDetuneSpin;
-    void generateMacroMorph();
 
-    // --- STRING MACHINE VARIABLES (UPDATED) ---
+    // ------------------------------------
+    // TAB 23: STRING MACHINE
+    // ------------------------------------
     QComboBox *stringModelCombo;
     QComboBox *stringChordCombo;
+    QSlider *stringEnsembleSlider;
+    QSlider *stringAttackSlider;
+    QSlider *stringEvolveSlider;
+    QSlider *stringMotionSlider;
+    QSlider *stringSpaceSlider;
+    QSlider *stringAgeSlider;
+    UniversalScope *stringScope;
+    QSlider *stringZoomSlider;
 
-    QSlider *stringEnsembleSlider;  // Chorus/Detune
-    QSlider *stringAttackSlider;    // Volume Swell
-    QSlider *stringEvolveSlider;    // NEW: Brightness Swell (Filter Env)
-    QSlider *stringMotionSlider;    // NEW: Phase Drift (Visual Fix)
-    QSlider *stringSpaceSlider;     // Reverb-ish Release
-    QSlider *stringAgeSlider;       // Pitch Wobble
-
-    void generateStringMachine();
-
-    //-vintage lab
-    void setupHardwareLab();
-    void generateHardwareXpf();
-    void loadHardwarePreset(int idx);
-    void generateRandomHardware();
-
-
-    EnvelopeDisplay *adsrVisualizer;
+    // ------------------------------------
+    // TAB 24: HARDWARE LAB (Vintage)
+    // ------------------------------------
     QComboBox *hwBaseWave;
     QComboBox *hwPresetCombo;
     QSlider *hwAttack;
-    QSlider *hwDecay;    // Required for the compiler error
+    QSlider *hwDecay;
     QSlider *hwSustain;
     QSlider *hwRelease;
-    QSlider *hwCutoff;   // Required for the compiler error
+    QSlider *hwCutoff;
     QSlider *hwResonance;
     QCheckBox *hwPeakBoost;
     QSlider *hwPwmSpeed;
@@ -463,29 +580,31 @@ private:
     QSlider *hwVibSpeed;
     QSlider *hwVibDepth;
     QSlider *hwNoiseMix;
-    QSpinBox *hwBaseNote; // Required for pitch control logic
+    QSpinBox *hwBaseNote;
+    EnvelopeDisplay *adsrVisualizer;
 
-
+    // ------------------------------------
+    // TAB 25: WEST COAST LAB
+    // ------------------------------------
     QComboBox *westBuildMode;
     QComboBox *westModelSelect;
-    QSlider *westTimbreSlider;   // Input Gain (Wavefolding Depth)
-    QSlider *westSymmetrySlider; // DC Offset (Even Harmonics)
-    QSlider *westOrderSlider;    // Harmonic Balance / Crossfade
-    QCheckBox *westVactrolSim;   // LPG "Bongo" Decay
-    QSlider *westModFreqSlider;  // Modulation Oscillator Frequency (FM)
-    QSlider *westModIndexSlider; // FM Index (Depth)
-    QCheckBox *westHalfWaveFold; // Toggle for Half-Wave vs Full-Wave folding
-    QSlider *westFoldStages;     // Number of cascaded folding stages (Serge-style)
-
-    // Universal Scope
-    UniversalScope *stringScope;
-    QSlider *stringZoomSlider;
+    QSlider *westTimbreSlider;
+    QSlider *westSymmetrySlider;
+    QSlider *westOrderSlider;
+    QCheckBox *westVactrolSim;
+    QSlider *westModFreqSlider;
+    QSlider *westModIndexSlider;
+    QCheckBox *westHalfWaveFold;
+    QSlider *westFoldStages;
     UniversalScope *westScope;
     QSlider *westZoomSlider;
-    UniversalScope *pcmScope;
-    QSlider *pcmZoomSlider;
 
+    // ------------------------------------
+    // SYNTH ENGINE
+    // ------------------------------------
 
+    SynthEngine *m_ghostSynth;
 
 };
-#endif
+
+#endif // MAINWINDOW_H
