@@ -16,6 +16,8 @@ add_executable(WaveConv
     main.cpp
     mainwindow.cpp
     mainwindow.h
+    synthengine.cpp
+    synthengine.h
 )
 
 target_link_libraries(WaveConv PRIVATE
