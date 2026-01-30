@@ -617,10 +617,29 @@ private:
     QSlider *westZoomSlider;
 
     // ------------------------------------
-    // SYNTH ENGINE
+    // TAB 26. SYNTH ENGINE
     // ------------------------------------
 
     SynthEngine *m_ghostSynth;
+
+    // -------------------------------------
+    // TAB 27: SPECTRAL RESYNTHESISER
+    // -------------------------------------
+    QComboBox *specBuildMode;
+    QComboBox *specPitchCombo;
+    QTextEdit *specExpressionBox;
+    bool m_deChordEnabled = false;
+    QPushButton *btnDeChord;
+    UniversalScope *specScope;
+    QDoubleSpinBox *specWindowRes;
+    QSpinBox *specTopHarmonics;
+    QSlider *specDecaySlider;
+    QPushButton *btnPlaySpec;
+    std::vector<double> specSampleData;
+    double specSampleRate = 44100.0;
+
+    void updateSpectralPreview();
+
 
 };
 
