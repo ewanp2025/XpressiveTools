@@ -1,3 +1,4 @@
+#include "ModularSynth.h"
 #include "mainwindow.h"
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -87,9 +88,6 @@ void MainWindow::setupUI() {
         sideLayout->addWidget(aGroup);
     }
 
-    leadUnisonCount = new QDoubleSpinBox(); leadUnisonCount->setRange(1, 8); leadUnisonCount->setValue(1);
-    leadDetuneAmount = new QDoubleSpinBox(); leadDetuneAmount->setRange(0, 0.1); leadDetuneAmount->setSingleStep(0.001);
-    leadWaveType = new QComboBox(); leadWaveType->addItems({"saww", "squarew", "sinew"});
     chaosSlider = new QSlider(Qt::Horizontal); chaosSlider->setRange(0, 100);
 
     sideScroll->setWidget(sideContent); sideScroll->setWidgetResizable(true);
@@ -101,7 +99,48 @@ void MainWindow::setupUI() {
     mainHLayout->addLayout(rightLayout, 3);
     rightLayout->addWidget(modeTabs);
 
+    // ==================================================
+    // 00. ABOUT / INFO TAB
+    // ==================================================
+    QWidget *tab00 = new QWidget();
+    auto *layout00 = new QVBoxLayout(tab00);
 
+    QTextEdit *infoText = new QTextEdit();
+    infoText->setReadOnly(true);
+    infoText->setHtml(
+        "<h2 style='color:#2c3e50;'>Xpressive Companion</h2>"
+        "<p><b>For LMMS Xpressive</b></p>"
+        "<hr>"
+        "<p><b>Author:</b> Ewan Pettigrew<br>"
+        "<b></b> <br>"
+        "<b></b> </p>"
+        "<p><i>This software is 100% Freeware. Do whatever you wish with the code and results.</i></p>"
+        "<br>"
+
+        "<h3>Project Background</h3>"
+        "<p>Xpressive allows users to program a synthesiser "
+        "or instrument like an arbitrary waveform generator.</p>"
+        "<p>My intent is to allow people who don't understand time-domain expressions to generate them using a GUI "
+        "</p>"
+
+        "<div style='background-color:#f0f8ff; padding:10px; border:1px solid #b0c4de;'>"
+        "<b></b><br>"
+        " "
+        " "
+        ""
+        ""
+        "</div>"
+
+        "<h3>Status & Disclaimers</h3>"
+        "<ul>"
+        "<li><b>Status:</b> Work In Progress (WIP). Updated regularly. May contain bugs which I may be aware of.</li>"
+        "<li><b>Compatibility:</b> Tested on Windows only so far.</li>"
+        "<li><b>Audio Accuracy:</b> The audio previews are not working properly yet which is on the to do list.</li>"
+        "</ul>"
+        );
+
+    layout00->addWidget(infoText);
+    modeTabs->addTab(tab00, "00");
 
     // 1. SID ARCHITECT
     QWidget *sidTab = new QWidget(); auto *sidLayout = new QVBoxLayout(sidTab);
@@ -440,94 +479,215 @@ void MainWindow::setupUI() {
     // Initial draw
     QTimer::singleShot(200, updateSFX);
 
-    // 5. ARP ANIMATOR
-    QWidget *arpTab = new QWidget();
-    auto *arpLayout = new QVBoxLayout(arpTab);
+    // [In mainwindow.cpp, replace the entire "5. ARP ANIMATOR" section in setupUI() with this]
 
-    // --- SECTION 1: THE OSCILLATOR ---
-    auto *oscGroup = new QGroupBox("SID Oscillator");
-    auto *oscForm = new QFormLayout(oscGroup);
+        // 5. ARP ANIMATOR
+        QWidget *arpTab = new QWidget();
+        auto *arpLayout = new QVBoxLayout(arpTab);
 
-    buildModeArp = new QComboBox();
-    buildModeArp->addItems({"Nightly (Nested - Clean)", "Legacy (Additive)"});
+        // A. VISUALIZER
+        arpScope = new UniversalScope();
+        arpScope->setMinimumHeight(150);
+        arpLayout->addWidget(arpScope);
 
-    arpWave = new QComboBox();
-    arpWave->addItems({"Pulse (Classic)", "Sawtooth", "Triangle", "Noise (Percussion)", "Metal (Ring Mod)"});
+        // --- SECTION 1: THE OSCILLATOR ---
+        auto *oscGroup = new QGroupBox("SID Oscillator");
+        auto *oscForm = new QFormLayout(oscGroup);
 
-    arpPwmSlider = new QSlider(Qt::Horizontal);
-    arpPwmSlider->setRange(1, 99);
-    arpPwmSlider->setValue(50); // Square wave default
+        buildModeArp = new QComboBox();
+        buildModeArp->addItems({"Nightly (Nested - Clean)", "Legacy (Additive)"});
 
-    oscForm->addRow("Build Mode:", buildModeArp);
-    oscForm->addRow("Waveform:", arpWave);
-    oscForm->addRow("Pulse Width:", arpPwmSlider);
+        arpWave = new QComboBox();
+        arpWave->addItems({"Pulse (Classic)", "Sawtooth", "Triangle", "Noise (Percussion)", "Metal (Ring Mod)"});
 
-    arpLayout->addWidget(oscGroup);
+        arpPwmSlider = new QSlider(Qt::Horizontal);
+        arpPwmSlider->setRange(1, 99);
+        arpPwmSlider->setValue(50); // Square wave default
 
-    // --- SECTION 2: THE CHORD (INTERVALS) ---
-    auto *seqGroup = new QGroupBox("Chord Sequence (0 -> Step 2 -> Step 3)");
-    auto *seqForm = new QFormLayout(seqGroup);
+        oscForm->addRow("Build Mode:", buildModeArp);
+        oscForm->addRow("Waveform:", arpWave);
+        oscForm->addRow("Pulse Width:", arpPwmSlider);
 
-    // Populating with Semitones (The way trackers do it)
-    QStringList intervals = {
-        "0 (Root)", "+3 (Minor 3rd)", "+4 (Major 3rd)", "+5 (4th)",
-        "+7 (Perfect 5th)", "+12 (Octave)", "-12 (Sub Octave)",
-        "+19 (Octave+5th)", "+24 (2 Octaves)"
-    };
+        arpLayout->addWidget(oscGroup);
 
-    arpInterval1 = new QComboBox(); arpInterval1->addItems(intervals);
-    arpInterval1->setCurrentIndex(2); // Major 3rd default
+        // --- SECTION 2: THE CHORD (INTERVALS) ---
+        auto *seqGroup = new QGroupBox("Chord Sequence (0 -> Step 2 -> Step 3)");
+        auto *seqForm = new QFormLayout(seqGroup);
 
-    arpInterval2 = new QComboBox(); arpInterval2->addItems(intervals);
-    arpInterval2->setCurrentIndex(4); // Perfect 5th default
+        // Populating with Semitones (The way trackers do it)
+        QStringList intervals = {
+            "0 (Root)", "+3 (Minor 3rd)", "+4 (Major 3rd)", "+5 (4th)",
+            "+7 (Perfect 5th)", "+12 (Octave)", "-12 (Sub Octave)",
+            "+19 (Octave+5th)", "+24 (2 Octaves)"
+        };
 
-    seqForm->addRow("Step 2 Note:", arpInterval1);
-    seqForm->addRow("Step 3 Note:", arpInterval2);
+        arpInterval1 = new QComboBox(); arpInterval1->addItems(intervals);
+        arpInterval1->setCurrentIndex(2); // Major 3rd default
 
-    arpLayout->addWidget(seqGroup);
+        arpInterval2 = new QComboBox(); arpInterval2->addItems(intervals);
+        arpInterval2->setCurrentIndex(4); // Perfect 5th default
 
-    // --- SECTION 3: SPEED & SYNC ---
-    auto *spdGroup = new QGroupBox("Speed / Tempo");
-    auto *spdForm = new QFormLayout(spdGroup);
+        seqForm->addRow("Step 2 Note:", arpInterval1);
+        seqForm->addRow("Step 3 Note:", arpInterval2);
 
-    arpBpmSync = new QCheckBox("Sync to BPM");
-    arpBpmSync->setChecked(true);
+        arpLayout->addWidget(seqGroup);
 
-    arpBpmVal = new QDoubleSpinBox();
-    arpBpmVal->setRange(40, 300);
-    arpBpmVal->setValue(125); // Classic Techno/Chiptune tempo
+        // --- SECTION 3: SPEED & SYNC ---
+        auto *spdGroup = new QGroupBox("Speed / Tempo");
+        auto *spdForm = new QFormLayout(spdGroup);
 
-    arpSpeedDiv = new QComboBox();
-    arpSpeedDiv->addItems({"1/16 (Standard)", "1/32 (Fast)", "1/48 (Triplets)", "1/64 (Hubbard Speed)", "50Hz (PAL Frame)"});
-    arpSpeedDiv->setCurrentIndex(3); // Default to "Hubbard Speed"
+        arpBpmSync = new QCheckBox("Sync to BPM");
+        arpBpmSync->setChecked(true);
 
-    // We keep the old Hz spinner just in case they uncheck Sync
-    arpSpeed = new QDoubleSpinBox();
-    arpSpeed->setRange(0.1, 1000);
-    arpSpeed->setValue(50);
-    arpSpeed->setVisible(false); // Hidden by default
+        arpBpmVal = new QDoubleSpinBox();
+        arpBpmVal->setRange(40, 300);
+        arpBpmVal->setValue(125); // Classic Techno/Chiptune tempo
 
-    spdForm->addRow(arpBpmSync);
-    spdForm->addRow("Song BPM:", arpBpmVal);
-    spdForm->addRow("Grid Size:", arpSpeedDiv);
-    spdForm->addRow("Manual Hz:", arpSpeed);
+        arpSpeedDiv = new QComboBox();
+        arpSpeedDiv->addItems({"1/16 (Standard)", "1/32 (Fast)", "1/48 (Triplets)", "1/64 (Hubbard Speed)", "50Hz (PAL Frame)"});
+        arpSpeedDiv->setCurrentIndex(3); // Default to "Hubbard Speed"
 
-    arpLayout->addWidget(spdGroup);
+        // We keep the old Hz spinner just in case they uncheck Sync
+        arpSpeed = new QDoubleSpinBox();
+        arpSpeed->setRange(0.1, 1000);
+        arpSpeed->setValue(50);
+        arpSpeed->setVisible(false); // Hidden by default
 
-    // GENERATE BUTTON
-    auto *btnGenArp = new QPushButton("GENERATE C64 ARP");
-    btnGenArp->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
-    arpLayout->addWidget(btnGenArp);
+        spdForm->addRow(arpBpmSync);
+        spdForm->addRow("Song BPM:", arpBpmVal);
+        spdForm->addRow("Grid Size:", arpSpeedDiv);
+        spdForm->addRow("Manual Hz:", arpSpeed);
 
-    // Logic to toggle inputs
-    connect(arpBpmSync, &QCheckBox::toggled, [=](bool checked){
-        arpBpmVal->setVisible(checked);
-        arpSpeedDiv->setVisible(checked);
-        arpSpeed->setVisible(!checked);
-    });
+        arpLayout->addWidget(spdGroup);
 
-    modeTabs->addTab(arpTab, "Arp Animator");
-    connect(btnGenArp, &QPushButton::clicked, this, &MainWindow::generateArpAnimator);
+        // BUTTONS LAYOUT
+        auto *arpBtnLay = new QHBoxLayout();
+
+        btnPlayArp = new QPushButton("▶ Play Arp");
+        btnPlayArp->setCheckable(true);
+        btnPlayArp->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+
+        auto *btnGenArp = new QPushButton("GENERATE C64 ARP");
+        btnGenArp->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
+
+        arpBtnLay->addWidget(btnPlayArp);
+        arpBtnLay->addWidget(btnGenArp);
+        arpLayout->addLayout(arpBtnLay);
+
+        // LOGIC TO TOGGLE INPUTS
+        connect(arpBpmSync, &QCheckBox::toggled, [=](bool checked){
+            arpBpmVal->setVisible(checked);
+            arpSpeedDiv->setVisible(checked);
+            arpSpeed->setVisible(!checked);
+        });
+
+        modeTabs->addTab(arpTab, "Arp Animator");
+
+        // --- LIVE PREVIEW LOGIC (Visuals + Audio) ---
+        auto updateArpPreview = [=]() {
+            // 1. Calculate Frequency (Speed)
+            double hz = 0;
+            if (arpBpmSync->isChecked()) {
+                double bpm = arpBpmVal->value();
+                int divIdx = arpSpeedDiv->currentIndex();
+                if (divIdx == 4) hz = 50.0; // PAL Frame
+                else {
+                    double multiplier = (divIdx == 0) ? 4.0 : (divIdx == 1) ? 8.0 : (divIdx == 2) ? 12.0 : 16.0;
+                    hz = (bpm / 60.0) * multiplier;
+                }
+            } else {
+                hz = arpSpeed->value();
+            }
+
+            // 2. Get Intervals
+            auto getSemi = [](QString s) { return s.split(" ")[0].toInt(); };
+            int semi1 = 0;
+            int semi2 = getSemi(arpInterval1->currentText());
+            int semi3 = getSemi(arpInterval2->currentText());
+
+            double p1 = 1.0;
+            double p2 = std::pow(2.0, semi2 / 12.0);
+            double p3 = std::pow(2.0, semi3 / 12.0);
+
+            // 3. Get Waveform Parameters
+            int wType = arpWave->currentIndex(); // 0=Pulse, 1=Saw, 2=Tri, 3=Noise, 4=Metal
+            double pwm = (arpPwmSlider->value() / 100.0) * 2.0 - 1.0; // Map -1 to 1
+
+            // 4. Build Lambda
+            std::function<double(double)> arpFunc = [=](double t) {
+                // Determine Step (0, 1, 2)
+                // Using a slightly offset time to ensure step 0 starts immediately
+                int step = (int)(t * hz) % 3;
+                double mult = (step == 0) ? p1 : (step == 1 ? p2 : p3);
+
+                double f = 220.0; // Preview Pitch (A3)
+                double pi = 3.14159;
+                double ph = t * f * mult; // Phase
+
+                // Oscillators
+                if (wType == 0) { // Pulse
+                    return (std::sin(ph * 2 * pi) > pwm) ? 1.0 : -1.0;
+                }
+                else if (wType == 1) { // Saw
+                    double x = std::fmod(ph, 1.0);
+                    return 2.0 * x - 1.0;
+                }
+                else if (wType == 2) { // Triangle
+                    return (2.0 / pi) * std::asin(std::sin(ph * 2 * pi));
+                }
+                else if (wType == 3) { // Noise
+                    return ((double)std::rand() / RAND_MAX) * 2.0 - 1.0;
+                }
+                else { // Metal (Ring Mod)
+                    // Square * Detuned Square (approx 2.41 ratio)
+                    double sq1 = (std::sin(ph * 2 * pi) > 0) ? 1.0 : -1.0;
+                    double sq2 = (std::sin(ph * 2.41 * 2 * pi) > 0) ? 1.0 : -1.0;
+                    return sq1 * sq2;
+                }
+            };
+
+            // 5. Update Scope (Show 4 beats worth or enough to see pattern)
+            double viewDur = (hz > 0) ? (4.0 / hz) : 1.0;
+            arpScope->updateScope(arpFunc, viewDur, 1.0);
+
+            // 6. Update Audio
+            if(btnPlayArp->isChecked()) {
+                m_ghostSynth->setAudioSource(arpFunc);
+            }
+        };
+
+        // --- CONNECTIONS ---
+        connect(btnGenArp, &QPushButton::clicked, this, &MainWindow::generateArpAnimator);
+
+        // Connect Play Button
+        connect(btnPlayArp, &QPushButton::toggled, [=](bool checked){
+            if(!checked) {
+                m_ghostSynth->setAudioSource([](double){ return 0.0; });
+                m_ghostSynth->stop();
+                btnPlayArp->setText("▶ Play Arp");
+                btnPlayArp->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+            } else {
+                m_ghostSynth->start();
+                btnPlayArp->setText("⏹ Stop");
+                btnPlayArp->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
+                updateArpPreview();
+            }
+        });
+
+        // Connect Inputs to Update Logic
+        QList<QWidget*> arpWidgets = {
+            arpWave, arpInterval1, arpInterval2, arpSpeedDiv, arpBpmSync,
+            arpBpmVal, arpSpeed, arpPwmSlider
+        };
+        for(auto *w : arpWidgets) {
+            if(auto *cb = qobject_cast<QComboBox*>(w)) connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), updateArpPreview);
+            if(auto *sb = qobject_cast<QDoubleSpinBox*>(w)) connect(sb, &QDoubleSpinBox::valueChanged, updateArpPreview);
+            if(auto *sl = qobject_cast<QSlider*>(w)) connect(sl, &QSlider::valueChanged, updateArpPreview);
+            if(auto *chk = qobject_cast<QCheckBox*>(w)) connect(chk, &QCheckBox::toggled, updateArpPreview);
+        }
+
+        // Initial Trigger
+        QTimer::singleShot(200, updateArpPreview);
 
     // 6. WAVETABLE FORGE (The "Hero" Tracker)
     QWidget *wtTab = new QWidget();
@@ -860,13 +1020,18 @@ void MainWindow::setupUI() {
     QWidget *drumWidget = new QWidget();
     QVBoxLayout *drumLayout = new QVBoxLayout(drumWidget);
 
-    // Disclaimer regarding Panning and Filter behavior
-    drumDisclaimer = new QLabel("⚠️ NOTICE: Panning must be set manually in the Instrument Editor due to XML parsing issues. "
-                                "Filters may require manual adjustment (0 Frequency = Silence).");
-    drumDisclaimer->setStyleSheet("color: red; font-weight: bold; border: 1px solid red; padding: 5px;");
-    drumDisclaimer->setWordWrap(true);
+    // 1. ADD OSCILLOSCOPE (Visualizer)
+    drumScope = new UniversalScope();
+    drumScope->setMinimumHeight(150);
+    drumLayout->addWidget(drumScope);
+
+    // Disclaimer Label
+    drumDisclaimer = new QLabel("⚠️ NOTICE: Panning must be set manually. Filters are simulated math approximations.");
+    drumDisclaimer->setStyleSheet("color: red; font-weight: bold; border: 1px solid red; padding: 5px; background-color: #ffeeee;");
+    drumDisclaimer->setAlignment(Qt::AlignCenter);
     drumLayout->addWidget(drumDisclaimer);
 
+    // 2. CONTROLS SETUP
     drumTypeCombo = new QComboBox();
     drumTypeCombo->addItems({"Kick (LPF)", "Snare (BPF)", "Hi-Hat (HPF)", "Tom (LPF)", "Cowbell (BPF)", "Rimshot (HPF)", "Clap (BPF)"});
 
@@ -875,63 +1040,220 @@ void MainWindow::setupUI() {
 
     QFormLayout *fLayout = new QFormLayout();
 
-    // Instantiating all sliders
-    drumPitchSlider = new QSlider(Qt::Horizontal); drumPitchSlider->setRange(20, 100);
-    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(1, 200);
-    drumPitchDropSlider = new QSlider(Qt::Horizontal); drumPitchDropSlider->setRange(0, 500);
-    drumToneSlider = new QSlider(Qt::Horizontal);  drumToneSlider->setRange(100, 14000); // Min 100 for audibility
-    drumSnapSlider = new QSlider(Qt::Horizontal);  drumSnapSlider->setRange(10, 100);    // Min 10 for HPF bite
-    drumNoiseSlider = new QSlider(Qt::Horizontal); drumNoiseSlider->setRange(0, 100);
-    drumPWMSlider = new QSlider(Qt::Horizontal);   drumPWMSlider->setRange(0, 100);
-    drumExpSlider = new QSlider(Qt::Horizontal);   drumExpSlider->setRange(1, 10);      // Exponential factor
+    // Initialize Sliders
+    drumPitchSlider = new QSlider(Qt::Horizontal); drumPitchSlider->setRange(20, 150); drumPitchSlider->setValue(40);
+    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(1, 200); drumDecaySlider->setValue(40);
+    drumPitchDropSlider = new QSlider(Qt::Horizontal); drumPitchDropSlider->setRange(0, 500); drumPitchDropSlider->setValue(350);
+    drumToneSlider = new QSlider(Qt::Horizontal);  drumToneSlider->setRange(100, 14000); drumToneSlider->setValue(1000);
+    drumSnapSlider = new QSlider(Qt::Horizontal);  drumSnapSlider->setRange(10, 100); drumSnapSlider->setValue(50);
+    drumNoiseSlider = new QSlider(Qt::Horizontal); drumNoiseSlider->setRange(0, 100); drumNoiseSlider->setValue(0);
+    drumPWMSlider = new QSlider(Qt::Horizontal);   drumPWMSlider->setRange(0, 100); drumPWMSlider->setValue(50);
+    drumExpSlider = new QSlider(Qt::Horizontal);   drumExpSlider->setRange(1, 10); drumExpSlider->setValue(2);
 
+    // Add rows to Form Layout
     fLayout->addRow("Body Waveform:", drumWaveCombo);
     fLayout->addRow("Base Pitch:", drumPitchSlider);
     fLayout->addRow("Decay Speed:", drumDecaySlider);
     fLayout->addRow("Exponential Curve:", drumExpSlider);
     fLayout->addRow("Pitch Punch (Drop):", drumPitchDropSlider);
-    fLayout->addRow("Filter Cutoff:", drumToneSlider);
+    fLayout->addRow("Filter Cutoff (Sim):", drumToneSlider);
     fLayout->addRow("Filter Res (Snap):", drumSnapSlider);
     fLayout->addRow("Noise Mix:", drumNoiseSlider);
     fLayout->addRow("Pulse Width:", drumPWMSlider);
 
-    btnGenerateDrum = new QPushButton("Copy XPF to Clipboard");
-    btnSaveDrumXpf = new QPushButton("Save Drum as .XPF File");
-
     drumLayout->addWidget(new QLabel("<b>Internal Filter Drum Designer</b>"));
     drumLayout->addLayout(fLayout);
     drumLayout->addWidget(drumTypeCombo);
-    drumLayout->addWidget(btnGenerateDrum);
-    drumLayout->addWidget(btnSaveDrumXpf);
+
+    // 3. BUTTONS
+    auto *dBtnLay = new QHBoxLayout();
+
+    btnPlayDrum = new QPushButton("▶ Play Drum Loop");
+    btnPlayDrum->setCheckable(true);
+    btnPlayDrum->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+
+    btnGenerateDrum = new QPushButton("Copy XPF to Clipboard");
+    btnSaveDrumXpf = new QPushButton("Save Drum as .XPF File");
+
+    dBtnLay->addWidget(btnPlayDrum);
+    dBtnLay->addWidget(btnGenerateDrum);
+    dBtnLay->addWidget(btnSaveDrumXpf);
+    drumLayout->addLayout(dBtnLay);
     drumLayout->addStretch();
 
-    // SUGGESTION LOGIC
+    modeTabs->addTab(drumWidget, "Drum Designer");
+
+    // 4. AUDIO & VISUAL LOGIC (The Math)
+    auto updateDrum = [=]() {
+        // Gather Values from UI
+        int waveIdx = drumWaveCombo->currentIndex(); // 0=Sin, 1=Tri, 2=Sqr, 3=Saw
+        double baseFreq = drumPitchSlider->value();
+        double decayFactor = drumDecaySlider->value();
+        double pitchDrop = drumPitchDropSlider->value();
+        double noiseMix = drumNoiseSlider->value() / 100.0;
+        double expCurve = drumExpSlider->value();
+
+        // Calculate a loop length that fits the decay so it doesn't click
+        double loopLen = 0.5 + (200.0 / (decayFactor > 0 ? decayFactor : 1.0));
+
+        // The Audio Generation Lambda
+        std::function<double(double)> drumAlgo = [=](double t) {
+            // Loop logic (retrigger)
+            double localT = std::fmod(t, loopLen);
+            if(localT < 0) return 0.0;
+
+            // 1. Pitch Envelope (Exponential Drop)
+            // f(t) = Base + Drop * exp(-t * decay/2)
+            double instFreq = baseFreq + (pitchDrop * std::exp(-localT * (decayFactor / 2.0)));
+
+            // 2. Oscillator Generation
+            double phase = localT * instFreq * 6.283185; // 2*PI
+            double osc = 0.0;
+
+            if (waveIdx == 0) osc = std::sin(phase);
+            else if (waveIdx == 1) osc = (2.0/3.14159) * std::asin(std::sin(phase)); // Triangle
+            else if (waveIdx == 2) osc = (std::sin(phase) > 0 ? 1.0 : -1.0); // Square
+            else osc = 2.0 * (std::fmod(localT * instFreq, 1.0)) - 1.0; // Saw
+
+            // 3. Noise Generation
+            double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
+
+            // 4. Mix Osc and Noise
+            double signal = (osc * (1.0 - noiseMix)) + (noise * noiseMix);
+
+            // 5. Volume Envelope (Exponential Decay)
+            double env = std::exp(-localT * decayFactor * expCurve);
+
+            return signal * env;
+        };
+
+        // Update Visualizer (Zoomed in to 0.2s to see the hit clearly)
+        drumScope->updateScope(drumAlgo, 0.2, 1.0);
+
+        // Update Audio Engine if Playing
+        if (btnPlayDrum->isChecked()) {
+            m_ghostSynth->setAudioSource(drumAlgo);
+        }
+    };
+
+    // 5. CONNECTIONS (INTERACTIVITY)
+
+    // Connect sliders to live update
+    connect(drumPitchSlider, &QSlider::valueChanged, updateDrum);
+    connect(drumDecaySlider, &QSlider::valueChanged, updateDrum);
+    connect(drumPitchDropSlider, &QSlider::valueChanged, updateDrum);
+    connect(drumExpSlider, &QSlider::valueChanged, updateDrum);
+    connect(drumNoiseSlider, &QSlider::valueChanged, updateDrum);
+    connect(drumWaveCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), updateDrum);
+
+    // PRESET LOGIC: Sets sliders when you choose a drum type
     connect(drumTypeCombo, &QComboBox::currentIndexChanged, [=](int idx){
+        // Stop audio briefly to prevent glitches while setting sliders
+        bool wasPlaying = btnPlayDrum->isChecked();
+        if(wasPlaying) m_ghostSynth->stop();
+
+        // Block signals so we don't trigger 10 updates in a row
+        drumPitchSlider->blockSignals(true);
+        drumDecaySlider->blockSignals(true);
+        // ... (blocking others is optional but good practice)
+
         switch(idx) {
         case 0: // Kick
-            drumWaveCombo->setCurrentText("Sine"); drumPitchSlider->setValue(40);
-            drumPitchDropSlider->setValue(350); drumDecaySlider->setValue(40); drumExpSlider->setValue(2); break;
+            drumWaveCombo->setCurrentText("Sine");
+            drumPitchSlider->setValue(40);
+            drumPitchDropSlider->setValue(350);
+            drumDecaySlider->setValue(40);
+            drumExpSlider->setValue(2);
+            drumToneSlider->setValue(1000);
+            drumSnapSlider->setValue(50);
+            drumNoiseSlider->setValue(0);
+            break;
         case 1: // Snare
-            drumWaveCombo->setCurrentText("Triangle"); drumNoiseSlider->setValue(70);
-            drumToneSlider->setValue(1200); drumDecaySlider->setValue(80); drumExpSlider->setValue(4); break;
+            drumWaveCombo->setCurrentText("Triangle");
+            drumPitchSlider->setValue(60);
+            drumPitchDropSlider->setValue(200);
+            drumNoiseSlider->setValue(70);
+            drumToneSlider->setValue(1200);
+            drumDecaySlider->setValue(80);
+            drumExpSlider->setValue(4);
+            break;
         case 2: // Hi-Hat
-            drumWaveCombo->setCurrentText("Square"); drumPitchSlider->setValue(80);
-            drumDecaySlider->setValue(160); drumNoiseSlider->setValue(100); drumToneSlider->setValue(8000); break;
+            drumWaveCombo->setCurrentText("Square");
+            drumPitchSlider->setValue(80);
+            drumPitchDropSlider->setValue(50);
+            drumDecaySlider->setValue(160);
+            drumNoiseSlider->setValue(100);
+            drumToneSlider->setValue(8000);
+            drumExpSlider->setValue(8);
+            break;
+        case 3: // Tom
+            drumWaveCombo->setCurrentText("Sine");
+            drumPitchSlider->setValue(50);
+            drumPitchDropSlider->setValue(150);
+            drumDecaySlider->setValue(60);
+            drumNoiseSlider->setValue(10);
+            drumToneSlider->setValue(800);
+            drumExpSlider->setValue(3);
+            break;
         case 4: // Cowbell
-            drumWaveCombo->setCurrentText("Square"); drumPitchSlider->setValue(80);
-            drumPitchDropSlider->setValue(0); drumToneSlider->setValue(3000); drumExpSlider->setValue(3); break;
+            drumWaveCombo->setCurrentText("Square");
+            drumPitchSlider->setValue(80);
+            drumPitchDropSlider->setValue(0);
+            drumToneSlider->setValue(3000);
+            drumExpSlider->setValue(3);
+            drumDecaySlider->setValue(100);
+            drumNoiseSlider->setValue(0);
+            break;
         case 5: // Rimshot
-            drumWaveCombo->setCurrentText("Square"); drumPitchSlider->setValue(95);
-            drumNoiseSlider->setValue(20); drumToneSlider->setValue(5000); drumExpSlider->setValue(8); break;
+            drumWaveCombo->setCurrentText("Square");
+            drumPitchSlider->setValue(95);
+            drumPitchDropSlider->setValue(20);
+            drumNoiseSlider->setValue(20);
+            drumToneSlider->setValue(5000);
+            drumExpSlider->setValue(8);
+            drumDecaySlider->setValue(30);
+            break;
         case 6: // Clap
-            drumWaveCombo->setCurrentText("Sawtooth"); drumNoiseSlider->setValue(90);
-            drumDecaySlider->setValue(120); drumToneSlider->setValue(1000); drumExpSlider->setValue(5); break;
+            drumWaveCombo->setCurrentText("Sawtooth");
+            drumPitchSlider->setValue(70);
+            drumPitchDropSlider->setValue(50);
+            drumNoiseSlider->setValue(90);
+            drumDecaySlider->setValue(120);
+            drumToneSlider->setValue(1000);
+            drumExpSlider->setValue(5);
+            break;
+        }
+
+        // Unblock signals
+        drumPitchSlider->blockSignals(false);
+        drumDecaySlider->blockSignals(false);
+
+        updateDrum(); // Force one update with new values
+
+        if(wasPlaying) m_ghostSynth->start();
+    });
+
+    // Play Button Logic
+    connect(btnPlayDrum, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlayDrum->setText("▶ Play Drum Loop");
+            btnPlayDrum->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+        } else {
+            m_ghostSynth->start();
+            btnPlayDrum->setText("⏹ Stop");
+            btnPlayDrum->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
+            updateDrum();
         }
     });
 
-    modeTabs->addTab(drumWidget, "Drum Designer");
+    // Generator Buttons
     connect(btnGenerateDrum, &QPushButton::clicked, this, &MainWindow::generateDrumXpf);
     connect(btnSaveDrumXpf, &QPushButton::clicked, this, &MainWindow::generateDrumXpf);
+
+    // Initial Trigger to draw the default wave
+    QTimer::singleShot(200, updateDrum);
 
     // 10. VELOCILOGIC (DYNAMICS MAPPER)
     QWidget *velTab = new QWidget();
@@ -1080,23 +1402,220 @@ void MainWindow::setupUI() {
 
     modeTabs->addTab(filterTab, "Filter Forge");
 
-    // 13. LEAD STACKER
-    QWidget *leadTab = new QWidget(); auto *leadLayout = new QFormLayout(leadTab);
-    leadLayout->addRow("Unison Voices:", leadUnisonCount);
-    leadLayout->addRow("Detune Amount:", leadDetuneAmount);
-    leadLayout->addRow("Wave Type:", leadWaveType);
-    auto *btnLead = new QPushButton("Generate Lead Stack");
-    leadLayout->addRow(btnLead);
+    // 13. LEAD STACKER (UPGRADED)
+    QWidget *leadTab = new QWidget();
+    QVBoxLayout *leadLayout = new QVBoxLayout(leadTab);
+
+    // 1. OSCILLOSCOPE
+    leadScope = new UniversalScope();
+    leadScope->setMinimumHeight(150);
+    leadLayout->addWidget(leadScope);
+
+    // 2. CONTROLS
+    // Group A: Oscillator Core
+    QGroupBox *leadOscGroup = new QGroupBox("1. Core Voice");
+    QHBoxLayout *oscLay = new QHBoxLayout(leadOscGroup);
+
+    leadWaveType = new QComboBox();
+    leadWaveType->addItems({"Sawtooth (Classic)", "Square (Pulse)", "Triangle (Soft)", "Sine (Pure)"});
+
+    oscLay->addWidget(new QLabel("Wave:"));
+    oscLay->addWidget(leadWaveType);
+
+    oscLay->addWidget(new QLabel("Sub Osc:"));
+    leadSubSlider = new QSlider(Qt::Horizontal); leadSubSlider->setRange(0, 100); leadSubSlider->setValue(0);
+    oscLay->addWidget(leadSubSlider);
+
+    oscLay->addWidget(new QLabel("Noise:"));
+    leadNoiseSlider = new QSlider(Qt::Horizontal); leadNoiseSlider->setRange(0, 100); leadNoiseSlider->setValue(0);
+    oscLay->addWidget(leadNoiseSlider);
+
+    leadLayout->addWidget(leadOscGroup);
+
+    // Group B: Unison Engine
+    QGroupBox *leadUniGroup = new QGroupBox("2. Super Unison Stack");
+    QGridLayout *uniGrid = new QGridLayout(leadUniGroup);
+
+    leadUnisonCount = new QSpinBox();
+    leadUnisonCount->setRange(1, 16); // Up to 16 voices!
+    leadUnisonCount->setValue(5);
+
+    leadDetuneSlider = new QSlider(Qt::Horizontal);
+    leadDetuneSlider->setRange(0, 100);
+    leadDetuneSlider->setValue(25);
+
+    leadWidthSlider = new QSlider(Qt::Horizontal);
+    leadWidthSlider->setRange(0, 100);
+    leadWidthSlider->setValue(50);
+
+    leadVibeSlider = new QSlider(Qt::Horizontal);
+    leadVibeSlider->setRange(0, 100);
+    leadVibeSlider->setValue(10);
+
+    uniGrid->addWidget(new QLabel("Voice Count:"), 0, 0);
+    uniGrid->addWidget(leadUnisonCount, 0, 1);
+
+    uniGrid->addWidget(new QLabel("Detune (Spread):"), 1, 0);
+    uniGrid->addWidget(leadDetuneSlider, 1, 1);
+
+    uniGrid->addWidget(new QLabel("Stereo Width:"), 2, 0);
+    uniGrid->addWidget(leadWidthSlider, 2, 1);
+
+    uniGrid->addWidget(new QLabel("Vintage Drift:"), 3, 0);
+    uniGrid->addWidget(leadVibeSlider, 3, 1);
+
+    leadLayout->addWidget(leadUniGroup);
+
+    // 3. BUTTONS
+    QHBoxLayout *leadBtnLay = new QHBoxLayout();
+
+    btnPlayLead = new QPushButton("▶ Play Stack");
+    btnPlayLead->setCheckable(true);
+    btnPlayLead->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+
+    auto *btnGenLead = new QPushButton("GENERATE SUPER STACK");
+    btnGenLead->setStyleSheet("font-weight: bold; background-color: #004488; color: white; height: 40px;");
+
+    leadBtnLay->addWidget(btnPlayLead);
+    leadBtnLay->addWidget(btnGenLead);
+    leadLayout->addLayout(leadBtnLay);
+
+    // 4. PREVIEW LOGIC
+    auto updateLeadPreview = [=]() {
+        int voices = leadUnisonCount->value();
+        double detune = leadDetuneSlider->value() / 500.0; // Scaled for audio
+        double sub = leadSubSlider->value() / 100.0;
+        double noise = leadNoiseSlider->value() / 100.0;
+        double drift = leadVibeSlider->value() / 2000.0;
+        int waveIdx = leadWaveType->currentIndex(); // 0=Saw, 1=Sqr, 2=Tri, 3=Sin
+
+        std::function<double(double)> leadAlgo = [=](double t) {
+            double baseF = 110.0; // A2
+            double signal = 0.0;
+            double driftVal = (drift > 0) ? (std::sin(t * 3.0) * drift) : 0.0;
+
+            // Voice Loop
+            for(int i=0; i<voices; ++i) {
+                // Calculate spread ratio (-0.5 to 0.5)
+                double ratio = (voices > 1) ? ((double)i / (voices - 1)) - 0.5 : 0.0;
+                double f = baseF * (1.0 + (ratio * detune) + driftVal);
+
+                // Oscillator
+                double phase = std::fmod(t * f, 1.0);
+                double osc = 0.0;
+                if(waveIdx == 0) osc = 2.0 * phase - 1.0; // Saw
+                else if(waveIdx == 1) osc = (phase > 0.5) ? 1.0 : -1.0; // Square
+                else if(waveIdx == 2) osc = 2.0 * std::abs(2.0 * phase - 1.0) - 1.0; // Tri
+                else osc = std::sin(phase * 6.28318);
+
+                signal += osc;
+            }
+
+            // Normalize
+            signal /= (double)voices;
+
+            // Add Sub Osc (Octave down, Square)
+            if(sub > 0) {
+                double subPhase = std::fmod(t * baseF * 0.5, 1.0);
+                double subOsc = (subPhase > 0.5) ? 1.0 : -1.0;
+                signal += subOsc * sub;
+            }
+
+            // Add Noise
+            if(noise > 0) {
+                signal += ((double)rand()/RAND_MAX * 2.0 - 1.0) * noise;
+            }
+
+            return signal;
+        };
+
+        // Update Scope (Zoom out slightly to see the beating)
+        leadScope->updateScope(leadAlgo, 0.1, 1.0);
+
+        // Update Audio
+        if(btnPlayLead->isChecked()) {
+            m_ghostSynth->setAudioSource(leadAlgo);
+        }
+    };
+
+    // Connections
+    connect(leadUnisonCount, &QSpinBox::valueChanged, updateLeadPreview);
+    connect(leadDetuneSlider, &QSlider::valueChanged, updateLeadPreview);
+    connect(leadSubSlider, &QSlider::valueChanged, updateLeadPreview);
+    connect(leadNoiseSlider, &QSlider::valueChanged, updateLeadPreview);
+    connect(leadVibeSlider, &QSlider::valueChanged, updateLeadPreview);
+    connect(leadWaveType, QOverload<int>::of(&QComboBox::currentIndexChanged), updateLeadPreview);
+
+    connect(btnPlayLead, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlayLead->setText("▶ Play Stack");
+            btnPlayLead->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+        } else {
+            m_ghostSynth->start();
+            btnPlayLead->setText("⏹ Stop");
+            btnPlayLead->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
+            updateLeadPreview();
+        }
+    });
+
+    // Use the new generate function
+    connect(btnGenLead, &QPushButton::clicked, this, &MainWindow::generateLeadStack);
+
+    // Initial Trigger
+    QTimer::singleShot(300, updateLeadPreview);
+
+    leadLayout->addStretch();
     modeTabs->addTab(leadTab, "Lead Stacker");
 
-    // 14. RANDOMISER
-    QWidget *randTab = new QWidget(); auto *randLayout = new QVBoxLayout(randTab);
-    randLayout->addWidget(new QLabel("Chaos Level (Randomness):"));
-    randLayout->addWidget(chaosSlider);
-    auto *btnRand = new QPushButton("GENERATE CHAOS");
-    btnRand->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 50px;");
-    randLayout->addWidget(btnRand);
-    modeTabs->addTab(randTab, "Randomiser");
+    // [In mainwindow.cpp, inside setupUI(), replace the "// 14. RANDOMISER" section with this]
+
+        // 14. RANDOMISER
+        QWidget *randTab = new QWidget();
+        auto *randLayout = new QVBoxLayout(randTab);
+
+        // A. Visualizer
+        randScope = new UniversalScope();
+        randScope->setMinimumHeight(150);
+        randLayout->addWidget(randScope);
+
+        // B. Controls
+        randLayout->addWidget(new QLabel("Chaos Level (Randomness):"));
+        randLayout->addWidget(chaosSlider);
+
+        // C. Buttons
+        auto *randBtnLay = new QHBoxLayout();
+
+        btnPlayRand = new QPushButton("▶ Play Result");
+        btnPlayRand->setCheckable(true);
+        btnPlayRand->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 50px;");
+
+        auto *btnRand = new QPushButton("GENERATE CHAOS");
+        btnRand->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 50px;");
+
+        randBtnLay->addWidget(btnPlayRand);
+        randBtnLay->addWidget(btnRand);
+        randLayout->addLayout(randBtnLay);
+
+        randLayout->addStretch();
+        modeTabs->addTab(randTab, "Randomiser");
+
+        // D. Connection for Play Button
+        connect(btnPlayRand, &QPushButton::toggled, [=](bool checked){
+            if(!checked) {
+                m_ghostSynth->setAudioSource([](double){ return 0.0; });
+                m_ghostSynth->stop();
+                btnPlayRand->setText("▶ Play Result");
+                btnPlayRand->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 50px;");
+            } else {
+                // Ensure we have a valid function to play
+                if(currentRandFunc) m_ghostSynth->setAudioSource(currentRandFunc);
+                m_ghostSynth->start();
+                btnPlayRand->setText("⏹ Stop");
+                btnPlayRand->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 50px;");
+            }
+        });
 
     // --- 15. PHONETIC LAB (NEW) ---
     QWidget *phoneticTab = new QWidget();
@@ -1445,13 +1964,20 @@ void MainWindow::setupUI() {
 
     connect(btnGenDelay, &QPushButton::clicked, this, &MainWindow::generateDelayArchitect);
 
-    // 21. --- MACRO MORPH
+    // ---------------------------------------------------------
+    // 21. --- MACRO MORPH (UPDATED) ---
+    // ---------------------------------------------------------
     QWidget *macroTab = new QWidget;
     QVBoxLayout *macroLayout = new QVBoxLayout(macroTab);
 
-    // Header
-    QLabel *fluxDesc = new QLabel("<b></b> \n"
-                                  "Use 'Texture' for vinyl noise and 'Wonk' for off-grid swing.");
+    // 1. VISUALIZER (NEW)
+    macroScope = new UniversalScope();
+    macroScope->setMinimumHeight(150);
+    macroLayout->addWidget(macroScope);
+
+    // Header / Description
+    QLabel *fluxDesc = new QLabel("<b>Macro Morph Engine</b><br>"
+                                  "Select a Vibe, then tweak the Macro Knobs. The sliders update the code logic dynamically.");
     fluxDesc->setStyleSheet("color: #333; padding: 10px; background-color: #eee; border-radius: 5px;");
     macroLayout->addWidget(fluxDesc);
 
@@ -1461,26 +1987,28 @@ void MainWindow::setupUI() {
 
     macroBuildMode = new QComboBox();
     macroBuildMode->addItems({"Nightly (Clean / Variables)", "Legacy (Inline / Safe)"});
-    macroBuildMode->setToolTip("Legacy Mode removes variables for compatibility with older engines.");
     topBar->addWidget(macroBuildMode);
     topBar->addStretch();
     macroLayout->addLayout(topBar);
 
-    // --- GROUP 1: PRESET SELECTOR (Renamed) ---
-    QGroupBox *sourceGroup = new QGroupBox("1. Select Vibe");
+    // --- GROUP 1: PRESET SELECTOR ---
+    QGroupBox *sourceGroup = new QGroupBox("1. Select Vibe (Auto-Sets Sliders)");
     sourceGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #666; margin-top: 10px; }");
     QVBoxLayout *sourceLay = new QVBoxLayout(sourceGroup);
 
     macroStyleCombo = new QComboBox;
     macroStyleCombo->addItems({
-        "0. Super Saws (Anthemic)",
-        "1. Formant Vocal Lead (Chops)",
-        "2. Wobbly Cassette Keys (Lo-Fi)",
-        "3. Granular Pad (Jitter)",
-        "4. Hollow Bass (Deep House)",
-        "5. Portamento Lead (Gliding)",
-        "6. Plucky Arp (Short)",
-        "7. Vinyl Atmosphere (Texture Only)"
+        "00. Super Saws (Anthemic)",
+        "01. Formant Vocal Lead (Chops)",
+        "02. Wobbly Cassette Keys (Lo-Fi)",
+        "03. Granular Pad (Jitter)",
+        "04. Hollow Bass (Deep House)",
+        "05. Portamento Lead (Gliding)",
+        "06. Plucky Arp (Short)",
+        "07. Vinyl Atmosphere (Texture Only)",
+        "08. Cyberpunk Bass (Distorted) [NEW]",
+        "09. Hardstyle Kick (Punch) [NEW]",
+        "10. Vaporwave E-Piano (Dreamy) [NEW]"
     });
     sourceLay->addWidget(macroStyleCombo);
     macroLayout->addWidget(sourceGroup);
@@ -1490,7 +2018,6 @@ void MainWindow::setupUI() {
     macroGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #008080; background-color: #f4fcfc; margin-top: 10px; }");
     QGridLayout *macroGrid = new QGridLayout(macroGroup);
 
-    // Helper to make sliders
     auto addMacro = [&](QString name, QSlider*& slider, int row, int col, int def) {
         slider = new QSlider(Qt::Horizontal);
         slider->setRange(0, 100); slider->setValue(def);
@@ -1499,22 +2026,229 @@ void MainWindow::setupUI() {
     };
 
     // Column 1: Tonal Character
-    addMacro("Color (Timbre)", macroColorSlider, 0, 0, 50);
+    addMacro("Color (Timbre/Cutoff)", macroColorSlider, 0, 0, 50);
     addMacro("Texture (Noise/Grain)", macroTextureSlider, 1, 0, 20);
-    addMacro("Bitcrush (Lo-Fi)", macroBitcrushSlider, 2, 0, 0); // Renamed Label
+    addMacro("Bitcrush (Res/Grit)", macroBitcrushSlider, 2, 0, 0);
 
     // Column 2: Space & Time
-    addMacro("Time (Envelope)", macroTimeSlider, 0, 1, 50);
-    addMacro("Width (Stereo/Detune)", macroWidthSlider, 1, 1, 30);
-    addMacro("Wonk (Sidechain/Swing)", macroWonkySlider, 2, 1, 25);
+    addMacro("Time (Envelope/Decay)", macroTimeSlider, 0, 1, 50);
+    addMacro("Width (Detune/Spread)", macroWidthSlider, 1, 1, 30);
+    addMacro("Wonk (Swing/Sidechain)", macroWonkySlider, 2, 1, 25);
 
     macroLayout->addWidget(macroGroup);
 
-    // GENERATE BUTTON
+    // --- BUTTONS ---
+    QHBoxLayout *macroBtnLay = new QHBoxLayout();
+
+    // Play Button (NEW)
+    btnPlayMacro = new QPushButton("▶ Play Preview");
+    btnPlayMacro->setCheckable(true);
+    btnPlayMacro->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+
+    // Generate Button
     QPushButton *btnGenMacro = new QPushButton("GENERATE FUTURE PATCH");
-    btnGenMacro->setStyleSheet("font-weight: bold; font-size: 14px; background-color: #008080; color: white; height: 50px; margin-top: 10px;");
+    btnGenMacro->setStyleSheet("font-weight: bold; background-color: #008080; color: white; height: 40px;");
+
+    macroBtnLay->addWidget(btnPlayMacro);
+    macroBtnLay->addWidget(btnGenMacro);
+    macroLayout->addLayout(macroBtnLay);
+
+    // --- LOGIC: UPDATE PREVIEW (SCOPE + AUDIO) ---
+    auto updateMacroPreview = [=]() {
+        int style = macroStyleCombo->currentIndex();
+
+        // Normalize Sliders 0.0 - 1.0
+        double valColor = macroColorSlider->value() / 100.0;
+        double valTex   = macroTextureSlider->value() / 100.0;
+        double valCrush = macroBitcrushSlider->value() / 100.0;
+        double valTime  = macroTimeSlider->value() / 100.0;
+        double valWidth = macroWidthSlider->value() / 100.0;
+        double valWonk  = macroWonkySlider->value() / 100.0;
+
+        // C++ Audio Routine (Approximation of the Xpressive Code)
+        std::function<double(double)> audioRoutine = [=](double t) {
+            double f = 110.0; // Base frequency (A2)
+            double pi = 3.14159;
+            double signal = 0.0;
+
+            // 1. GENERATE CORE SIGNAL
+            switch(style) {
+            case 0: // Super Saws
+            {
+                double d = valWidth * 0.02;
+                double s1 = 2.0 * (std::fmod(t*f, 1.0)) - 1.0;
+                double s2 = 2.0 * (std::fmod(t*f*(1.0+d), 1.0)) - 1.0;
+                double s3 = 2.0 * (std::fmod(t*f*(1.0-d), 1.0)) - 1.0;
+                signal = (s1 + s2 + s3) / 3.0;
+                // Filter sim
+                signal = signal * (0.2 + 0.8 * valColor);
+            }
+            break;
+            case 1: // Formant Vocal
+            {
+                // FM Formant approximation
+                double formant = 2.0 + (valColor * 3.0);
+                double mod = std::sin(t * f * formant * 2 * pi) * (0.3 + valWidth * 0.2);
+                signal = std::sin((t * f * 2 * pi) + mod);
+                // LFO
+                double lfo = 1.0 + (0.1 * valTime * std::sin(t * 6.0));
+                signal *= lfo;
+            }
+            break;
+            case 2: // Cassette Keys
+            {
+                double drift = 1.0 + (valWidth * 0.005 * std::sin(t * 2.0));
+                // Triangle approximation
+                double ph = std::fmod(t * f * drift, 1.0);
+                signal = 2.0 * std::abs(2.0 * ph - 1.0) - 1.0;
+            }
+            break;
+            case 3: // Granular Pad
+            {
+                double saw = 2.0 * (std::fmod(t*f, 1.0)) - 1.0;
+                double grain = ((double)rand()/RAND_MAX * 2.0 - 1.0) * valTex;
+                signal = saw * (0.8 + grain);
+            }
+            break;
+            case 4: // Hollow Bass
+            {
+                double ph = std::fmod(t*f, 1.0);
+                signal = (ph > 0.5) ? 1.0 : -1.0; // Square
+                // Filter decay
+                double env = 1.0 - (valColor * std::exp(-t * 20.0));
+                signal *= env;
+            }
+            break;
+            case 5: // Portamento (Just saw for preview)
+                signal = 2.0 * (std::fmod(t*f, 1.0)) - 1.0;
+                break;
+            case 8: // Cyberpunk Bass
+            {
+                double saw = 2.0 * (std::fmod(t*f*0.5, 1.0)) - 1.0; // Sub osc
+                // Distortion (Fold)
+                double drive = 1.0 + (valCrush * 5.0);
+                signal = std::tanh(saw * drive);
+            }
+            break;
+            case 9: // Hardstyle Kick
+            {
+                // Pitch drop
+                double fDrop = f * (4.0 * std::exp(-t * 20.0));
+                signal = std::sin(t * fDrop * 2 * pi);
+                // Clip
+                if (signal > 0.5) signal = 0.5;
+                if (signal < -0.5) signal = -0.5;
+            }
+            break;
+            case 10: // Vaporwave
+            {
+                double fm = std::sin(t * f * 4.0 * 2 * pi) * valColor;
+                signal = std::sin((t * f * 2 * pi) + fm);
+            }
+            break;
+            default: // Fallback
+                signal = std::sin(t * f * 2 * pi);
+            }
+
+            // 2. APPLY ENVELOPE (TIME)
+            if (style != 7) { // Skip for Atmosphere
+                double decay = 5.0 - (valTime * 4.0); // Map 0-1 to 5-1 speed
+                if (decay < 0.1) decay = 0.1;
+                double env = std::exp(-std::fmod(t, 0.5) * decay * 10.0); // Repeated envelope for scope
+                signal *= env;
+            }
+
+            // 3. TEXTURE (Noise)
+            if (valTex > 0) {
+                double noise = ((double)rand()/RAND_MAX * 2.0 - 1.0);
+                signal += noise * valTex * 0.2;
+            }
+
+            // 4. BITCRUSH (Step)
+            if (valCrush > 0) {
+                double steps = 16.0 - (valCrush * 14.0);
+                signal = std::floor(signal * steps) / steps;
+            }
+
+            // 5. WONK (Sidechain)
+            if (valWonk > 0) {
+                double pump = 0.5 * (1.0 + std::sin(t * 8.0)); // 8Hz LFO
+                signal *= (1.0 - (valWonk * pump));
+            }
+
+            return signal;
+        };
+
+        // Update Scope (Zoom based on Time slider mostly)
+        macroScope->updateScope(audioRoutine, 0.2, 1.0);
+
+        // Update Audio
+        if(btnPlayMacro->isChecked()) {
+            m_ghostSynth->setAudioSource(audioRoutine);
+        }
+    };
+
+    // --- LOGIC: PRESET LOADER (MOVES SLIDERS) ---
+    connect(macroStyleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int idx){
+        // Helper to set all 6 sliders at once
+        auto setS = [&](int c, int tx, int bc, int tm, int w, int wk) {
+            macroColorSlider->setValue(c);
+            macroTextureSlider->setValue(tx);
+            macroBitcrushSlider->setValue(bc);
+            macroTimeSlider->setValue(tm);
+            macroWidthSlider->setValue(w);
+            macroWonkySlider->setValue(wk);
+        };
+
+        // PRESET DEFINITIONS
+        switch(idx) {
+        case 0: setS(80, 10, 0, 60, 50, 0); break;  // Super Saws
+        case 1: setS(30, 0, 10, 40, 20, 0); break;  // Formant
+        case 2: setS(50, 40, 20, 80, 80, 30); break; // Cassette
+        case 3: setS(20, 80, 0, 50, 50, 10); break; // Granular
+        case 4: setS(90, 0, 0, 40, 0, 0); break;    // Hollow Bass
+        case 5: setS(50, 0, 0, 100, 30, 0); break;  // Portamento
+        case 6: setS(100, 10, 0, 10, 10, 0); break; // Plucky
+        case 7: setS(0, 100, 50, 100, 0, 0); break; // Atmosphere
+        case 8: setS(80, 20, 80, 60, 0, 0); break;  // Cyberpunk (High Crush)
+        case 9: setS(20, 0, 100, 10, 0, 0); break;  // Hardstyle (Max Crush, Short Time)
+        case 10: setS(60, 10, 5, 80, 90, 50); break; // Vaporwave (High Width/Wonk)
+        }
+
+        // Trigger update immediately
+        updateMacroPreview();
+    });
+
+    // --- CONNECT SLIDERS ---
+    connect(macroColorSlider, &QSlider::valueChanged, updateMacroPreview);
+    connect(macroTextureSlider, &QSlider::valueChanged, updateMacroPreview);
+    connect(macroBitcrushSlider, &QSlider::valueChanged, updateMacroPreview);
+    connect(macroTimeSlider, &QSlider::valueChanged, updateMacroPreview);
+    connect(macroWidthSlider, &QSlider::valueChanged, updateMacroPreview);
+    connect(macroWonkySlider, &QSlider::valueChanged, updateMacroPreview);
+
+    // --- PLAY BUTTON ---
+    connect(btnPlayMacro, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlayMacro->setText("▶ Play Preview");
+            btnPlayMacro->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+        } else {
+            m_ghostSynth->start();
+            btnPlayMacro->setText("⏹ Stop");
+            btnPlayMacro->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
+            updateMacroPreview();
+        }
+    });
+
     connect(btnGenMacro, &QPushButton::clicked, this, &MainWindow::generateMacroMorph);
-    macroLayout->addWidget(btnGenMacro);
+
+    // Initial Trigger
+    QTimer::singleShot(200, [=](){
+        macroStyleCombo->setCurrentIndex(0);
+        updateMacroPreview();
+    });
 
     macroLayout->addStretch();
     modeTabs->addTab(macroTab, "Macro Morph");
@@ -1964,8 +2698,32 @@ void MainWindow::setupUI() {
     westLayout->addStretch();
     modeTabs->addTab(westTab, "West Coast Lab");
 
+    // 26. MODULAR SYNTH
+        ModularSynthTab* modularTab = new ModularSynthTab(this);
 
-    // 25. NEED TO KNOW / NOTES TAB
+        // 1. Handle Text Code Generation
+        connect(modularTab, &ModularSynthTab::expressionGenerated, this, [=](QString code){
+            statusBox->setText(code);
+            QApplication::clipboard()->setText(code);
+        });
+
+        // 2. Handle PLAY Request
+        connect(modularTab, &ModularSynthTab::startPreview, this, [=](std::function<double(double)> func){
+            m_ghostSynth->setAudioSource(func);
+            m_ghostSynth->start();
+        });
+
+        // 3. Handle STOP Request
+        connect(modularTab, &ModularSynthTab::stopPreview, this, [=](){
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+        });
+
+        modeTabs->addTab(modularTab, "Modular Grid");
+
+
+
+    // 26. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -2017,7 +2775,6 @@ void MainWindow::setupUI() {
     connect(btnNoise, &QPushButton::clicked, this, &MainWindow::generateNoiseForge);
     connect(btnSaveXpf, &QPushButton::clicked, this, &MainWindow::saveXpfInstrument);
     connect(btnFil, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
-    connect(btnLead, &QPushButton::clicked, this, &MainWindow::generateLeadStack);
     connect(btnRand, &QPushButton::clicked, this, &MainWindow::generateRandomPatch);
 }
 
@@ -2225,13 +2982,58 @@ void MainWindow::generateHarmonicLab() {
 }
 
 void MainWindow::generateLeadStack() {
-    int voices = (int)leadUnisonCount->value(); double detune = leadDetuneAmount->value();
-    QStringList s;
+    int voices = leadUnisonCount->value();
+    double detune = leadDetuneSlider->value() / 200.0; // 0.0 to 0.5 range
+    double sub = leadSubSlider->value() / 100.0;
+    double noise = leadNoiseSlider->value() / 100.0;
+    double drift = leadVibeSlider->value() / 100.0;
+
+    QString wName = leadWaveType->currentText().toLower();
+    QString func = "saww";
+    if(wName.contains("square")) func = "squarew";
+    else if(wName.contains("triangle")) func = "trianglew";
+    else if(wName.contains("sine")) func = "sinew";
+
+    QStringList stack;
+
+    // 1. Generate Unison Voices
     for (int i = 0; i < voices; ++i) {
-        double offset = (voices == 1) ? 1.0 : 1.0 + (detune * ((double)i / (voices - 1) - 0.5) * 2.0);
-        s << QString("(1.0/%1) * %2(integrate(f * %3))").arg(voices).arg(leadWaveType->currentText()).arg(offset, 0, 'f', 4);
+        // Calculate offset centered around 1.0
+        // e.g. 5 voices: -2, -1, 0, 1, 2 scaled by detune
+        double ratio = (voices > 1) ? ((double)i / (voices - 1)) - 0.5 : 0.0;
+        double mult = 1.0 + (ratio * detune);
+
+        QString freqExpr = QString("f * %1").arg(mult, 0, 'f', 4);
+
+        // Add Drift if active (Random slow sine LFO)
+        if(drift > 0) {
+            freqExpr += QString(" * (1 + %1 * sinew(t*3))").arg(drift * 0.02);
+        }
+
+        // Add to stack
+        stack << QString("%1(integrate(%2))").arg(func).arg(freqExpr);
     }
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(s.join(" + ")));
+
+    QString finalExpr = "(" + stack.join(" + ") + ")";
+
+    // 2. Normalize Volume (Divide by count)
+    finalExpr = QString("(%1 / %2)").arg(finalExpr).arg(voices);
+
+    // 3. Add Sub Oscillator
+    if (sub > 0) {
+        finalExpr += QString(" + (%1 * squarew(integrate(f*0.5)))").arg(sub);
+    }
+
+    // 4. Add Noise
+    if (noise > 0) {
+        finalExpr += QString(" + (%1 * randv(t*10000))").arg(noise);
+    }
+
+    // 5. Final Clamp
+    finalExpr = QString("clamp(-1, %1, 1)").arg(finalExpr);
+
+    statusBox->setText(finalExpr);
+    QApplication::clipboard()->setText(finalExpr);
 }
 
 void MainWindow::generateVelocilogic() {
@@ -2321,13 +3123,64 @@ void MainWindow::generateFilterForge() {
     statusBox->setText(QString("clamp(-1, %1 / %2, 1)").arg(expr).arg(taps));
 }
 
-void MainWindow::generateRandomPatch() {
-    int theme = std::rand() % 3; double ch = chaosSlider->value() / 100.0;
-    if(theme == 0) statusBox->setText(QString("sinew(integrate(f*%1 + sinew(integrate(f*%2))*%3*f*%2))").arg((rand()%4)+1).arg((rand()%8)+1).arg((rand()%15)*ch+1));
-    else if(theme == 1) statusBox->setText(QString("floor(saww(integrate(f)) * %1) / %1").arg((int)(16*ch+2)));
-    else statusBox->setText("sinew(integrate(f)) + 0.5*sinew(integrate(f*2))");
-}
+// [In mainwindow.cpp, replace the old generateRandomPatch function with this]
 
+void MainWindow::generateRandomPatch() {
+    int theme = std::rand() % 3;
+    double ch = chaosSlider->value() / 100.0;
+    QString textStr;
+    double pi = 3.14159;
+
+    // We define the math for audio/scope here
+    if (theme == 0) { // FM Synthesis
+        double c = (std::rand() % 4) + 1;       // Carrier Ratio
+        double m = (std::rand() % 8) + 1;       // Mod Ratio
+        double i = (std::rand() % 15) * ch + 1; // FM Index (Intensity)
+
+        // String for Clipboard
+        textStr = QString("sinew(integrate(f*%1 + sinew(integrate(f*%2))*%3*f*%2))")
+                  .arg(c).arg(m).arg(i);
+
+        // Function for Audio Engine
+        currentRandFunc = [=](double t) {
+            double f = 220.0; // Preview at A3
+            double mod = i * std::sin(t * f * m * 2 * pi);
+            return std::sin((t * f * c * 2 * pi) + mod);
+        };
+    }
+    else if (theme == 1) { // Bitcrushed Sawtooth
+        double steps = (int)(16 * ch + 2);
+
+        textStr = QString("floor(saww(integrate(f)) * %1) / %1").arg(steps);
+
+        currentRandFunc = [=](double t) {
+            double f = 220.0;
+            double saw = 2.0 * (std::fmod(t * f, 1.0)) - 1.0;
+            return std::floor(saw * steps) / steps;
+        };
+    }
+    else { // Additive Sine
+        textStr = "sinew(integrate(f)) + 0.5*sinew(integrate(f*2))";
+
+        currentRandFunc = [=](double t) {
+            double f = 220.0;
+            return std::sin(t * f * 2 * pi) + 0.5 * std::sin(t * f * 2.0 * 2 * pi);
+        };
+    }
+
+    // 1. Update UI Text
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(textStr));
+
+    // 2. Update Scope
+    if (randScope && currentRandFunc) {
+        randScope->updateScope(currentRandFunc, 0.05, 1.0); // Fast zoom (0.05s) to see waveform
+    }
+
+    // 3. Update Audio (If currently playing)
+    if (btnPlayRand->isChecked() && currentRandFunc) {
+        m_ghostSynth->setAudioSource(currentRandFunc);
+    }
+}
 
 void MainWindow::saveSidExpr() {
     if (sidSegments.empty()) return;
@@ -3632,132 +4485,189 @@ void MainWindow::generateMacroMorph() {
     int style = macroStyleCombo->currentIndex();
     bool isLegacy = (macroBuildMode->currentIndex() == 1);
 
-    // Fetch Slider Values (0.0 to 1.0)
+    // 1. FETCH SLIDER VALUES (Normalized 0.0 to 1.0)
     double mColor = macroColorSlider->value() / 100.0;
     double mTime  = macroTimeSlider->value() / 100.0;
-    double mGrit  = macroBitcrushSlider->value() / 100.0; // Bitcrush
-    double mTex   = macroTextureSlider->value() / 100.0;
-    double mWidth = macroWidthSlider->value() / 100.0;
-    double mWonk  = macroWonkySlider->value() / 100.0;
+    double mGrit  = macroBitcrushSlider->value() / 100.0; // Bitcrush / Distortion
+    double mTex   = macroTextureSlider->value() / 100.0;  // Noise / Grain
+    double mWidth = macroWidthSlider->value() / 100.0;    // Detune / Chorus
+    double mWonk  = macroWonkySlider->value() / 100.0;    // Sidechain / Swing
 
     QString osc, env;
 
-    // --- ALGORITHM LIBRARY ---
+    // --- 2. ALGORITHM LIBRARY ---
     switch(style) {
-    case 0: // FUTURE SUPER SAWS
+    case 0: // SUPER SAWS (Anthemic)
+        // 3 Detuned Saws averaged
         osc = QString("((saww(integrate(f)) + saww(integrate(f * %1)) + saww(integrate(f * %2))) / 3)")
                   .arg(1.0 + (mWidth * 0.02))
                   .arg(1.0 - (mWidth * 0.02));
-        // Filter Logic
+        // Color = Lowpass Filter Simulation (Crossfade Sine vs Saw)
         osc = QString("(%1 * %2 + sinew(integrate(f)) * %3)")
                   .arg(osc).arg(mColor).arg(1.0 - mColor);
+        // Time = Envelope Decay
         env = QString("min(1, t * 20) * exp(-t * %1)").arg(5.0 - (mTime * 4.0));
         break;
 
-    case 1: // FORMANT VOCAL LEAD
+    case 1: // FORMANT VOCAL LEAD (Chops)
     {
         // Base: Triangle wave for body
         QString base = "trianglew(integrate(f/2))";
-
-        // Formant Modulation (PWM-like effect)
-        // Nightly can use a variable for the LFO to keep it readable
-        // Legacy must inline the LFO math directly into the phase
 
         double vibSpeed = 6.0;
         double vibDepth = mTime * 0.05;
 
         if (isLegacy) {
-            // Inline: f * (1 + sin(t*6)*depth)
+            // Inline LFO logic
             QString lfo = QString("(1.0 + sinew(t*%1)*%2)").arg(vibSpeed).arg(vibDepth);
-
-            // Apply LFO to frequency inside the integrator
             osc = QString("(%1 * (0.5 + 0.4 * sinew(integrate(f * %2 * %3))))")
-                      .arg(base)
-                      .arg(lfo) // Frequency mod
-                      .arg(2.0 + (mColor * 3.0)); // Formant shift
+                      .arg(base).arg(lfo).arg(2.0 + (mColor * 3.0));
         } else {
-            // Nightly: Cleaner variable
+            // Nightly: Use variables
             osc = QString("(%1 * (0.5 + 0.4 * sinew(integrate(f * %2))))")
-                      .arg(2.0 + (mColor * 3.0));
-
-            // Prepend Variable
+                      .arg(base).arg(2.0 + (mColor * 3.0));
+            // Prepend LFO variable
             if(mTime > 0) {
                 osc = QString("var vib:=sinew(t*%1)*%2; %3")
                 .arg(vibSpeed).arg(vibDepth)
                     .arg(osc.replace("(f", "(f*(1+vib)"));
             }
         }
-        env = "1";
+        env = "1"; // Sustained
         break;
     }
 
-    case 2: // WOBBLY CASSETTE KEYS
+    case 2: // WOBBLY CASSETTE KEYS (Lo-Fi)
     {
+        // Width = Tape Drift amount
         double drift = 1.0 + (mWidth * 0.005);
+        // Color = Brightness (Triangle vs Sine)
         osc = QString("(trianglew(integrate(f * %1)) + %2 * sinew(integrate(f * 4)))")
                   .arg(drift).arg(mColor * 0.5);
+        // Time = Decay Speed
         env = QString("exp(-t * %1)").arg(10.0 - (mTime * 8.0));
         break;
     }
 
-    case 3: // GRANULAR PAD
+    case 3: // GRANULAR PAD (Jitter)
+        // Texture determines grain frequency
         osc = QString("(saww(integrate(f)) * (0.8 + 0.2 * randv(t * %1)))")
                   .arg(50 + mTex * 500);
         env = QString("min(1, t * %1)").arg(0.5 + mTime * 2.0);
         break;
 
-    case 4: // HOLLOW BASS
+    case 4: // HOLLOW BASS (Deep House)
+        // Square wave
         osc = QString("(squarew(integrate(f)) * (1 - %1 * exp(-t*20)))")
-                  .arg(mColor);
+                  .arg(mColor); // Color controls filter pluck amount
         env = "1";
         break;
 
-    case 5: // PORTAMENTO LEAD
-        osc = QString("saww(integrate(f)) + %1 * saww(integrate(f * 1.01))").arg(mWidth);
+    case 5: // PORTAMENTO LEAD (Gliding)
+        // Width = Detune amount between two saws
+        osc = QString("saww(integrate(f)) + 0.5 * saww(integrate(f * %1))").arg(1.0 + mWidth * 0.02);
         env = "1";
         break;
 
-    case 6: // PLUCKY ARP
+    case 6: // PLUCKY ARP (Short)
+        // Uses a conditional to create a pluck shape
         osc = "squarew(integrate(f)) * (sinew(integrate(f*2)) > 0 ? 1 : 0)";
         env = QString("exp(-t * %1)").arg(20.0 - mTime * 10.0);
         break;
 
-    case 7: // VINYL ATMOSPHERE
-        osc = "0";
+    case 7: // VINYL ATMOSPHERE (Texture Only)
+        osc = "0"; // Silence base
         env = "1";
+        break;
+
+    case 8: // CYBERPUNK BASS [NEW]
+    {
+        // Sub Osc + Saw
+        QString raw = "(saww(integrate(f)) + 0.5*sinew(integrate(f/2)))";
+        // Distortion (Grit) controls clamp tightness
+        double drive = 1.0 + (mGrit * 5.0);
+        // "Fold" effect using clamp
+        osc = QString("clamp(-0.8, %1 * %2, 0.8)").arg(raw).arg(drive);
+        env = "1"; // Sustained
         break;
     }
 
-    // --- GLOBAL PROCESSING ---
+    case 9: // HARDSTYLE KICK [NEW]
+    {
+        // Pitch Envelope: Drops from High to Low
+        // Time slider controls drop speed
+        double dropSpeed = 10.0 + (mTime * 20.0);
+        QString pitchEnv = QString("(f + (400.0 * exp(-t * %1)))").arg(dropSpeed);
 
-    // 1. Apply Envelope
+        // Core Sine
+        osc = QString("sinew(integrate(%1))").arg(pitchEnv);
+
+        // Hard Clip / Distortion (Grit)
+        double clip = 1.0 + (mGrit * 10.0);
+        osc = QString("clamp(-0.9, %1 * %2, 0.9)").arg(osc).arg(clip);
+
+        env = QString("exp(-t * 3.0)"); // Fixed short decay for kick
+        break;
+    }
+
+    case 10: // VAPORWAVE E-PIANO [NEW]
+    {
+        // FM Bell Tone
+        // Color controls Modulation Index (Brightness)
+        double modIndex = 1.0 + (mColor * 8.0);
+        QString modulator = QString("(%1 * sinew(integrate(f * 4.0)))").arg(modIndex);
+
+        // Width controls Chorus LFO
+        double lfoSpeed = 2.0;
+        double lfoDepth = mWidth * 0.01;
+        QString chorus = QString("(1.0 + %1 * sinew(t * %2))").arg(lfoDepth).arg(lfoSpeed);
+
+        osc = QString("sinew(integrate(f * %1 + %2))").arg(chorus).arg(modulator);
+
+        // Time controls Release
+        env = QString("exp(-t * %1)").arg(4.0 - (mTime * 3.0));
+        break;
+    }
+    }
+
+    // --- 3. GLOBAL PROCESSING CHAIN ---
+
+    // A. Apply Envelope (Skip for Atmosphere)
     if (style != 7) {
         osc = QString("(%1 * %2)").arg(osc).arg(env);
     }
 
-    // 2. TEXTURE LAYER (Noise)
+    // B. TEXTURE LAYER (Noise/Grain)
     if (mTex > 0 || style == 7) {
-        QString noise = QString("(randv(t * 8000) * %1)").arg(mTex * 0.15);
-        if (style == 7) osc = noise;
+        // High frequency noise
+        QString noise = QString("(randv(t * 8000) * %1)").arg(mTex * 0.25);
+        if (style == 7) osc = noise; // Atmosphere is pure noise
         else osc = QString("(%1 + %2)").arg(osc).arg(noise);
     }
 
-    // 3. WONK (Sidechain)
+    // C. WONK (Sidechain / Ducking)
     if (mWonk > 0) {
-        QString sidechain = QString("(1.0 - %1 * abs(sinew(t * 15)))").arg(mWonk * 0.8);
+        // AM Modulation simulating sidechain compression
+        // 8.0 is roughly 120BPM quarter notes
+        QString sidechain = QString("(1.0 - %1 * abs(sinew(t * 8.0)))").arg(mWonk * 0.8);
         osc = QString("(%1 * %2)").arg(osc).arg(sidechain);
     }
 
-    // 4. BITCRUSH (Formerly VHS Degrade)
-    if (mGrit > 0) {
+    // D. BITCRUSH (Quantization)
+    // Applied last for maximum artifacting
+    if (mGrit > 0 && style != 8 && style != 9) {
+        // (Skip for Cyberpunk/Hardstyle as they use Grit for distortion instead)
         double steps = 16.0 - (mGrit * 14.0);
-        // Both Legacy and Nightly handle 'floor' and 'steps' logic fine inline
+        // "floor(x * steps) / steps"
         osc = QString("floor(%1 * %2) / %2").arg(osc).arg(steps);
     }
 
-    // Final Safety Clamp
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(osc));
-    QApplication::clipboard()->setText(statusBox->toPlainText());
+    // 4. FINAL OUTPUT
+    // Clamp result to prevent clipping in LMMS
+    QString finalResult = QString("clamp(-1, %1, 1)").arg(osc);
+
+    statusBox->setText(finalResult);
+    QApplication::clipboard()->setText(finalResult);
 }
 void MainWindow::generateStringMachine() {
     int model = stringModelCombo->currentIndex();
