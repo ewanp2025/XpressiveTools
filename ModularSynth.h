@@ -11,72 +11,191 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QGraphicsSceneMouseEvent>
-#include <functional> // Needed for audio
+#include <QMenu>
+#include <functional>
 
 // Forward declarations
 class SynthNode;
 class ConnectionPath;
-class UniversalScope; // We assume this exists in your project
+class UniversalScope;
 
-// --- 1. The Wire (Connection) ---
+// =========================================================
+// 1. CONNECTION PATH (The Wire)
+// =========================================================
 class ConnectionPath : public QGraphicsPathItem {
 public:
     ConnectionPath(QPointF start, QPointF end, QGraphicsItem* parent = nullptr);
+    ~ConnectionPath();
     void updatePosition(QPointF start, QPointF end);
+    void detach();
+
     SynthNode* startNode = nullptr;
     SynthNode* endNode = nullptr;
+    int inputIndex = -1;
+
+protected:
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
 };
 
-// --- 2. The Node (Base Class) ---
+// =========================================================
+// 2. SYNTH NODE (The Base Class)
+// =========================================================
 class SynthNode : public QGraphicsRectItem {
 public:
     SynthNode(QString title, int inputs, int outputs, QGraphicsItem* parent = nullptr);
+    virtual ~SynthNode();
 
     enum { Type = UserType + 1 };
     int type() const override { return Type; }
 
-    // Generates the Text Code (for export)
-    virtual QString getExpression() = 0;
-
-    // Generates the Audio Value (for Preview/Scope)
-    // t = time, freq = base frequency (e.g. 220Hz)
+    // Logic: Now takes a 'nightly' flag
+    virtual QString getExpression(bool nightly) = 0;
     virtual double evaluate(double t, double freq) = 0;
 
     QPointF getInputPos(int index);
     QPointF getOutputPos(int index);
     void addInputConnection(int index, ConnectionPath* conn);
+    void removeInputConnection(int index);
 
-    ConnectionPath* inputs[5]; // Max 5 inputs
+    ConnectionPath* inputs[8];
 
 protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
+
+    // Base Interaction
+    virtual void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+    virtual void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+    virtual void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
 
     QString m_title;
     int m_numInputs;
     int m_numOutputs;
+
+    bool m_isKnobDrag = false;
+    QPointF m_lastMousePos;
 };
 
-// --- 3. Specific Node Types ---
+// =========================================================
+// 3. MODULES
+// =========================================================
 
 class OutputNode : public SynthNode {
 public:
     OutputNode();
-    QString getExpression() override;
+    QString getExpression(bool nightly) override;
     double evaluate(double t, double freq) override;
 };
 
 class OscillatorNode : public SynthNode {
 public:
     OscillatorNode();
-    QString getExpression() override;
+    QString getExpression(bool nightly) override;
     double evaluate(double t, double freq) override;
-
-    void setWaveform(int index); // 0=Sin, 1=Tri, 2=Saw, 3=Sqr
+    void setWaveform(int index);
     int currentWave = 0;
 };
 
-// --- 4. The Canvas (Scene) ---
+class LFONode : public SynthNode {
+public:
+    LFONode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+
+    double m_freq = 1.0;
+};
+
+class SequencerNode : public SynthNode {
+public:
+    SequencerNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+
+    double steps[8];
+};
+
+class QuantizerNode : public SynthNode {
+public:
+    QuantizerNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+};
+
+class SampleHoldNode : public SynthNode {
+public:
+    SampleHoldNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+};
+
+class NoiseNode : public SynthNode {
+public:
+    NoiseNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+};
+
+class MathNode : public SynthNode {
+public:
+    MathNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+    void setMode(int mode);
+    int currentMode = 0;
+};
+
+class WaveFolderNode : public SynthNode {
+public:
+    WaveFolderNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+};
+
+class BitCrushNode : public SynthNode {
+public:
+    BitCrushNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+};
+
+class DelayNode : public SynthNode {
+public:
+    DelayNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+};
+
+class LogicNode : public SynthNode {
+public:
+    LogicNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+    int logicType = 0;
+};
+
+class ClockDivNode : public SynthNode {
+public:
+    ClockDivNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+};
+
+// =========================================================
+// 4. SCENE & TAB
+// =========================================================
+
 class ModularScene : public QGraphicsScene {
     Q_OBJECT
 public:
@@ -90,13 +209,13 @@ protected:
     void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
 
 private:
     ConnectionPath* m_tempPath = nullptr;
     SynthNode* m_sourceNode = nullptr;
 };
 
-// --- 5. The Tab Widget (Main Entry) ---
 class ModularSynthTab : public QWidget {
     Q_OBJECT
 public:
@@ -104,23 +223,23 @@ public:
 
 signals:
     void expressionGenerated(QString code);
-    // Signals to tell MainWindow to play audio
     void startPreview(std::function<double(double)> func);
     void stopPreview();
 
 public slots:
     void generateCode();
+    void updateVisuals();
+    void createNode(QString type, QPointF pos);
 
 private slots:
-    void addOscillator();
     void togglePlay(bool checked);
-    void updateVisuals(); // Refreshes the scope
 
 private:
     ModularScene* m_scene;
     QGraphicsView* m_view;
-    UniversalScope* m_scope; // The Oscilloscope
+    UniversalScope* m_scope;
     QPushButton* m_btnPlay;
+    QComboBox* m_buildMode; // NEW: The Switch
 };
 
 #endif // MODULARSYNTH_H
