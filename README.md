@@ -2,52 +2,41 @@
 
 A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive. This suite is designed to make life easier when working with the Xpressive instrument by generating complex mathematical audio expressions (selectable between both Legacy and ExprTk parsing). Instead of manually working with complex XML files or trying to write math formulas from scratch, this suite lets you generate high-quality patches, percussion, and phonetic speech strings using a proper UI.
 
-This is still very much work in progress.
+This is still very much work in progress. The intent was to create a suite of tools for creating Xpressive expressions as I had realised that Xpressive can do many things that people are asking for in instruments within the LMMS forums. However, the 'language' of the time domain may be quite strange to people who have no prior experience with signal processing.
 
 **Key Features**
 
 The suite is divided into several tabs each targeting a specific era or style of sound design.
 
-**Tab Breakdown & Progress**
+**Tab Breakdown**
+•  SID Architect – Build multi-segment C64-style oscillator chains with per-segment decay and frequency offsets. 
+•  PCM Sampler – Converts WAV files into mathematical expressions for sample playback within Xpressive with optimized 4-bit quantisation. 
+•  Console Lab – A library of classic chip-synth waveforms (NES, GB, C64) with live bit-crushing and quantisation. 
+•  SFX Macro – Generates exponential pitch sweeps and glides for transitions and cinematic risers. 
+•  Arp Animator – Creates rhythmic, synchronised arpeggios with 8 bit style presets and BPM-sync capabilities. 
+•  Wavetable Forge – An interface for sequencing complex waveform, pitch, and PWM changes over time. 
+•  Bessel FM – A dual-operator FM synthesis engine with a library of 80s inspired DX7 and bell tone presets. 
+•  Harmonic Lab – A 16 harmonic additive synthesiser with real time spectrum visualization and slider based control. 
+•  Drum Designer – Architects percussion by combining exponential pitch-drop envelopes with simulated filter behaviours. Unlike the other tabs, this one exports a .xpf instrument so that the instruments filter can be controlled due to limited success with FIR.
+•  Velocilogic – Maps different code expressions to MIDI velocity layers. 
+•  Noise Forge – Provides precise sample rate control over random noise generation for digital textures. 
+•  XPF Packager – Wraps your raw expressions into a fully-formed LMMS instrument file for instant loading. Placeholder.
+•  Filter Forge – An experimental lab for generating mathematical approximations of FIR filters using $last(n)$ logic. Placeholder. Limited success so far with FIR results.
+•  Lead Stacker – A unison engine that generates supersaw stacks with adjustable detune, sub oscillators, and drift. 
+•  Randomiser – Uses chaos algorithms to generate semi random mathematical patches for instant inspiration. 
+•  Phonetic Lab – A text-to-speech engine utilizing SAM phoneme tables to generate complex vocal and speech formulas. WIP. Works in principle as SAM does not use filters. However,  results are not satisfactory yet.
+•  Logic Converter – A migration tool to bridge code between Xpressive versions, converting between Time ($t$) and Samples ($s$). WIP.
+•  Key Mapper – Allows keyboard splitting by assigning different logic expressions to specific MIDI key ranges. 
+•  Step Gate – A 16-step rhythmic sequencer that aims to pulse sounds in sync with the project BPM. 
+•  Numbers 1981 – A dual-oscillator sequencer inspired by early 80s minimal synth patterns and random streams. 
+•  Delay Architect – Builds multi tap echo chains using math based delay lines with adjustable feedback and sample rates. 
+•  Macro Morph – A high level dashboard that morphs complex sound "vibes" using simplified Macro knobs. 
+•  String Machine – Emulates vintage Solina and Logan string ensembles with evolving filter swells and ensemble width. 
+•  Hardware Lab – A direct parameter analog suite for designing patches with virtual ADSR, LFOs, and resonance. 
+•  West Coast Lab – Emulates Buchla-style nonlinear waveshaping using parallel and series wavefolding topologies. 
+•  Modular Grid – A visual, modular synethesiser emulator / node based environment for connecting oscillators and logic modules to "draw" your synth. 
+•  Spectral Resynthesiser – Analyses external WAV stabs to reconstruct sounds through windowed harmonic additive synthesis (another way to bring external recordings into Xpressive as an expression). 
 
-SID Architect	- Build complex C64-style oscillator chains with decay and frequency offsets. STABLE but will benefit from more features.
-
-PCM Sampler	- Converts WAV files into optimized math expressions for playback. WIP modern and legacy mode.
-* Under closer inspection I can only get the PCM Sampler to work in 1.5-bit (Ternary) logic. My Original Matlab script was 4 bit but I just can't get this right yet.
-
-Console Lab - Generate console chip sounds. WIP requires more features.
-
-SFX Macro - Generate sweeps. STABLE.
-
-Arp Animator - Generate synchronised arpeggios. STABLE.
-
-Wavetable Forge	- An interface for sequencing waveforms and pitches. STABLE but will benefit from more features.
-
-Bessel FM - Generate FM sounds. STABLE.
-
-Harmonic Lab - Generate harmonics with sliders. STABLE.
-
-Drum Designer	- Architect classic percussion (Kicks, Snares, Hats) using code based envelopes and internal LMMS filters. WIP.
-
-Velocilogic	- Maps different expressions to MIDI velocity layers for dynamic playing. WIP only tested with legacy.
-
-Noise Forge - Sample rate control of noise. STABLE.
-
-XPF Packagaer - Placeholder. WIP
-
-Filter Forge	Generates mathematical approximations of FIR filters using last(n) logic. WIP limited success with FIR.
-
-Lead Stacker - Generate Supersaws etc. WIP only tested with legacy.
-
-Randomiser - Semi random expressions. WIP working.
-
-Phonetic Lab	- A text-to-speech engine using SAM phoneme tables to generate vocal formulas. WIP.
-
-Logic Converter	- Migrates code between Xpressive versions (e.g., Time t to Samples s). WIP only works for PCM samples and only with very short ones.
-
-Key Mapper	- Splits the keyboard into zones so you can play different logic on different keys. WIP only tested with legacy.
-
-Step Gate	- A 16-step rhythmic gate to pulse your sounds in sync with the BPM. WIP tested working on legacy.
 
 **Technical**
 
@@ -55,11 +44,8 @@ Framework: Qt 6.x (Widgets)
 Language: C++17 
 Build System: CMake 3.16+
 
-Panning: Due to the XML parsing, the PAN1 attributes are currently disabled to prevent crashes. You'll need to set your panning manually in the LMMS instrument editor for now.
+Panning: Due to the XML parsing, the PAN1 attributes are currently disabled to prevent crashes. You'll need to set your panning manually in the LMMS instrument editor for now (for drum designer).
 
-Filter Silence: If you select an LPF and set the frequency to 0, you won't hear a thing. The app now defaults to 100Hz minimum to help avoid this.
-
-ADSR: The drum generator sets the internal Volume Envelope Amount (AMT) to 0. This is intentional so that the mathematical envelopes in your code have total control over the "snappiness" of the sound.
 
 **Usage**
 
@@ -71,7 +57,7 @@ Generate: Click the "Generate" button to produce the mathematical expression.
 
 Export: Use the Copy Clipboard function to take the generated string and paste it directly into your Xpressive engine environment in O1.
 
-For Drum Generator generate the .xpf file and save it to your instruments folder. Drum generator workss differently so that it can control the instrument filters external to the expression (as I have had limited success with FIR with last(n).
+For Drum Generator generate the .xpf file and save it to your instruments folder. Drum generator works differently so that it can control the instrument filters external to the expression (as I have had limited success with FIR with last(n).
 
 **License**
 
