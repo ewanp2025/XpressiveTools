@@ -2722,7 +2722,7 @@ void MainWindow::setupUI() {
         modeTabs->addTab(modularTab, "Modular Grid");
 
         // =========================================================
-        // 27. SPECTRAL RESYNTHESISER (CLEANED & FIXED)
+        // 27. SPECTRAL RESYNTHESISER
         // =========================================================
             QWidget *specTab = new QWidget();
             auto *specLayout = new QVBoxLayout(specTab);
@@ -2840,11 +2840,11 @@ void MainWindow::setupUI() {
         "<p><b>Current Version:</b> Experimental Build</p>"
         "<hr>"
 
-        "<h3 style='color:red;'>CRITICAL LIMITATIONS</h3>"
+        "<h3 style='color:red;'></h3>"
         "<ul>"
-        "<li><b>NO ADSR Shaping:</b> The generated code does not automate the Instrument Envelope (Attack, Decay, Sustain, Release). You must program these expressions yourself or set these knobs manually in the Instrument Editor.</li>"
-        "<li><b>O1 Only:</b> The XPF Packager and Generators only output code for <b>Oscillator 1 (O1)</b>. O2, W1, W2, and W3 are disabled or ignored.</li>"
-        "<li><b>Filters are Manual:</b> The 'Filter Forge' aims to generate a mathematical approximation of a filter if FIR is resolved, but it does <b>not</b> control the actual Filter Section (Cutoff/Resonance) of the instrument.</li>"
+        "<li><b></b> </li>"
+        "<li><b></b></li>"
+        "<li><b>:</b></li>"
         "</ul>"
 
 
@@ -5134,3 +5134,4 @@ void MainWindow::updateSpectralPreview() {
         m_ghostSynth->setAudioSource(resynthAlgo);
     }
 }
+
