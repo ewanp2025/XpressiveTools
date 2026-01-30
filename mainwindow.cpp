@@ -2721,9 +2721,113 @@ void MainWindow::setupUI() {
 
         modeTabs->addTab(modularTab, "Modular Grid");
 
+        // =========================================================
+        // 27. SPECTRAL RESYNTHESISER (CLEANED & FIXED)
+        // =========================================================
+            QWidget *specTab = new QWidget();
+            auto *specLayout = new QVBoxLayout(specTab);
 
+            // --- A. THE SCOPE ---
+            specScope = new UniversalScope();
+            specScope->setMinimumHeight(180);
+            specLayout->addWidget(specScope);
 
-    // 26. NEED TO KNOW / NOTES TAB
+            // --- B. SETTINGS FORM ---
+            auto *specForm = new QFormLayout();
+
+            specBuildMode = new QComboBox();
+            specBuildMode->addItems({"Nightly (Nested Variables)", "Legacy (Additive Inline)"});
+
+            specWindowRes = new QDoubleSpinBox();
+            specWindowRes->setRange(1, 500);
+            specWindowRes->setValue(10); // Default to 10 as requested
+            specWindowRes->setSuffix(" Analysis Windows");
+
+            specTopHarmonics = new QSpinBox();
+            specTopHarmonics->setRange(1, 64); specTopHarmonics->setValue(8);
+            specTopHarmonics->setSuffix(" Harmonics");
+
+            specDecaySlider = new QSlider(Qt::Horizontal);
+            specDecaySlider->setRange(1, 100);
+            specDecaySlider->setValue(25);
+
+            specForm->addRow("Build Mode:", specBuildMode);
+            specForm->addRow("Time Resolution:", specWindowRes);
+            specForm->addRow("Spectral Detail:", specTopHarmonics);
+            specForm->addRow("Decay Speed:", specDecaySlider);
+            specLayout->addLayout(specForm);
+
+            // --- C. BUTTON & SELECTOR ROW ---
+            auto *specBtnLay = new QHBoxLayout();
+
+            specPitchCombo = new QComboBox();
+            specPitchCombo->addItems({"C-3", "G-3", "A-3", "C-4", "E-4", "A-4", "C-5"});
+            specPitchCombo->setCurrentText("A-4");
+            specBtnLay->addWidget(new QLabel("Pitch:"));
+            specBtnLay->addWidget(specPitchCombo);
+
+            btnDeChord = new QPushButton("De-Chord: OFF");
+            btnDeChord->setCheckable(true);
+            btnDeChord->setStyleSheet("background-color: #444; color: white; height: 35px;");
+            specBtnLay->addWidget(btnDeChord);
+
+            QPushButton *btnLoadSpec = new QPushButton("Load Stab (.wav)");
+            btnLoadSpec->setStyleSheet("height: 35px;");
+            specBtnLay->addWidget(btnLoadSpec);
+
+            btnPlaySpec = new QPushButton("▶ Play Preview");
+            btnPlaySpec->setCheckable(true);
+            btnPlaySpec->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 35px;");
+            specBtnLay->addWidget(btnPlaySpec);
+
+            specLayout->addLayout(specBtnLay);
+
+            // --- D. EXPRESSION BOX ---
+            specExpressionBox = new QTextEdit();
+            specExpressionBox->setPlaceholderText("Generated spectral formula will appear here...");
+            specExpressionBox->setMaximumHeight(100);
+            specExpressionBox->setReadOnly(true);
+            specLayout->addWidget(specExpressionBox);
+
+            modeTabs->addTab(specTab, "Spectral Resynth");
+
+            // --- CONNECTIONS ---
+            connect(specWindowRes, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [=](){ updateSpectralPreview(); });
+            connect(specTopHarmonics, QOverload<int>::of(&QSpinBox::valueChanged), [=](){ updateSpectralPreview(); });
+            connect(specBuildMode, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateSpectralPreview(); });
+            connect(specPitchCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateSpectralPreview(); });
+            connect(specDecaySlider, &QSlider::valueChanged, [=](){ updateSpectralPreview(); });
+
+            connect(btnDeChord, &QPushButton::toggled, [=](bool checked){
+                m_deChordEnabled = checked;
+                btnDeChord->setText(checked ? "De-Chord: ON (Mono)" : "De-Chord: OFF");
+                btnDeChord->setStyleSheet(checked ? "background-color: #0066ff; color: white;" : "background-color: #444; color: white;");
+                updateSpectralPreview();
+            });
+
+            connect(btnLoadSpec, &QPushButton::clicked, this, [=](){
+                loadWav();
+                if(!originalData.empty()) {
+                    specSampleData = originalData;
+                    if(specSampleData.size() > (fileFs * 2)) specSampleData.resize(fileFs * 2);
+                    updateSpectralPreview();
+                }
+            });
+
+            connect(btnPlaySpec, &QPushButton::toggled, [=](bool checked){
+                if(!checked) {
+                    m_ghostSynth->stop();
+                    btnPlaySpec->setText("▶ Play Preview");
+                    btnPlaySpec->setStyleSheet("background-color: #335533; color: white;");
+                } else {
+                    m_ghostSynth->start();
+                    btnPlaySpec->setText("⏹ Stop");
+                    btnPlaySpec->setStyleSheet("background-color: #338833; color: white;");
+                    updateSpectralPreview();
+                }
+            });
+
+    // 28. NEED TO KNOW / NOTES TAB
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -4951,4 +5055,82 @@ void MainWindow::generateWestCoast() {
 
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(folder));
     QApplication::clipboard()->setText(statusBox->toPlainText());
+}
+
+void MainWindow::updateSpectralPreview() {
+    if (specSampleData.empty()) return;
+
+    int numWindows = (int)specWindowRes->value();
+    int topN = specTopHarmonics->value();
+    double totalDur = (double)specSampleData.size() / fileFs;
+    bool deChord = m_deChordEnabled;
+    bool isNightly = (specBuildMode->currentIndex() == 0);
+    double decayVal = specDecaySlider->value() / 5.0; // Decay constant
+
+    // Determine fundamental frequency
+    double fundamental = 440.0;
+    QString pText = specPitchCombo->currentText();
+    if(pText.contains("C-3")) fundamental = 130.81;
+    else if(pText.contains("A-3")) fundamental = 220.00;
+    else if(pText.contains("C-4")) fundamental = 261.63;
+    else if(pText.contains("C-5")) fundamental = 523.25;
+
+    // --- 1. AUDIO ENGINE (Looping & Analysis) ---
+    std::function<double(double)> resynthAlgo = [=](double t) {
+        double loopTime = std::fmod(t, totalDur + 0.1);
+        if (loopTime >= totalDur) return 0.0;
+
+        // Find current window
+        int currentWin = std::floor(loopTime * (numWindows / totalDur));
+        if (currentWin >= numWindows) currentWin = numWindows - 1;
+
+        double signal = 0.0;
+        for (int i = 1; i <= topN; ++i) {
+            // Note: A real FFT would change ratios per window, but here we
+            // use a fixed set to demonstrate the windowed expression logic.
+            double freq = deChord ? (fundamental * i) : (fundamental * (1.0 + (i-1)*0.25));
+            double amp = (1.0 / i) * std::exp(-loopTime * decayVal);
+            signal += amp * std::sin(loopTime * freq * 6.2831);
+        }
+        return signal * 0.3;
+    };
+
+    // --- 2. GENERATE WINDOWED XPRESSIVE FORMULA ---
+    QString finalFormula;
+    if (isNightly) {
+        finalFormula = QString("var w := floor(t * (%1 / %2));\n").arg(numWindows).arg(totalDur);
+        finalFormula += QString("var env := exp(-t * %1);\n").arg(decayVal, 0, 'f', 2);
+
+        QStringList windowBlocks;
+        for(int i = 0; i < numWindows; ++i) {
+            QStringList harms;
+            for(int h = 1; h <= topN; ++h) {
+                double ratio = deChord ? (double)h : (1.0 + (h-1)*0.25);
+                harms << QString("((1/%1)*sinew(integrate(f*%2)))").arg(h).arg(ratio);
+            }
+            windowBlocks << QString("(w == %1 ? (%2) : ").arg(i).arg(harms.join("+"));
+        }
+
+        finalFormula += "clamp(-1, env * (" + windowBlocks.join("") + "0" + QString(")").repeated(numWindows) + "), 1)";
+    } else {
+        QStringList parts;
+        double winSize = totalDur / numWindows;
+        for(int i = 0; i < numWindows; ++i) {
+            QStringList harms;
+            for(int h = 1; h <= topN; ++h) {
+                double ratio = deChord ? (double)h : (1.0 + (h-1)*0.25);
+                harms << QString("((1/%1)*exp(-t*%3)*sinew(integrate(f*%2)))").arg(h).arg(ratio).arg(decayVal);
+            }
+            parts << QString("((t >= %1 & t < %2) * (%3))").arg(i*winSize, 0, 'f', 4).arg((i+1)*winSize, 0, 'f', 4).arg(harms.join("+"));
+        }
+        finalFormula = "clamp(-1, " + parts.join(" + ") + ", 1)";
+    }
+
+    // --- 3. UPDATE UI ---
+    specExpressionBox->setText(finalFormula);
+    specScope->updateScope(resynthAlgo, totalDur, 1.0);
+
+    if (btnPlaySpec->isChecked()) {
+        m_ghostSynth->setAudioSource(resynthAlgo);
+    }
 }
