@@ -382,6 +382,8 @@ private:
     // ------------------------------------
     // TAB 5: ARP ANIMATOR
     // ------------------------------------
+    UniversalScope *arpScope;
+    QPushButton *btnPlayArp;
     QComboBox *buildModeArp;
     QComboBox *arpWave;
     QComboBox *arpInterval1;
@@ -390,7 +392,7 @@ private:
     QCheckBox *arpBpmSync;
     QDoubleSpinBox *arpBpmVal;
     QComboBox *arpSpeedDiv;
-    QDoubleSpinBox *arpSpeed; // Manual Hz
+    QDoubleSpinBox *arpSpeed;
 
     // ------------------------------------
     // TAB 6: WAVETABLE FORGE
@@ -435,6 +437,8 @@ private:
     QSlider *drumPitchDropSlider;
     QSlider *drumPWMSlider;
     QSlider *drumExpSlider;
+    UniversalScope *drumScope;
+    QPushButton *btnPlayDrum;
     QPushButton *btnGenerateDrum;
     QPushButton *btnSaveDrumXpf;
     QLabel *drumDisclaimer;
@@ -472,14 +476,23 @@ private:
     // ------------------------------------
     // TAB 14: LEAD STACKER
     // ------------------------------------
-    QDoubleSpinBox *leadUnisonCount;
-    QDoubleSpinBox *leadDetuneAmount;
+    UniversalScope *leadScope;
     QComboBox *leadWaveType;
+    QSpinBox *leadUnisonCount;
+    QSlider *leadDetuneSlider;
+    QSlider *leadSubSlider;
+    QSlider *leadNoiseSlider;
+    QSlider *leadVibeSlider;  // Pitch Drift
+    QSlider *leadWidthSlider; // Stereo Spread simulation
+    QPushButton *btnPlayLead;
 
     // ------------------------------------
     // TAB 15: RANDOMISER
     // ------------------------------------
     QSlider *chaosSlider;
+    UniversalScope *randScope;
+    QPushButton *btnPlayRand;
+    std::function<double(double)> currentRandFunc;
 
     // ------------------------------------
     // TAB 16: PHONETIC LAB (SAM)
@@ -550,6 +563,8 @@ private:
     QSlider *macroTextureSlider;
     QSlider *macroWidthSlider;
     QSpinBox *macroDetuneSpin;
+    UniversalScope *macroScope;
+    QPushButton *btnPlayMacro;
 
     // ------------------------------------
     // TAB 23: STRING MACHINE
