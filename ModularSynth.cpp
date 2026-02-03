@@ -6,7 +6,7 @@
 #include <QGraphicsSceneContextMenuEvent>
 
 // =========================================================
-// 1. CONNECTION LOGIC
+// CONNECTION LOGIC
 // =========================================================
 
 ConnectionPath::ConnectionPath(QPointF start, QPointF end, QGraphicsItem* parent)
@@ -49,7 +49,7 @@ void ConnectionPath::mousePressEvent(QGraphicsSceneMouseEvent *event) {
 }
 
 // =========================================================
-// 2. NODE BASE LOGIC
+// NODE BASE LOGIC
 // =========================================================
 
 SynthNode::SynthNode(QString title, int in, int out, QGraphicsItem* parent)
@@ -126,8 +126,7 @@ void SynthNode::contextMenuEvent(QGraphicsSceneContextMenuEvent *event) {
 // --- BASE INTERACTION ---
 void SynthNode::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     m_lastMousePos = event->scenePos();
-    // FIX: Do NOT set m_isKnobDrag = true here!
-    // Base class only handles moving the node. Subclasses must request knob drag.
+
     QGraphicsRectItem::mousePressEvent(event);
 }
 void SynthNode::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
@@ -174,7 +173,7 @@ void SynthNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
 }
 
 // =========================================================
-// 3. MODULE IMPLEMENTATIONS
+// MODULE IMPLEMENTATIONS
 // =========================================================
 
 // --- OUTPUT ---
@@ -247,7 +246,7 @@ void LFONode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     painter->setFont(QFont("Arial", 7));
     painter->drawText(QRectF(0, 70, 100, 15), Qt::AlignCenter, QString::number(m_freq, 'f', 1) + " Hz");
 }
-// FIX: Header Click Logic
+
 void LFONode::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     if (event->pos().y() < 25) {
         // Clicked header -> Move
@@ -298,7 +297,7 @@ void SequencerNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *opt
         painter->drawRect(x, y + h - fillH, 10, fillH);
     }
 }
-// FIX: Header vs Body logic
+
 void SequencerNode::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     if (event->pos().y() < 25) {
         SynthNode::mousePressEvent(event);
@@ -332,7 +331,7 @@ QString SequencerNode::getExpression(bool nightly) {
     QString body = "0";
 
     if (nightly) {
-        // NIGHTLY: Nested Ternary
+
         for(int i=7; i>=0; --i) {
             body = QString("(step == %1 ? %2 : %3)").arg(i).arg(steps[i]).arg(body);
         }
@@ -477,7 +476,7 @@ double DelayNode::evaluate(double t, double freq) { return inputs[0] ? inputs[0]
 
 
 // =========================================================
-// 4. SCENE
+// SCENE
 // =========================================================
 
 ModularScene::ModularScene(QObject* parent) : QGraphicsScene(parent) {
@@ -489,9 +488,6 @@ ModularScene::ModularScene(QObject* parent) : QGraphicsScene(parent) {
 void ModularScene::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
     if (SynthNode* node = dynamic_cast<SynthNode*>(item)) {
-
-        // --- FIX: Dynamic Width Detection for Wire Dragging ---
-        // Check if we clicked on the right-most edge (Port Area)
         double width = node->rect().width();
         if (event->scenePos().x() > node->scenePos().x() + width - 30) {
             m_sourceNode = node;
@@ -592,7 +588,7 @@ void ModularScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *event) {
 }
 
 // =========================================================
-// 5. TAB WIDGET
+// TAB WIDGET
 // =========================================================
 
 ModularSynthTab::ModularSynthTab(QWidget *parent) : QWidget(parent) {
