@@ -5,7 +5,7 @@
 #include <QAudioSink>
 #include <QMediaDevices>
 #include <QAudioDevice>
-#include <QMutex> // <--- 1. ADD THIS INCLUDE
+#include <QMutex>
 #include <cmath>
 #include <functional>
 
@@ -32,7 +32,7 @@ private:
     QAudioFormat m_format;
     std::function<double(double)> m_oscillator = [](double){ return 0.0; };
 
-    QMutex m_mutex; // <--- 2. ADD THIS MUTEX
+    QMutex m_mutex;
     double m_sampleRate = 44100.0;
     qint64 m_totalSamples = 0;
 };
