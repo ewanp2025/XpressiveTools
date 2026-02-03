@@ -20,7 +20,7 @@ class ConnectionPath;
 class UniversalScope;
 
 // =========================================================
-// 1. CONNECTION PATH (The Wire)
+// CONNECTION PATH
 // =========================================================
 class ConnectionPath : public QGraphicsPathItem {
 public:
@@ -38,7 +38,7 @@ protected:
 };
 
 // =========================================================
-// 2. SYNTH NODE (The Base Class)
+// SYNTH NODE
 // =========================================================
 class SynthNode : public QGraphicsRectItem {
 public:
@@ -78,7 +78,7 @@ protected:
 };
 
 // =========================================================
-// 3. MODULES
+// MODULES
 // =========================================================
 
 class OutputNode : public SynthNode {
@@ -193,7 +193,7 @@ public:
 };
 
 // =========================================================
-// 4. SCENE & TAB
+// SCENE & TAB
 // =========================================================
 
 class ModularScene : public QGraphicsScene {
@@ -239,7 +239,7 @@ private:
     QGraphicsView* m_view;
     UniversalScope* m_scope;
     QPushButton* m_btnPlay;
-    QComboBox* m_buildMode; // NEW: The Switch
+    QComboBox* m_buildMode;
 };
 
 #endif // MODULARSYNTH_H
