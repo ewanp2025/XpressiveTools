@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QPainter>
 #include <QLabel>
+#include <QDial>
 #include <QSlider>
 #include <QScrollArea>
 #include <QMap>
@@ -32,7 +33,7 @@
 #include <QClipboard>
 
 // ==============================================================================
-// 1. DATA STRUCTURES & STRUCTS
+// DATA STRUCTURES & STRUCTS
 // ==============================================================================
 
 // --- PHONETIC LAB STRUCTS ---
@@ -74,14 +75,14 @@ struct ArpSettings {
 
 // --- WAVETABLE STRUCTS ---
 struct WavetableStep {
-    QString shape;      // "Pulse", "Saw", "Tri", "Noise"
-    int semitones;      // Transpose
-    int pwm;            // Pulse Width
-    double duration;    // Seconds
+    QString shape;
+    int semitones;
+    int pwm;
+    double duration;
 };
 
 // ==============================================================================
-// 2. CUSTOM SUB-WIDGETS
+// CUSTOM SUB WIDGETS
 // ==============================================================================
 
 // --- ENVELOPE VISUALIZER ---
@@ -271,7 +272,7 @@ private:
 
 
 // ==============================================================================
-// 3. MAIN WINDOW CLASS
+// MAIN WINDOW CLASS
 // ==============================================================================
 
 class MainWindow : public QMainWindow {
@@ -281,7 +282,7 @@ public:
 
     // --- SLOTS (Actions) ---
 private slots:
-    // General / IO
+    // General IO
     void loadWav();
     void saveExpr();
     void copyToClipboard();
@@ -317,10 +318,15 @@ private slots:
     void generateKeyMapper();
     void generateWestCoast();
 
-    // Logic/Preset Loading
+    void generateNatureLogic();
+    void updateNatureLabels(int index);
+
+    // Preset Loading
     void loadBesselPreset(int index);
     void loadWavetablePreset(int index);
     void loadHardwarePreset(int idx);
+
+    void updateSubtractivePreview();
 
 private:
     // --- CORE & HELPERS ---
@@ -341,6 +347,11 @@ private:
     QTextEdit *statusBox;
     QPushButton *btnSave;
     QPushButton *btnCopy;
+
+    // ------------------------------------
+    // TAB 0: OVERVIEW
+    // ------------------------------------
+
 
     // ------------------------------------
     // TAB 1: SID ARCHITECT
@@ -446,8 +457,8 @@ private:
     // ------------------------------------
     // TAB 10: VELOCILOGIC
     // ------------------------------------
-    QComboBox *buildModeVeloci; // aka velMapMode in logic
-    QComboBox *velMapMode;      // used in some logic, keeping both to be safe
+    QComboBox *buildModeVeloci;
+    QComboBox *velMapMode;
     QTableWidget *velMapTable;
     QComboBox *velociType;
     QLabel *velDisclaimer;
@@ -468,10 +479,21 @@ private:
     // ------------------------------------
     // TAB 13: FILTER FORGE
     // ------------------------------------
+    UniversalScope *filterScope;
+    UniversalSpectrum *filterSpectrum;
+    QPushButton *btnPlayFilter;
+    QComboBox *filterSourceWave;
+    QSlider *filterCutoffSlider;
+    QSlider *filterAtt, *filterDec, *filterSus, *filterRel;
+    EnvelopeDisplay *filterAdsrVisualizer;
     QComboBox *buildModeFilter;
     QComboBox *filterType;
     QDoubleSpinBox *filterTaps;
     QLabel *filterDisclaimer;
+    QComboBox *filterWaveform;
+    QDoubleSpinBox *filterFreqPreview;
+    QSlider *filterTapsSlider;
+    QLabel *filterCutoffLabel;
 
     // ------------------------------------
     // TAB 14: LEAD STACKER
@@ -498,8 +520,8 @@ private:
     // TAB 16: PHONETIC LAB (SAM)
     // ------------------------------------
     QTextEdit *phoneticInput;
-    QComboBox *parserModeCombo;   // HQ vs Retro
-    QComboBox *parsingStyleCombo; // Legacy vs Nightly
+    QComboBox *parserModeCombo;
+    QComboBox *parsingStyleCombo;
     QPushButton *btnGenPhonetic;
     QLabel *phonemeRefLabel;
     QMap<QString, SAMPhoneme> samLibrary;
@@ -581,7 +603,7 @@ private:
     QSlider *stringZoomSlider;
 
     // ------------------------------------
-    // TAB 24: HARDWARE LAB (Vintage)
+    // TAB 24: HARDWARE LAB
     // ------------------------------------
     QComboBox *hwBaseWave;
     QComboBox *hwPresetCombo;
@@ -619,7 +641,6 @@ private:
     // ------------------------------------
     // TAB 26. SYNTH ENGINE
     // ------------------------------------
-
     SynthEngine *m_ghostSynth;
 
     // -------------------------------------
@@ -639,6 +660,72 @@ private:
     double specSampleRate = 44100.0;
 
     void updateSpectralPreview();
+
+    // -------------------------------------
+    // --- TAB 28: SUBTRACTIVE LAB ---
+    // -------------------------------------
+    QComboBox *subOsc1Wave, *subOsc2Wave;
+    QSlider *subDetuneSlider, *subMixSlider;
+    QSlider *subAttSlider, *subDecSlider, *subSusSlider, *subRelSlider;
+    QCheckBox *subShowMathToggle;
+    UniversalScope *subScope;
+    QPushButton *btnPlaySub;
+    QLabel *subMathOverlay;
+    QDial *subOsc1Dial, *subOsc2Dial;
+    UniversalScope *subSpectrum;
+    QPushButton *btnSubPlayMaster;
+
+    // ------------------------------------
+    // TAB 29: PIXEL SYNTH
+    // ------------------------------------
+    QWidget *pixelTab;
+    QLabel *pixelPreviewLabel;
+    QImage pixelLoadedImage;
+
+    QComboBox *pixelBuildMode;
+    QSpinBox *pixelTimeSteps;
+    QSpinBox *pixelFreqBands;
+    QSlider *pixelMaxPartials;
+    QDoubleSpinBox *pixelDuration;
+    QDoubleSpinBox *pixelMinFreq;
+    QDoubleSpinBox *pixelMaxFreq;
+    QCheckBox *pixelLogScale;
+
+    QPushButton *btnLoadPixel;
+    QPushButton *btnGenPixel;
+    QPushButton *btnPlayPixel;
+
+    void generatePixelSynth();
+
+
+    // --- TAB 30: SCRATCH GENERATOR ---
+    QComboBox *scratchBuildMode;
+    QComboBox *scratchPatternCombo;
+    QSlider *scratchVinylPitch;
+    QSlider *scratchFaderSpeed;
+    QSlider *scratchGritSlider;
+    UniversalScope *scratchScope;
+    QPushButton *btnPlayScratch;
+    void generateScratchLogic();
+    void updateScratchPreview();
+
+    // --- TAB 31: NATURE LAB---
+    QComboBox *natureTypeCombo;
+    QComboBox *natureBuildMode;
+    QSlider *natureParam1;
+    QSlider *natureParam2;
+    QSlider *natureParam3;
+    QSlider *natureParam4;
+    QSlider *natureParam5;
+    QSlider *natureParam6;
+    QSlider *natureParam7;
+    QSlider *natureParam8;
+
+    QLabel *natureLabels[8];
+
+    UniversalScope *natureScope;
+    QPushButton *btnPlayNature;
+    QPushButton *btnGenNature;
 
 
 };
