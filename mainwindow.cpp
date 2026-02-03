@@ -1,3 +1,6 @@
+// =========================================================
+// INCLUDES & DEPENDENCIES
+// =========================================================
 #include "ModularSynth.h"
 #include "mainwindow.h"
 #include <QHBoxLayout>
@@ -10,15 +13,22 @@
 #include <functional>
 #include <cstdlib>
 #include <QRegularExpression>
+#include <QProgressDialog>
 
+// =========================================================
+// MAIN CONSTRUCTOR
+// =========================================================
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    initSamLibrary(); // Initialize the new SAM library
+    initSamLibrary(); // InitialiSe the new SAM library
     setupUI();
     setWindowTitle("Xpressive Sound Design Suite - Ewan Pettigrew - Uses parts of SAM phonetics code for text to speech test");
 
     m_ghostSynth = new SynthEngine(this); // TEST
 }
 
+// =========================================================
+// CUSTOM WIDGET IMPLEMENTATIONS
+// =========================================================
 
 void WaveformDisplay::updateData(const std::vector<SidSegment>& segments) {
     m_segments = segments;
@@ -55,7 +65,9 @@ void WaveformDisplay::paintEvent(QPaintEvent *) {
         xPos += segWidth;
     }
 }
-
+// =========================================================
+// UI INITIALIZATION & SETUP
+// =========================================================
 void MainWindow::setupUI() {
     auto *centralWidget = new QWidget(this);
     auto *mainHLayout = new QHBoxLayout(centralWidget);
@@ -99,9 +111,9 @@ void MainWindow::setupUI() {
     mainHLayout->addLayout(rightLayout, 3);
     rightLayout->addWidget(modeTabs);
 
-    // ==================================================
-    // 00. ABOUT / INFO TAB
-    // ==================================================
+    // ------------------------------------
+    // TAB 0: ABOUT / INFO TAB
+    // ------------------------------------
     QWidget *tab00 = new QWidget();
     auto *layout00 = new QVBoxLayout(tab00);
 
@@ -120,7 +132,7 @@ void MainWindow::setupUI() {
         "<h3>Project Background</h3>"
         "<p>Xpressive allows users to program a synthesiser "
         "or instrument like an arbitrary waveform generator.</p>"
-        "<p>My intent is to allow people who don't understand time-domain expressions to generate them using a GUI "
+        "<p>Please save your project each time before pasting an expression in as bad expressions can cause crashes"
         "</p>"
 
         "<div style='background-color:#f0f8ff; padding:10px; border:1px solid #b0c4de;'>"
@@ -142,7 +154,9 @@ void MainWindow::setupUI() {
     layout00->addWidget(infoText);
     modeTabs->addTab(tab00, "00");
 
-    // 1. SID ARCHITECT
+    // ------------------------------------
+    // TAB 1: SID ARCHITECT
+    // ------------------------------------
     QWidget *sidTab = new QWidget(); auto *sidLayout = new QVBoxLayout(sidTab);
     auto *sidOptGrid = new QGridLayout();
     buildModeSid = new QComboBox(); buildModeSid->addItems({"Modern", "Legacy"});
@@ -163,7 +177,9 @@ void MainWindow::setupUI() {
     sidLayout->addLayout(sidBtns);
     modeTabs->addTab(sidTab, "SID Architect");
 
-    // 2. PCM SAMPLER
+    // ------------------------------------
+    // TAB 2: PCM SAMPLER
+    // ------------------------------------
     QWidget *pcmTab = new QWidget();
     auto *pcmLayout = new QVBoxLayout(pcmTab);
 
@@ -213,7 +229,6 @@ void MainWindow::setupUI() {
     modeTabs->addTab(pcmTab, "PCM Sampler");
 
     // SCOPE ZOOM LOGIC
-    // This allows the slider to update the view even if we don't reload the file
     connect(pcmZoomSlider, &QSlider::valueChanged, [=]() {
         if(originalData.empty()) return;
         double dur = (double)originalData.size() / fileFs;
@@ -225,16 +240,18 @@ void MainWindow::setupUI() {
         }, dur, zoom);
     });
 
-    // 3. CONSOLE LAB
+    // ------------------------------------
+    // TAB 3 : CONSOLE LAB
+    // ------------------------------------
     QWidget *consoleTab = new QWidget();
     auto *consoleLayout = new QVBoxLayout(consoleTab);
 
-    // A. SHARED ROUTINE: OSCILLOSCOPE
+    //OSCILLOSCOPE
     consoleScope = new UniversalScope();
     consoleScope->setMinimumHeight(150);
     consoleLayout->addWidget(consoleScope);
 
-    // B. CONTROLS
+    //CONTROLS
     auto *cForm = new QFormLayout();
     buildModeConsole = new QComboBox(); buildModeConsole->addItems({"Modern", "Legacy"});
     consoleWaveType = new QComboBox();
@@ -270,7 +287,7 @@ void MainWindow::setupUI() {
     cForm->addRow("Quantize Steps:", consoleSteps);
     consoleLayout->addLayout(cForm);
 
-    // C. PLAY / GENERATE BUTTONS
+    //PLAY / GENERATE BUTTONS
     auto *cBtnLayout = new QHBoxLayout();
 
     auto *btnPlayConsole = new QPushButton("▶ Play A-5 (880Hz)");
@@ -286,19 +303,19 @@ void MainWindow::setupUI() {
     consoleLayout->addStretch();
     modeTabs->addTab(consoleTab, "Console Lab");
 
-    // --- LOGIC EXTRACTION: SHARED UPDATE FUNCTION ---
+    //LOGIC EXTRACTION
     auto updateConsole = [=]() {
         int type = consoleWaveType->currentIndex();
         double steps = consoleSteps->value();
         double f = 880.0; // A-5 Frequency
 
-        // THE MATH ROUTINE (Extracted)
+        // THE MATH ROUTINE
         std::function<double(double)> audioRoutine = [=](double t) {
             double signal = 0.0;
             double pi = 3.14159;
             double ph = t * f; // Basic Phase
 
-            // Helper for Pulse Width
+            //Pulse Width
             auto pulse = [&](double w) { return std::sin(2.0*pi*ph) > w ? 1.0 : -1.0; };
             auto tri = [&]() { return (2.0/pi)*std::asin(std::sin(2.0*pi*ph)); };
             auto saw = [&]() { return 2.0 * (ph - std::floor(0.5 + ph)); };
@@ -334,26 +351,25 @@ void MainWindow::setupUI() {
             return signal;
         };
 
-        // 1. Update Visualizer (Always)
-        // We use a slower "fake" frequency for the scope so the wave shape is visible
+        //Update VisualiSer
+        // Slower "fake" frequency for the scope so the wave shape is visible
         std::function<double(double)> visRoutine = [=](double t) {
             double ratio = 80.0 / f; // Scale 880Hz down to 80Hz for viewing
             return audioRoutine(t * ratio);
         };
         consoleScope->updateScope(visRoutine, 1.0, 0.1);
 
-        // 2. Update Audio (Only if playing)
+        // Update Audio (Only if playing)
         if(btnPlayConsole->isChecked()) {
             m_ghostSynth->setAudioSource(audioRoutine);
         }
     };
 
-    // D. CONNECTIONS (NOW LIVE UPDATING)
-    // Connecting these ensures the scope updates immediately when you change the dropdown
+    // CONNECTIONS
     connect(consoleWaveType, QOverload<int>::of(&QComboBox::currentIndexChanged), updateConsole);
     connect(consoleSteps, &QDoubleSpinBox::valueChanged, updateConsole);
 
-    // E. PLAY BUTTON LOGIC
+    // PLAY BUTTON LOGIC
     connect(btnPlayConsole, &QPushButton::toggled, [=](bool checked){
         if(!checked) {
             m_ghostSynth->setAudioSource([](double){ return 0.0; });
@@ -364,7 +380,6 @@ void MainWindow::setupUI() {
             btnPlayConsole->setText("⏹ Stop");
             btnPlayConsole->setStyleSheet("background-color: #338833; color: white;");
             m_ghostSynth->start();
-
             // Trigger the update logic to start the sound
             updateConsole();
         }
@@ -375,16 +390,18 @@ void MainWindow::setupUI() {
     // Initial Trigger to draw the default wave
     QTimer::singleShot(100, updateConsole);
 
-    // 4. SFX MACRO
+    // ------------------------------------
+    // TAB 4: SFX MACRO
+    // ------------------------------------
     QWidget *sfxTab = new QWidget();
-    auto *sfxLayout = new QVBoxLayout(sfxTab); // Changed to VBox for Scope
+    auto *sfxLayout = new QVBoxLayout(sfxTab);
 
-    // A. OSCILLOSCOPE
+    // OSCILLOSCOPE
     sfxScope = new UniversalScope();
     sfxScope->setMinimumHeight(150);
     sfxLayout->addWidget(sfxScope);
 
-    // B. CONTROLS
+    // CONTROLS
     auto *sfxForm = new QFormLayout();
     buildModeSFX = new QComboBox(); buildModeSFX->addItems({"Modern", "Legacy"});
     sfxStartFreq = new QDoubleSpinBox(); sfxStartFreq->setRange(20, 20000); sfxStartFreq->setValue(880);
@@ -397,7 +414,7 @@ void MainWindow::setupUI() {
     sfxForm->addRow("Dur (s):", sfxDur);
     sfxLayout->addLayout(sfxForm);
 
-    // C. PLAY / GENERATE BUTTONS
+    // PLAY / GENERATE BUTTONS
     auto *sfxBtnLay = new QHBoxLayout();
 
     auto *btnPlaySFX = new QPushButton("▶ Play SFX Loop");
@@ -414,13 +431,11 @@ void MainWindow::setupUI() {
 
     modeTabs->addTab(sfxTab, "SFX Macro");
 
-    // D. LIVE UPDATE LOGIC
     auto updateSFX = [=]() {
         double fStart = sfxStartFreq->value();
         double fEnd   = sfxEndFreq->value();
         double dur    = sfxDur->value();
 
-        // C++ Math for Exponential Glide (Matches the generated formula)
         std::function<double(double)> sfxAlgo = [=](double t) {
             // Silence after duration
             if (t > dur) return 0.0;
@@ -441,11 +456,10 @@ void MainWindow::setupUI() {
             return std::sin(phase * 2.0 * 3.14159);
         };
 
-        // 1. Update Scope
-        // We zoom out slightly (1.2x) so you can see the sound stop
+        // Update Scope
         sfxScope->updateScope(sfxAlgo, dur * 1.2, 1.0);
 
-        // 2. Update Audio (If Playing)
+        // Update Audio (If Playing)
         if (btnPlaySFX->isChecked()) {
             // Create a loop with a small silence gap so you can hear the attack again
             double loopLen = dur + 0.5;
@@ -455,7 +469,7 @@ void MainWindow::setupUI() {
         }
     };
 
-    // E. CONNECTIONS
+    // CONNECTIONS
     connect(sfxStartFreq, &QDoubleSpinBox::valueChanged, updateSFX);
     connect(sfxEndFreq, &QDoubleSpinBox::valueChanged, updateSFX);
     connect(sfxDur, &QDoubleSpinBox::valueChanged, updateSFX);
@@ -476,116 +490,115 @@ void MainWindow::setupUI() {
 
     connect(btnGenSFX, &QPushButton::clicked, this, &MainWindow::generateSFXMacro);
 
-    // Initial draw
     QTimer::singleShot(200, updateSFX);
 
-    // [In mainwindow.cpp, replace the entire "5. ARP ANIMATOR" section in setupUI() with this]
+    // ------------------------------------
+    // TAB 5: ARP ANIMATOR
+    // ------------------------------------
+    QWidget *arpTab = new QWidget();
+    auto *arpLayout = new QVBoxLayout(arpTab);
 
-        // 5. ARP ANIMATOR
-        QWidget *arpTab = new QWidget();
-        auto *arpLayout = new QVBoxLayout(arpTab);
+    // VISUALIZER
+    arpScope = new UniversalScope();
+    arpScope->setMinimumHeight(150);
+    arpLayout->addWidget(arpScope);
 
-        // A. VISUALIZER
-        arpScope = new UniversalScope();
-        arpScope->setMinimumHeight(150);
-        arpLayout->addWidget(arpScope);
+    // OSCILLATOR
+    auto *oscGroup = new QGroupBox("SID Oscillator");
+    auto *oscForm = new QFormLayout(oscGroup);
 
-        // --- SECTION 1: THE OSCILLATOR ---
-        auto *oscGroup = new QGroupBox("SID Oscillator");
-        auto *oscForm = new QFormLayout(oscGroup);
+    buildModeArp = new QComboBox();
+    buildModeArp->addItems({"Nightly (Nested - Clean)", "Legacy (Additive)"});
 
-        buildModeArp = new QComboBox();
-        buildModeArp->addItems({"Nightly (Nested - Clean)", "Legacy (Additive)"});
+    arpWave = new QComboBox();
+    arpWave->addItems({"Pulse (Classic)", "Sawtooth", "Triangle", "Noise (Percussion)", "Metal (Ring Mod)"});
 
-        arpWave = new QComboBox();
-        arpWave->addItems({"Pulse (Classic)", "Sawtooth", "Triangle", "Noise (Percussion)", "Metal (Ring Mod)"});
+    arpPwmSlider = new QSlider(Qt::Horizontal);
+    arpPwmSlider->setRange(1, 99);
+    arpPwmSlider->setValue(50); // Square wave default
 
-        arpPwmSlider = new QSlider(Qt::Horizontal);
-        arpPwmSlider->setRange(1, 99);
-        arpPwmSlider->setValue(50); // Square wave default
+    oscForm->addRow("Build Mode:", buildModeArp);
+    oscForm->addRow("Waveform:", arpWave);
+    oscForm->addRow("Pulse Width:", arpPwmSlider);
 
-        oscForm->addRow("Build Mode:", buildModeArp);
-        oscForm->addRow("Waveform:", arpWave);
-        oscForm->addRow("Pulse Width:", arpPwmSlider);
+    arpLayout->addWidget(oscGroup);
 
-        arpLayout->addWidget(oscGroup);
+    // THE CHORD
+    auto *seqGroup = new QGroupBox("Chord Sequence (0 -> Step 2 -> Step 3)");
+    auto *seqForm = new QFormLayout(seqGroup);
 
-        // --- SECTION 2: THE CHORD (INTERVALS) ---
-        auto *seqGroup = new QGroupBox("Chord Sequence (0 -> Step 2 -> Step 3)");
-        auto *seqForm = new QFormLayout(seqGroup);
-
-        // Populating with Semitones (The way trackers do it)
-        QStringList intervals = {
+    // Populating with Semitones
+    QStringList intervals = {
             "0 (Root)", "+3 (Minor 3rd)", "+4 (Major 3rd)", "+5 (4th)",
             "+7 (Perfect 5th)", "+12 (Octave)", "-12 (Sub Octave)",
             "+19 (Octave+5th)", "+24 (2 Octaves)"
-        };
+    };
 
-        arpInterval1 = new QComboBox(); arpInterval1->addItems(intervals);
-        arpInterval1->setCurrentIndex(2); // Major 3rd default
+    arpInterval1 = new QComboBox(); arpInterval1->addItems(intervals);
+    arpInterval1->setCurrentIndex(2); // Major 3rd default
 
-        arpInterval2 = new QComboBox(); arpInterval2->addItems(intervals);
-        arpInterval2->setCurrentIndex(4); // Perfect 5th default
+    arpInterval2 = new QComboBox(); arpInterval2->addItems(intervals);
+    arpInterval2->setCurrentIndex(4); // Perfect 5th default
 
-        seqForm->addRow("Step 2 Note:", arpInterval1);
-        seqForm->addRow("Step 3 Note:", arpInterval2);
+    seqForm->addRow("Step 2 Note:", arpInterval1);
+    seqForm->addRow("Step 3 Note:", arpInterval2);
 
-        arpLayout->addWidget(seqGroup);
+    arpLayout->addWidget(seqGroup);
 
-        // --- SECTION 3: SPEED & SYNC ---
-        auto *spdGroup = new QGroupBox("Speed / Tempo");
-        auto *spdForm = new QFormLayout(spdGroup);
+    //SPEED & SYNC ---
+    auto *spdGroup = new QGroupBox("Speed / Tempo");
+    auto *spdForm = new QFormLayout(spdGroup);
 
-        arpBpmSync = new QCheckBox("Sync to BPM");
-        arpBpmSync->setChecked(true);
+    arpBpmSync = new QCheckBox("Sync to BPM");
+    arpBpmSync->setChecked(true);
 
-        arpBpmVal = new QDoubleSpinBox();
-        arpBpmVal->setRange(40, 300);
-        arpBpmVal->setValue(125); // Classic Techno/Chiptune tempo
+    arpBpmVal = new QDoubleSpinBox();
+    arpBpmVal->setRange(40, 300);
+    arpBpmVal->setValue(125); // Classic Techno/Chiptune tempo
 
-        arpSpeedDiv = new QComboBox();
-        arpSpeedDiv->addItems({"1/16 (Standard)", "1/32 (Fast)", "1/48 (Triplets)", "1/64 (Hubbard Speed)", "50Hz (PAL Frame)"});
-        arpSpeedDiv->setCurrentIndex(3); // Default to "Hubbard Speed"
+    arpSpeedDiv = new QComboBox();
+    arpSpeedDiv->addItems({"1/16 (Standard)", "1/32 (Fast)", "1/48 (Triplets)", "1/64 (Hubbard Speed)", "50Hz (PAL Frame)"});
+    arpSpeedDiv->setCurrentIndex(3); // Default to "Hubbard Speed"
 
-        // We keep the old Hz spinner just in case they uncheck Sync
-        arpSpeed = new QDoubleSpinBox();
-        arpSpeed->setRange(0.1, 1000);
-        arpSpeed->setValue(50);
-        arpSpeed->setVisible(false); // Hidden by default
 
-        spdForm->addRow(arpBpmSync);
-        spdForm->addRow("Song BPM:", arpBpmVal);
-        spdForm->addRow("Grid Size:", arpSpeedDiv);
-        spdForm->addRow("Manual Hz:", arpSpeed);
+    arpSpeed = new QDoubleSpinBox();
+    arpSpeed->setRange(0.1, 1000);
+    arpSpeed->setValue(50);
+    arpSpeed->setVisible(false);
 
-        arpLayout->addWidget(spdGroup);
+    spdForm->addRow(arpBpmSync);
+    spdForm->addRow("Song BPM:", arpBpmVal);
+    spdForm->addRow("Grid Size:", arpSpeedDiv);
+    spdForm->addRow("Manual Hz:", arpSpeed);
 
-        // BUTTONS LAYOUT
-        auto *arpBtnLay = new QHBoxLayout();
+    arpLayout->addWidget(spdGroup);
 
-        btnPlayArp = new QPushButton("▶ Play Arp");
-        btnPlayArp->setCheckable(true);
-        btnPlayArp->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+    // BUTTONS LAYOUT
+    auto *arpBtnLay = new QHBoxLayout();
 
-        auto *btnGenArp = new QPushButton("GENERATE C64 ARP");
-        btnGenArp->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
+    btnPlayArp = new QPushButton("▶ Play Arp");
+    btnPlayArp->setCheckable(true);
+    btnPlayArp->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
 
-        arpBtnLay->addWidget(btnPlayArp);
-        arpBtnLay->addWidget(btnGenArp);
-        arpLayout->addLayout(arpBtnLay);
+    auto *btnGenArp = new QPushButton("GENERATE C64 ARP");
+    btnGenArp->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
 
-        // LOGIC TO TOGGLE INPUTS
-        connect(arpBpmSync, &QCheckBox::toggled, [=](bool checked){
+    arpBtnLay->addWidget(btnPlayArp);
+    arpBtnLay->addWidget(btnGenArp);
+    arpLayout->addLayout(arpBtnLay);
+
+    // LOGIC TO TOGGLE INPUTS
+    connect(arpBpmSync, &QCheckBox::toggled, [=](bool checked){
             arpBpmVal->setVisible(checked);
             arpSpeedDiv->setVisible(checked);
             arpSpeed->setVisible(!checked);
-        });
+    });
 
-        modeTabs->addTab(arpTab, "Arp Animator");
+    modeTabs->addTab(arpTab, "Arp Animator");
 
-        // --- LIVE PREVIEW LOGIC (Visuals + Audio) ---
-        auto updateArpPreview = [=]() {
-            // 1. Calculate Frequency (Speed)
+    // LIVE PREVIEW LOGIC
+    auto updateArpPreview = [=]() {
+            // Calculate Frequency (Speed)
             double hz = 0;
             if (arpBpmSync->isChecked()) {
                 double bpm = arpBpmVal->value();
@@ -597,108 +610,110 @@ void MainWindow::setupUI() {
                 }
             } else {
                 hz = arpSpeed->value();
-            }
-
-            // 2. Get Intervals
-            auto getSemi = [](QString s) { return s.split(" ")[0].toInt(); };
-            int semi1 = 0;
-            int semi2 = getSemi(arpInterval1->currentText());
-            int semi3 = getSemi(arpInterval2->currentText());
-
-            double p1 = 1.0;
-            double p2 = std::pow(2.0, semi2 / 12.0);
-            double p3 = std::pow(2.0, semi3 / 12.0);
-
-            // 3. Get Waveform Parameters
-            int wType = arpWave->currentIndex(); // 0=Pulse, 1=Saw, 2=Tri, 3=Noise, 4=Metal
-            double pwm = (arpPwmSlider->value() / 100.0) * 2.0 - 1.0; // Map -1 to 1
-
-            // 4. Build Lambda
-            std::function<double(double)> arpFunc = [=](double t) {
-                // Determine Step (0, 1, 2)
-                // Using a slightly offset time to ensure step 0 starts immediately
-                int step = (int)(t * hz) % 3;
-                double mult = (step == 0) ? p1 : (step == 1 ? p2 : p3);
-
-                double f = 220.0; // Preview Pitch (A3)
-                double pi = 3.14159;
-                double ph = t * f * mult; // Phase
-
-                // Oscillators
-                if (wType == 0) { // Pulse
-                    return (std::sin(ph * 2 * pi) > pwm) ? 1.0 : -1.0;
-                }
-                else if (wType == 1) { // Saw
-                    double x = std::fmod(ph, 1.0);
-                    return 2.0 * x - 1.0;
-                }
-                else if (wType == 2) { // Triangle
-                    return (2.0 / pi) * std::asin(std::sin(ph * 2 * pi));
-                }
-                else if (wType == 3) { // Noise
-                    return ((double)std::rand() / RAND_MAX) * 2.0 - 1.0;
-                }
-                else { // Metal (Ring Mod)
-                    // Square * Detuned Square (approx 2.41 ratio)
-                    double sq1 = (std::sin(ph * 2 * pi) > 0) ? 1.0 : -1.0;
-                    double sq2 = (std::sin(ph * 2.41 * 2 * pi) > 0) ? 1.0 : -1.0;
-                    return sq1 * sq2;
-                }
-            };
-
-            // 5. Update Scope (Show 4 beats worth or enough to see pattern)
-            double viewDur = (hz > 0) ? (4.0 / hz) : 1.0;
-            arpScope->updateScope(arpFunc, viewDur, 1.0);
-
-            // 6. Update Audio
-            if(btnPlayArp->isChecked()) {
-                m_ghostSynth->setAudioSource(arpFunc);
-            }
-        };
-
-        // --- CONNECTIONS ---
-        connect(btnGenArp, &QPushButton::clicked, this, &MainWindow::generateArpAnimator);
-
-        // Connect Play Button
-        connect(btnPlayArp, &QPushButton::toggled, [=](bool checked){
-            if(!checked) {
-                m_ghostSynth->setAudioSource([](double){ return 0.0; });
-                m_ghostSynth->stop();
-                btnPlayArp->setText("▶ Play Arp");
-                btnPlayArp->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
-            } else {
-                m_ghostSynth->start();
-                btnPlayArp->setText("⏹ Stop");
-                btnPlayArp->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
-                updateArpPreview();
-            }
-        });
-
-        // Connect Inputs to Update Logic
-        QList<QWidget*> arpWidgets = {
-            arpWave, arpInterval1, arpInterval2, arpSpeedDiv, arpBpmSync,
-            arpBpmVal, arpSpeed, arpPwmSlider
-        };
-        for(auto *w : arpWidgets) {
-            if(auto *cb = qobject_cast<QComboBox*>(w)) connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), updateArpPreview);
-            if(auto *sb = qobject_cast<QDoubleSpinBox*>(w)) connect(sb, &QDoubleSpinBox::valueChanged, updateArpPreview);
-            if(auto *sl = qobject_cast<QSlider*>(w)) connect(sl, &QSlider::valueChanged, updateArpPreview);
-            if(auto *chk = qobject_cast<QCheckBox*>(w)) connect(chk, &QCheckBox::toggled, updateArpPreview);
         }
 
-        // Initial Trigger
-        QTimer::singleShot(200, updateArpPreview);
+        // Get Intervals
+        auto getSemi = [](QString s) { return s.split(" ")[0].toInt(); };
+        int semi1 = 0;
+        int semi2 = getSemi(arpInterval1->currentText());
+        int semi3 = getSemi(arpInterval2->currentText());
 
-    // 6. WAVETABLE FORGE (The "Hero" Tracker)
+        double p1 = 1.0;
+        double p2 = std::pow(2.0, semi2 / 12.0);
+        double p3 = std::pow(2.0, semi3 / 12.0);
+
+        // Get Waveform Parameters
+        int wType = arpWave->currentIndex(); // 0=Pulse, 1=Saw, 2=Tri, 3=Noise, 4=Metal
+        double pwm = (arpPwmSlider->value() / 100.0) * 2.0 - 1.0; // Map -1 to 1
+
+        // Build Lambda
+        std::function<double(double)> arpFunc = [=](double t) {
+            // Determine Step (0, 1, 2)
+            // Using a slightly offset time to ensure step 0 starts immediately
+            int step = (int)(t * hz) % 3;
+            double mult = (step == 0) ? p1 : (step == 1 ? p2 : p3);
+
+            double f = 220.0; // Preview Pitch (A3)
+            double pi = 3.14159;
+            double ph = t * f * mult; // Phase
+
+            // Oscillators
+            if (wType == 0) { // Pulse
+                return (std::sin(ph * 2 * pi) > pwm) ? 1.0 : -1.0;
+            }
+            else if (wType == 1) { // Saw
+                double x = std::fmod(ph, 1.0);
+                return 2.0 * x - 1.0;
+            }
+            else if (wType == 2) { // Triangle
+                return (2.0 / pi) * std::asin(std::sin(ph * 2 * pi));
+            }
+            else if (wType == 3) { // Noise
+                return ((double)std::rand() / RAND_MAX) * 2.0 - 1.0;
+            }
+            else { // Metal (Ring Mod)
+                // Square * Detuned Square (approx 2.41 ratio)
+                double sq1 = (std::sin(ph * 2 * pi) > 0) ? 1.0 : -1.0;
+                double sq2 = (std::sin(ph * 2.41 * 2 * pi) > 0) ? 1.0 : -1.0;
+                return sq1 * sq2;
+            }
+        };
+
+        // Update Scope (Show 4 beats worth or enough to see pattern)
+        double viewDur = (hz > 0) ? (4.0 / hz) : 1.0;
+        arpScope->updateScope(arpFunc, viewDur, 1.0);
+
+        // Update Audio
+        if(btnPlayArp->isChecked()) {
+             m_ghostSynth->setAudioSource(arpFunc);
+        }
+    };
+
+    // --- CONNECTIONS ---
+    connect(btnGenArp, &QPushButton::clicked, this, &MainWindow::generateArpAnimator);
+
+    // Connect Play Button
+    connect(btnPlayArp, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlayArp->setText("▶ Play Arp");
+            btnPlayArp->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+        } else {
+            m_ghostSynth->start();
+            btnPlayArp->setText("⏹ Stop");
+            btnPlayArp->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
+            updateArpPreview();
+        }
+    });
+
+    // Connect Inputs to Update Logic
+    QList<QWidget*> arpWidgets = {
+        arpWave, arpInterval1, arpInterval2, arpSpeedDiv, arpBpmSync,
+        arpBpmVal, arpSpeed, arpPwmSlider
+    };
+    for(auto *w : arpWidgets) {
+        if(auto *cb = qobject_cast<QComboBox*>(w)) connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), updateArpPreview);
+        if(auto *sb = qobject_cast<QDoubleSpinBox*>(w)) connect(sb, &QDoubleSpinBox::valueChanged, updateArpPreview);
+        if(auto *sl = qobject_cast<QSlider*>(w)) connect(sl, &QSlider::valueChanged, updateArpPreview);
+        if(auto *chk = qobject_cast<QCheckBox*>(w)) connect(chk, &QCheckBox::toggled, updateArpPreview);
+    }
+
+    // Initial Trigger
+    QTimer::singleShot(200, updateArpPreview);
+
+    // ------------------------------------
+    // TAB 6: WAVETABLE FORGE
+    // ------------------------------------
     QWidget *wtTab = new QWidget();
     auto *wtLayout = new QVBoxLayout(wtTab);
 
-    // A. SCOPE
+    // SCOPE
     wtScope = new UniversalScope();
     wtScope->setMinimumHeight(150);
     wtLayout->addWidget(wtScope);
 
-    // B. HEADER
+    // HEADER
     auto *wtHeader = new QHBoxLayout();
     wtHeader->addWidget(new QLabel("Build Mode:"));
     buildModeWavetable = new QComboBox();
@@ -725,7 +740,7 @@ void MainWindow::setupUI() {
     wtHeader->addWidget(wtLoopCheck);
     wtLayout->addLayout(wtHeader);
 
-    // C. TABLE
+    // TABLE
     wtTrackerTable = new QTableWidget();
     wtTrackerTable->setColumnCount(4);
     wtTrackerTable->setHorizontalHeaderLabels({"Waveform", "Pitch (+/-)", "PWM %", "Dur (s)"});
@@ -733,7 +748,7 @@ void MainWindow::setupUI() {
     wtTrackerTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     wtLayout->addWidget(wtTrackerTable);
 
-    // D. BUTTONS
+    // BUTTONS
     auto *wtBtnLayout = new QHBoxLayout();
     auto *btnAddStep = new QPushButton("Add Step (+)");
     auto *btnRemStep = new QPushButton("Remove Step (-)");
@@ -750,7 +765,7 @@ void MainWindow::setupUI() {
     wtLayout->addWidget(btnGenWT);
     modeTabs->addTab(wtTab, "Wavetable Forge");
 
-    // E. UPDATE LOGIC (WITH NULLPTR SAFETY)
+    // UPDATE LOGIC
     auto updateWavetable = [=]() {
         int rows = wtTrackerTable->rowCount();
         if (rows == 0) return;
@@ -760,8 +775,6 @@ void MainWindow::setupUI() {
         double totalDur = 0;
 
         for(int i=0; i<rows; ++i) {
-            // --- CRITICAL SAFETY CHECK ---
-            // If any cell is missing (nullptr), skip this row to prevent crash
             if (!wtTrackerTable->item(i, 0) || !wtTrackerTable->item(i, 1) ||
                 !wtTrackerTable->item(i, 2) || !wtTrackerTable->item(i, 3))
                 continue;
@@ -830,8 +843,7 @@ void MainWindow::setupUI() {
         }
     };
 
-    // F. CONNECTIONS
-    // Wrap the preset loader to update logic after loading
+    // CONNECTIONS
     connect(wtPresetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int i){
         loadWavetablePreset(i);
         // Force the scope to update with the new data
@@ -876,7 +888,9 @@ void MainWindow::setupUI() {
     loadWavetablePreset(1);
     QTimer::singleShot(200, updateWavetable);
 
-    // 7. BESSEL FM
+    // ------------------------------------
+    // TAB 7: BESSEL FM
+    // ------------------------------------
     QWidget *besselTab = new QWidget(); auto *besselLayout = new QVBoxLayout(besselTab);
     besselSpectrum = new UniversalSpectrum();
     besselLayout->addWidget(besselSpectrum);
@@ -906,16 +920,16 @@ void MainWindow::setupUI() {
     auto *btnBes = new QPushButton("Generate Bessel FM");
     besselLayout->addWidget(btnBes);
 
-    // This function calculates the FM math for the visualizer
+    // FM math for the visualiser
     auto updateBesselVisual = [=]() {
         if (!besselSpectrum) return;
 
-        // 1. Get values from the UI
+        // Get values from the UI
         double cMult = besselCarrierMult->value();
         double mMult = besselModMult->value();
         double index = besselModIndex->value();
 
-        // 2. Define the Math (Standard FM Synthesis)
+        // Define the Math (Standard FM Synthesis)
         // t = time, f = frequency (we use 220Hz for visualization)
         std::function<double(double)> fmAlgo = [=](double t) {
             double f = 220.0;
@@ -928,11 +942,11 @@ void MainWindow::setupUI() {
             return carrier;
         };
 
-        // 3. Send to Spectrum (Sample Rate 44100 for high detail)
+        // Send to Spectrum (Sample Rate 44100 for high detail)
         besselSpectrum->updateSpectrum(fmAlgo, 44100.0);
     };
 
-    // 4. Connect Sliders so it updates instantly
+    // Connect Sliders so it updates instantly
     connect(besselCarrierMult, &QDoubleSpinBox::valueChanged, updateBesselVisual);
     connect(besselModMult, &QDoubleSpinBox::valueChanged, updateBesselVisual);
     connect(besselModIndex, &QDoubleSpinBox::valueChanged, updateBesselVisual);
@@ -943,12 +957,13 @@ void MainWindow::setupUI() {
 
     modeTabs->addTab(besselTab, "Bessel FM");
 
-    // 8. HARMONIC LAB
+    // ------------------------------------
+    // TAB 8: HARMONIC LAB
+    // ------------------------------------
     QWidget *harTab = new QWidget();
     auto *harLayout = new QVBoxLayout(harTab);
 
-    // --- A. ADD THE SPECTRUM ANALYZER ---
-    // We create a new instance of the class used in Bessel FM
+    // ADD THE SPECTRUM ANALYSER
     harmonicSpectrum = new UniversalSpectrum();
     harLayout->addWidget(harmonicSpectrum);
 
@@ -959,13 +974,13 @@ void MainWindow::setupUI() {
 
     auto *harGrid = new QGridLayout();
 
-    // --- B. DEFINE THE "ROUTINE" (Audio Math) ---
+    // DEFINE THE "ROUTINE" (Audio Math) ---
     // This function calculates Additive Synthesis: Summing sine waves
     auto updateHarmonicVisual = [=]() {
         if (!harmonicSpectrum) return;
 
-        // 1. Define the Math
-        // We use a lambda inside a lambda so the Spectrum class can call it repeatedly
+        // Define the Math
+        // Use lambda inside a lambda so the Spectrum class can call it repeatedly
         std::function<double(double)> additiveAlgo = [=](double t) {
             double signal = 0.0;
             double f = 220.0; // Base frequency (A3) for visualization
@@ -982,7 +997,7 @@ void MainWindow::setupUI() {
                     signal += amp * std::sin(t * f * harmonic * twoPi);
                 }
             }
-            // Normalize slightly to prevent massive clipping on the visualizer
+            // Normalise slightly to prevent massive clipping on the visualizer
             return signal * 0.3;
         };
 
@@ -990,7 +1005,7 @@ void MainWindow::setupUI() {
         harmonicSpectrum->updateSpectrum(additiveAlgo, 44100.0);
     };
 
-    // --- C. GENERATE SLIDERS & CONNECT THEM ---
+    // GENERATE SLIDERS & CONNECT THEM ---
     for(int i=0; i<16; ++i) {
         harmonicSliders[i] = new QSlider(Qt::Vertical);
         harmonicSliders[i]->setRange(0, 100);
@@ -1010,17 +1025,19 @@ void MainWindow::setupUI() {
     harLayout->addWidget(btnHar);
     modeTabs->addTab(harTab, "Harmonic Lab");
 
-    // Connect the generation button (Keep original logic)
+    // Connect the generation button
     connect(btnHar, &QPushButton::clicked, this, &MainWindow::generateHarmonicLab);
 
     // Trigger once to draw the initial state
     QTimer::singleShot(200, updateHarmonicVisual);
 
-    // 9. --- DRUM ARCHITECT TAB ---
+    // ------------------------------------
+    // TAB 9: DRUM DESIGNER
+    // ------------------------------------
     QWidget *drumWidget = new QWidget();
     QVBoxLayout *drumLayout = new QVBoxLayout(drumWidget);
 
-    // 1. ADD OSCILLOSCOPE (Visualizer)
+    // ADD OSCILLOSCOPE (Visualizer)
     drumScope = new UniversalScope();
     drumScope->setMinimumHeight(150);
     drumLayout->addWidget(drumScope);
@@ -1031,7 +1048,7 @@ void MainWindow::setupUI() {
     drumDisclaimer->setAlignment(Qt::AlignCenter);
     drumLayout->addWidget(drumDisclaimer);
 
-    // 2. CONTROLS SETUP
+    // CONTROLS SETUP
     drumTypeCombo = new QComboBox();
     drumTypeCombo->addItems({"Kick (LPF)", "Snare (BPF)", "Hi-Hat (HPF)", "Tom (LPF)", "Cowbell (BPF)", "Rimshot (HPF)", "Clap (BPF)"});
 
@@ -1040,7 +1057,7 @@ void MainWindow::setupUI() {
 
     QFormLayout *fLayout = new QFormLayout();
 
-    // Initialize Sliders
+    // Initialise Sliders
     drumPitchSlider = new QSlider(Qt::Horizontal); drumPitchSlider->setRange(20, 150); drumPitchSlider->setValue(40);
     drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(1, 200); drumDecaySlider->setValue(40);
     drumPitchDropSlider = new QSlider(Qt::Horizontal); drumPitchDropSlider->setRange(0, 500); drumPitchDropSlider->setValue(350);
@@ -1065,7 +1082,7 @@ void MainWindow::setupUI() {
     drumLayout->addLayout(fLayout);
     drumLayout->addWidget(drumTypeCombo);
 
-    // 3. BUTTONS
+    // BUTTONS
     auto *dBtnLay = new QHBoxLayout();
 
     btnPlayDrum = new QPushButton("▶ Play Drum Loop");
@@ -1083,7 +1100,7 @@ void MainWindow::setupUI() {
 
     modeTabs->addTab(drumWidget, "Drum Designer");
 
-    // 4. AUDIO & VISUAL LOGIC (The Math)
+    // AUDIO & VISUAL LOGIC (The Math)
     auto updateDrum = [=]() {
         // Gather Values from UI
         int waveIdx = drumWaveCombo->currentIndex(); // 0=Sin, 1=Tri, 2=Sqr, 3=Saw
@@ -1102,11 +1119,11 @@ void MainWindow::setupUI() {
             double localT = std::fmod(t, loopLen);
             if(localT < 0) return 0.0;
 
-            // 1. Pitch Envelope (Exponential Drop)
+            //Pitch Envelope (Exponential Drop)
             // f(t) = Base + Drop * exp(-t * decay/2)
             double instFreq = baseFreq + (pitchDrop * std::exp(-localT * (decayFactor / 2.0)));
 
-            // 2. Oscillator Generation
+            //Oscillator Generation
             double phase = localT * instFreq * 6.283185; // 2*PI
             double osc = 0.0;
 
@@ -1115,13 +1132,13 @@ void MainWindow::setupUI() {
             else if (waveIdx == 2) osc = (std::sin(phase) > 0 ? 1.0 : -1.0); // Square
             else osc = 2.0 * (std::fmod(localT * instFreq, 1.0)) - 1.0; // Saw
 
-            // 3. Noise Generation
+            //Noise Generation
             double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
 
-            // 4. Mix Osc and Noise
+            //Mix Osc and Noise
             double signal = (osc * (1.0 - noiseMix)) + (noise * noiseMix);
 
-            // 5. Volume Envelope (Exponential Decay)
+            //Volume Envelope (Exponential Decay)
             double env = std::exp(-localT * decayFactor * expCurve);
 
             return signal * env;
@@ -1136,7 +1153,7 @@ void MainWindow::setupUI() {
         }
     };
 
-    // 5. CONNECTIONS (INTERACTIVITY)
+    // CONNECTIONS
 
     // Connect sliders to live update
     connect(drumPitchSlider, &QSlider::valueChanged, updateDrum);
@@ -1255,11 +1272,13 @@ void MainWindow::setupUI() {
     // Initial Trigger to draw the default wave
     QTimer::singleShot(200, updateDrum);
 
-    // 10. VELOCILOGIC (DYNAMICS MAPPER)
+    // ------------------------------------
+    // TAB 10: VELOCILOGIC
+    // ------------------------------------
     QWidget *velTab = new QWidget();
     auto *velLayout = new QVBoxLayout(velTab);
 
-    // 1. Disclaimer
+    // Disclaimer
     velDisclaimer = new QLabel("⚠ VELOCILOGIC: DYNAMIC LAYERING.\n"
                                "Checked working with Legacy only.\n"
                                "");
@@ -1268,7 +1287,7 @@ void MainWindow::setupUI() {
     velDisclaimer->setFixedHeight(80);
     velLayout->addWidget(velDisclaimer);
 
-    // 2. Options
+    // Options
     auto *velOptLayout = new QHBoxLayout();
     velOptLayout->addWidget(new QLabel("Build Mode:"));
     velMapMode = new QComboBox();
@@ -1277,14 +1296,14 @@ void MainWindow::setupUI() {
     velOptLayout->addStretch();
     velLayout->addLayout(velOptLayout);
 
-    // 3. The Zone Table
+    // The Zone Table
     velMapTable = new QTableWidget();
     velMapTable->setColumnCount(2);
     velMapTable->setHorizontalHeaderLabels({"Upper Velocity Limit (0-127)", "Expression (Code)"});
     velMapTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     velLayout->addWidget(velMapTable);
 
-    // 4. Buttons
+    // Buttons
     auto *velBtnLayout = new QHBoxLayout();
     auto *btnAddVel = new QPushButton("Add Velocity Zone");
     auto *btnRemVel = new QPushButton("Remove Zone");
@@ -1321,7 +1340,9 @@ void MainWindow::setupUI() {
     addVelZone(100, "saww(t*f)");
     addVelZone(127, "squarew(t*f) + (randv(t)*0.2)");
 
-    // 11. NOISE FORGE
+    // ------------------------------------
+    // TAB 11: NOISE FORGE
+    // ------------------------------------
     QWidget *noiseTab = new QWidget(); auto *noiseLayout = new QFormLayout(noiseTab);
     buildModeNoise = new QComboBox(); buildModeNoise->addItems({"Modern", "Legacy"});
     noiseRes = new QDoubleSpinBox(); noiseRes->setRange(100, 44100); noiseRes->setValue(8000);
@@ -1331,11 +1352,13 @@ void MainWindow::setupUI() {
     noiseLayout->addRow(btnNoise);
     modeTabs->addTab(noiseTab, "Noise Forge");
 
-     // 12. XPF PACKAGER / MANAGER
+    // ------------------------------------
+    // TAB 12: XPF PACKAGER
+    // ------------------------------------
     QWidget *xpfTab = new QWidget();
     auto *xpfLayout = new QVBoxLayout(xpfTab);
 
-    // 1. Red Disclaimer (O1 Editing Mode)
+    // Disclaimer (O1 Editing Mode)
     xpfDisclaimer = new QLabel("⚠ NOTICE: O1 EDITING MODE.\n"
                                "This tab is a placeholder the tab logic is not complete or tested\n"
                                "This tool packages your code into Oscillator 1 (O1) only.\n"
@@ -1346,7 +1369,7 @@ void MainWindow::setupUI() {
     xpfDisclaimer->setFixedHeight(80);
     xpfLayout->addWidget(xpfDisclaimer);
 
-    // 2. Input Area
+    // Input Area
     auto *xpfGroup = new QGroupBox("Expression Source");
     auto *xpfForm = new QVBoxLayout(xpfGroup);
 
@@ -1355,63 +1378,140 @@ void MainWindow::setupUI() {
     xpfForm->addWidget(xpfInput);
     xpfLayout->addWidget(xpfGroup);
 
-    // 3. Save Button
+    // Save Button
     btnSaveXpf = new QPushButton("Save as Instrument (.xpf)...");
     btnSaveXpf->setStyleSheet("font-weight: bold; height: 50px; font-size: 14px;");
     xpfLayout->addWidget(btnSaveXpf);
 
     modeTabs->addTab(xpfTab, "XPF Packager");
 
-    // Connect (FIXED: Uses 'btnSaveXpf' and 'saveXpfInstrument')
+    // Connect
     connect(btnSaveXpf, &QPushButton::clicked, this, &MainWindow::saveXpfInstrument);
 
-    // 12. FILTER FORGE
+    // ------------------------------------
+    // TAB 13: FILTER FORGE
+    // ------------------------------------
     QWidget *filterTab = new QWidget();
+    QVBoxLayout *filterMainLayout = new QVBoxLayout(filterTab);
 
-    // 1. CHANGE: Main layout is now VERTICAL
-    auto *filterMainLayout = new QVBoxLayout(filterTab);
+    // TOP SECTION: THE ANALYZERS
+    QHBoxLayout *vizLay = new QHBoxLayout();
+    filterScope = new UniversalScope();
+    filterSpectrum = new UniversalSpectrum();
+    vizLay->addWidget(filterScope);
+    vizLay->addWidget(filterSpectrum);
+    filterMainLayout->addLayout(vizLay);
 
-    // 2. NEW: The Red Disclaimer Label
-    filterDisclaimer = new QLabel("⚠ DISCLAIMER: EXPERIMENTAL FEATURE.\n"
-                                  "Limited success with FIR filters using last(n).\n"
-                                  "May produce unexpected audio artifacts.");
-    filterDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
-    filterDisclaimer->setAlignment(Qt::AlignCenter);
-    filterDisclaimer->setFixedHeight(80); // Consistent height
+    // CONTROLS GROUP
+    QGroupBox *fCtrlGroup = new QGroupBox("Weighted Filter Designer");
+    QFormLayout *fForm = new QFormLayout(fCtrlGroup);
 
-    filterMainLayout->addWidget(filterDisclaimer); // Add to top
+    filterType = new QComboBox();
+    filterType->addItems({"Low-Pass (Weighted)", "High-Pass (Differential)"});
 
-    // 3. The Form Controls (Sub-Layout)
-    auto *filterForm = new QFormLayout(); // This holds the inputs nicely
+    filterWaveform = new QComboBox();
+    filterWaveform->addItems({"Sine", "Sawtooth", "Square"});
 
-    buildModeFilter = new QComboBox(); buildModeFilter->addItems({"Modern", "Legacy"});
-    filterType = new QComboBox(); filterType->addItems({"Low-Pass", "High-Pass"});
-    filterTaps = new QDoubleSpinBox(); filterTaps->setRange(2, 8); filterTaps->setValue(4);
+    // The New Cutoff Slider
+    filterCutoffSlider = new QSlider(Qt::Horizontal);
+    filterCutoffSlider->setRange(1, 99);
+    filterCutoffSlider->setValue(50);
+    filterCutoffLabel = new QLabel("Cutoff: 0.50");
 
-    filterForm->addRow("Build Mode:", buildModeFilter);
-    filterForm->addRow("Type:", filterType);
-    filterForm->addRow("Taps:", filterTaps);
+    filterFreqPreview = new QDoubleSpinBox();
+    filterFreqPreview->setRange(20, 15000);
+    filterFreqPreview->setValue(990); // Default to your B5 test pitch
+    filterFreqPreview->setSuffix(" Hz");
 
-    auto *btnFil = new QPushButton("Generate Filter");
-    filterForm->addRow(btnFil);
+    fForm->addRow("Filter Mode:", filterType);
+    fForm->addRow("Waveform:", filterWaveform);
+    fForm->addRow(filterCutoffLabel, filterCutoffSlider);
+    fForm->addRow("Preview Pitch:", filterFreqPreview);
+    filterMainLayout->addWidget(fCtrlGroup);
 
-    // Add the form to the main layout
-    filterMainLayout->addLayout(filterForm);
-    // Push everything to the top so it doesn't float in the middle
-    filterMainLayout->addStretch();
+    // PLAY & GENERATE BUTTONS
+    btnPlayFilter = new QPushButton("▶ Play Filter Test");
+    btnPlayFilter->setCheckable(true);
+    btnPlayFilter->setStyleSheet("height: 40px; background-color: #335533; color: white;");
 
+    QPushButton *btnGenFilter = new QPushButton("GENERATE XPRESSIVE CODE");
+    btnGenFilter->setStyleSheet("height: 40px; font-weight: bold;");
+
+    filterMainLayout->addWidget(btnPlayFilter);
+    filterMainLayout->addWidget(btnGenFilter);
     modeTabs->addTab(filterTab, "Filter Forge");
 
-    // 13. LEAD STACKER (UPGRADED)
+    // LIVE UPDATE LAMBDA
+    auto updateFilter = [=]() {
+        double f = filterFreqPreview->value();
+        double coeff = filterCutoffSlider->value() / 100.0;
+        bool isHP = (filterType->currentIndex() == 1);
+        int waveType = filterWaveform->currentIndex();
+
+        auto dspAlgo = [=](double t) {
+            auto getRaw = [&](double time) {
+                double ph = time * f * 6.2831;
+                if (waveType == 0) return std::sin(ph);
+                if (waveType == 1) return 2.0 * std::fmod(time * f, 1.0) - 1.0;
+                return (std::sin(ph) > 0 ? 1.0 : -1.0);
+            };
+
+            double current = getRaw(t);
+            static double lastOut = 0; // Simple state for preview
+
+            if (isHP) {
+                // High Pass logic for preview
+                double hp = current - lastOut;
+                lastOut = (hp * coeff) + (lastOut * 0.1);
+                return lastOut;
+            } else {
+                // Low Pass logic for preview
+                lastOut = (current * (1.0 - coeff)) + (lastOut * coeff);
+                return lastOut;
+            }
+        };
+
+        filterScope->updateScope(dspAlgo, 0.05, 1.0);
+        filterSpectrum->updateSpectrum(dspAlgo, 44100.0);
+        if (btnPlayFilter->isChecked()) m_ghostSynth->setAudioSource(dspAlgo);
+    };
+
+    // FINAL CONNECTIONS
+    connect(filterCutoffSlider, &QSlider::valueChanged, [=](int val){
+        filterCutoffLabel->setText(QString("Cutoff: %1").arg(val/100.0, 0, 'f', 2));
+        updateFilter();
+    });
+
+    connect(filterType, QOverload<int>::of(&QComboBox::currentIndexChanged), updateFilter);
+    connect(filterFreqPreview, QOverload<double>::of(&QDoubleSpinBox::valueChanged), updateFilter);
+    connect(btnPlayFilter, &QPushButton::toggled, [=](bool checked){
+        if (checked) { m_ghostSynth->start(); updateFilter(); }
+        else m_ghostSynth->stop();
+    });
+
+    connect(btnGenFilter, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
+
+    filterDisclaimer = new QLabel("⚠️ EXPERIMENTAL: NOT FULLY WORKING\n"
+                                  "TYPE: First-Order Recursive (IIR-Style) Weighted Filter\n"
+                                  "REQUIREMENT: Use Xpressive Nightly Build Only.\n"
+                                  "NOTE: Must fix, variable definition must be outside of clamp.");
+    filterDisclaimer->setStyleSheet("QLabel { color: #FF5555; font-weight: bold; border: 2px solid #FF5555; "
+                                    "padding: 10px; background-color: #221111; }");
+    filterDisclaimer->setAlignment(Qt::AlignCenter);
+    filterMainLayout->addWidget(filterDisclaimer);
+
+    // ------------------------------------
+    // TAB 14: LEAD STACKER
+    // ------------------------------------
     QWidget *leadTab = new QWidget();
     QVBoxLayout *leadLayout = new QVBoxLayout(leadTab);
 
-    // 1. OSCILLOSCOPE
+    // OSCILLOSCOPE
     leadScope = new UniversalScope();
     leadScope->setMinimumHeight(150);
     leadLayout->addWidget(leadScope);
 
-    // 2. CONTROLS
+    // CONTROLS
     // Group A: Oscillator Core
     QGroupBox *leadOscGroup = new QGroupBox("1. Core Voice");
     QHBoxLayout *oscLay = new QHBoxLayout(leadOscGroup);
@@ -1432,7 +1532,7 @@ void MainWindow::setupUI() {
 
     leadLayout->addWidget(leadOscGroup);
 
-    // Group B: Unison Engine
+    // Unison Engine
     QGroupBox *leadUniGroup = new QGroupBox("2. Super Unison Stack");
     QGridLayout *uniGrid = new QGridLayout(leadUniGroup);
 
@@ -1466,7 +1566,7 @@ void MainWindow::setupUI() {
 
     leadLayout->addWidget(leadUniGroup);
 
-    // 3. BUTTONS
+    // BUTTONS
     QHBoxLayout *leadBtnLay = new QHBoxLayout();
 
     btnPlayLead = new QPushButton("▶ Play Stack");
@@ -1480,7 +1580,7 @@ void MainWindow::setupUI() {
     leadBtnLay->addWidget(btnGenLead);
     leadLayout->addLayout(leadBtnLay);
 
-    // 4. PREVIEW LOGIC
+    // PREVIEW LOGIC
     auto updateLeadPreview = [=]() {
         int voices = leadUnisonCount->value();
         double detune = leadDetuneSlider->value() / 500.0; // Scaled for audio
@@ -1560,7 +1660,6 @@ void MainWindow::setupUI() {
         }
     });
 
-    // Use the new generate function
     connect(btnGenLead, &QPushButton::clicked, this, &MainWindow::generateLeadStack);
 
     // Initial Trigger
@@ -1569,55 +1668,57 @@ void MainWindow::setupUI() {
     leadLayout->addStretch();
     modeTabs->addTab(leadTab, "Lead Stacker");
 
-    // [In mainwindow.cpp, inside setupUI(), replace the "// 14. RANDOMISER" section with this]
+    // ------------------------------------
+    // TAB 15: RANDOMISER
+    // ------------------------------------
+    QWidget *randTab = new QWidget();
+    auto *randLayout = new QVBoxLayout(randTab);
 
-        // 14. RANDOMISER
-        QWidget *randTab = new QWidget();
-        auto *randLayout = new QVBoxLayout(randTab);
+    // Visualizer
+    randScope = new UniversalScope();
+    randScope->setMinimumHeight(150);
+    randLayout->addWidget(randScope);
 
-        // A. Visualizer
-        randScope = new UniversalScope();
-        randScope->setMinimumHeight(150);
-        randLayout->addWidget(randScope);
+    // Controls
+    randLayout->addWidget(new QLabel("Chaos Level (Randomness):"));
+    randLayout->addWidget(chaosSlider);
 
-        // B. Controls
-        randLayout->addWidget(new QLabel("Chaos Level (Randomness):"));
-        randLayout->addWidget(chaosSlider);
+    // Buttons
+    auto *randBtnLay = new QHBoxLayout();
 
-        // C. Buttons
-        auto *randBtnLay = new QHBoxLayout();
+    btnPlayRand = new QPushButton("▶ Play Result");
+    btnPlayRand->setCheckable(true);
+    btnPlayRand->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 50px;");
 
-        btnPlayRand = new QPushButton("▶ Play Result");
-        btnPlayRand->setCheckable(true);
-        btnPlayRand->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 50px;");
+    auto *btnRand = new QPushButton("GENERATE CHAOS");
+    btnRand->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 50px;");
 
-        auto *btnRand = new QPushButton("GENERATE CHAOS");
-        btnRand->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 50px;");
+    randBtnLay->addWidget(btnPlayRand);
+    randBtnLay->addWidget(btnRand);
+    randLayout->addLayout(randBtnLay);
 
-        randBtnLay->addWidget(btnPlayRand);
-        randBtnLay->addWidget(btnRand);
-        randLayout->addLayout(randBtnLay);
+    randLayout->addStretch();
+    modeTabs->addTab(randTab, "Randomiser");
 
-        randLayout->addStretch();
-        modeTabs->addTab(randTab, "Randomiser");
+    // Connection for Play Button
+    connect(btnPlayRand, &QPushButton::toggled, [=](bool checked){
+        if(!checked) {
+            m_ghostSynth->setAudioSource([](double){ return 0.0; });
+            m_ghostSynth->stop();
+            btnPlayRand->setText("▶ Play Result");
+            btnPlayRand->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 50px;");
+        } else {
+            // Ensure we have a valid function to play
+            if(currentRandFunc) m_ghostSynth->setAudioSource(currentRandFunc);
+            m_ghostSynth->start();
+            btnPlayRand->setText("⏹ Stop");
+            btnPlayRand->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 50px;");
+        }
+    });
 
-        // D. Connection for Play Button
-        connect(btnPlayRand, &QPushButton::toggled, [=](bool checked){
-            if(!checked) {
-                m_ghostSynth->setAudioSource([](double){ return 0.0; });
-                m_ghostSynth->stop();
-                btnPlayRand->setText("▶ Play Result");
-                btnPlayRand->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 50px;");
-            } else {
-                // Ensure we have a valid function to play
-                if(currentRandFunc) m_ghostSynth->setAudioSource(currentRandFunc);
-                m_ghostSynth->start();
-                btnPlayRand->setText("⏹ Stop");
-                btnPlayRand->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 50px;");
-            }
-        });
-
-    // --- 15. PHONETIC LAB (NEW) ---
+    // ------------------------------------
+    // TAB 16: PHONETIC LAB
+    // ------------------------------------
     QWidget *phoneticTab = new QWidget();
     auto *pLayout = new QVBoxLayout(phoneticTab);
 
@@ -1656,13 +1757,15 @@ void MainWindow::setupUI() {
     modeTabs->addTab(phoneticTab, "Phonetic Lab");
     connect(btnGenPhonetic, &QPushButton::clicked, this, &MainWindow::generatePhoneticFormula);
 
-    // --- 16. LOGIC CONVERTER TAB (NEW) ---
+    // ------------------------------------
+    // TAB 17: LOGIC CONVERTER
+    // ------------------------------------
     QWidget *convTab = new QWidget();
 
-    // 1. CHANGE: Main layout is now VERTICAL to stack the warning on top
+    // CHANGE: Main layout is now VERTICAL to stack the warning on top
     auto *mainConvLayout = new QVBoxLayout(convTab);
 
-    // 2. NEW: The Red Disclaimer Label
+    // NEW: The Red Disclaimer Label
     convDisclaimer = new QLabel("⚠ DISCLAIMER: CURRENTLY EXPERIMENTAL.\n"
                                 "Only works with SHORT PCM samples (approx < 0.1s).\n"
                                 "Long files or complex expressions may cause crashes.");
@@ -1672,7 +1775,7 @@ void MainWindow::setupUI() {
 
     mainConvLayout->addWidget(convDisclaimer); // Add it to the top
 
-    // 3. The Columns (Input - Buttons - Output)
+    // The Columns (Input - Buttons - Output)
     auto *hLayout = new QHBoxLayout(); // This holds the boxes side-by-side
 
     // LEFT SIDE (Input)
@@ -1719,11 +1822,13 @@ void MainWindow::setupUI() {
         convOutput->setText(convertNightlyToLegacy(convInput->toPlainText()));
     });
 
-    // 17. KEY MAPPER (KEYBOARD SPLIT)
+    // ------------------------------------
+    // TAB 18: KEY MAPPER
+    // ------------------------------------
     QWidget *keyTab = new QWidget();
     auto *keyLayout = new QVBoxLayout(keyTab);
 
-    // 1. Red Disclaimer
+    // Disclaimer
     keyMapDisclaimer = new QLabel("⚠ DISCLAIMER: EXPERIMENTAL KEY MAPPING.\n"
                                   "This feature allows splitting logic across the keyboard.\n"
                                   "Requires further development.\n"
@@ -1733,7 +1838,7 @@ void MainWindow::setupUI() {
     keyMapDisclaimer->setFixedHeight(80);
     keyLayout->addWidget(keyMapDisclaimer);
 
-    // 2. Options
+    // Options
     auto *keyOptLayout = new QHBoxLayout();
     keyOptLayout->addWidget(new QLabel("Build Mode:"));
     keyMapMode = new QComboBox();
@@ -1742,14 +1847,14 @@ void MainWindow::setupUI() {
     keyOptLayout->addStretch();
     keyLayout->addLayout(keyOptLayout);
 
-    // 3. The Zone Table
+    // The Zone Table
     keyMapTable = new QTableWidget();
     keyMapTable->setColumnCount(2);
     keyMapTable->setHorizontalHeaderLabels({"Upper Key Limit (0-127)", "Expression (Code)"});
     keyMapTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     keyLayout->addWidget(keyMapTable);
 
-    // 4. Buttons (Add/Remove/Gen)
+    // Buttons (Add/Remove/Gen)
     auto *keyBtnLayout = new QHBoxLayout();
     auto *btnAddZone = new QPushButton("Add Split Zone");
     auto *btnRemZone = new QPushButton("Remove Zone");
@@ -1783,7 +1888,9 @@ void MainWindow::setupUI() {
     addZone(60, "saww(t*f*0.5)"); // Bass (Below Middle C)
     addZone(128, "squarew(t*f)");   // Lead (Everything else)
 
-    // 18 STEP GATE
+    // ------------------------------------
+    // TAB 19: STEP GATE
+    // ------------------------------------
     QWidget *gateTab = new QWidget();
     QVBoxLayout *gateLayout = new QVBoxLayout(gateTab);
 
@@ -1851,11 +1958,13 @@ void MainWindow::setupUI() {
 
     connect(btnGenGate, &QPushButton::clicked, this, &MainWindow::generateStepGate);
 
-    // 19. --- NUMBERS 1981 TAB ---
+    // ------------------------------------
+    // TAB 20: NUMBERS 1981
+    // ------------------------------------
     QWidget *numTab = new QWidget();
     auto *numLayout = new QVBoxLayout(numTab);
 
-    // 1. Top Controls
+    // Top Controls
     auto *numCtrlLayout = new QHBoxLayout();
     numModeCombo = new QComboBox(); numModeCombo->addItems({"Random Stream", "Pattern Editor"});
     numStepsCombo = new QComboBox(); numStepsCombo->addItems({"16 Steps", "32 Steps"}); numStepsCombo->setCurrentIndex(1); // Default 32
@@ -1866,7 +1975,7 @@ void MainWindow::setupUI() {
     numCtrlLayout->addWidget(new QLabel("Note Dur:")); numCtrlLayout->addWidget(numDuration);
     numLayout->addLayout(numCtrlLayout);
 
-    // 2. Pattern Editor (Table)
+    // Pattern Editor (Table)
     numPatternTable = new QTableWidget();
     numPatternTable->setRowCount(1);
     numPatternTable->setColumnCount(32); // Max 32
@@ -1880,7 +1989,7 @@ void MainWindow::setupUI() {
     numLayout->addWidget(new QLabel("<b>Pattern Editor:</b> (Semitones +/- 12). Only used if 'Pattern Editor' mode selected."));
     numLayout->addWidget(numPatternTable);
 
-    // 3. Outputs (O1 & O2)
+    // Outputs (O1 & O2)
     auto *numOutLayout = new QHBoxLayout();
     auto *g1 = new QGroupBox("O1: Pan Left (Main)"); auto *l1 = new QVBoxLayout(g1);
     numOut1 = new QTextEdit(); l1->addWidget(numOut1);
@@ -1892,7 +2001,7 @@ void MainWindow::setupUI() {
     numOutLayout->addWidget(g2);
     numLayout->addLayout(numOutLayout);
 
-    // 4. Generate Button
+    //Generate Button
     auto *btnGenNum = new QPushButton("GENERATE NUMBERS 1981");
     btnGenNum->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 40px;");
     numLayout->addWidget(btnGenNum);
@@ -1907,9 +2016,9 @@ void MainWindow::setupUI() {
     // Default visibility check
     numPatternTable->setVisible(false);
 
-    // --- INSERT IN mainwindow.cpp (Inside setupUI) ---
-
-    // 20. DELAY ARCHITECT
+    // ------------------------------------
+    // TAB 21: DELAY ARCHITECT
+    // ------------------------------------
     QWidget *delayTab = new QWidget();
     auto *delayLayout = new QVBoxLayout(delayTab);
 
@@ -1964,13 +2073,13 @@ void MainWindow::setupUI() {
 
     connect(btnGenDelay, &QPushButton::clicked, this, &MainWindow::generateDelayArchitect);
 
-    // ---------------------------------------------------------
-    // 21. --- MACRO MORPH (UPDATED) ---
-    // ---------------------------------------------------------
+    // ------------------------------------
+    // TAB 22: MACRO MORPH
+    // ------------------------------------
     QWidget *macroTab = new QWidget;
     QVBoxLayout *macroLayout = new QVBoxLayout(macroTab);
 
-    // 1. VISUALIZER (NEW)
+    // VISUALISER
     macroScope = new UniversalScope();
     macroScope->setMinimumHeight(150);
     macroLayout->addWidget(macroScope);
@@ -1981,7 +2090,7 @@ void MainWindow::setupUI() {
     fluxDesc->setStyleSheet("color: #333; padding: 10px; background-color: #eee; border-radius: 5px;");
     macroLayout->addWidget(fluxDesc);
 
-    // --- TOP BAR: BUILD MODE ---
+    //TOP BAR: BUILD MODE ---
     QHBoxLayout *topBar = new QHBoxLayout();
     topBar->addWidget(new QLabel("Parsing Engine:"));
 
@@ -1991,7 +2100,7 @@ void MainWindow::setupUI() {
     topBar->addStretch();
     macroLayout->addLayout(topBar);
 
-    // --- GROUP 1: PRESET SELECTOR ---
+    //  PRESET SELECTOR ---
     QGroupBox *sourceGroup = new QGroupBox("1. Select Vibe (Auto-Sets Sliders)");
     sourceGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #666; margin-top: 10px; }");
     QVBoxLayout *sourceLay = new QVBoxLayout(sourceGroup);
@@ -2037,7 +2146,7 @@ void MainWindow::setupUI() {
 
     macroLayout->addWidget(macroGroup);
 
-    // --- BUTTONS ---
+    //BUTTONS ---
     QHBoxLayout *macroBtnLay = new QHBoxLayout();
 
     // Play Button (NEW)
@@ -2053,7 +2162,7 @@ void MainWindow::setupUI() {
     macroBtnLay->addWidget(btnGenMacro);
     macroLayout->addLayout(macroBtnLay);
 
-    // --- LOGIC: UPDATE PREVIEW (SCOPE + AUDIO) ---
+    // LOGIC: UPDATE PREVIEW (SCOPE + AUDIO) ---
     auto updateMacroPreview = [=]() {
         int style = macroStyleCombo->currentIndex();
 
@@ -2071,7 +2180,7 @@ void MainWindow::setupUI() {
             double pi = 3.14159;
             double signal = 0.0;
 
-            // 1. GENERATE CORE SIGNAL
+            // GENERATE CORE SIGNAL
             switch(style) {
             case 0: // Super Saws
             {
@@ -2150,7 +2259,7 @@ void MainWindow::setupUI() {
                 signal = std::sin(t * f * 2 * pi);
             }
 
-            // 2. APPLY ENVELOPE (TIME)
+            //APPLY ENVELOPE (TIME)
             if (style != 7) { // Skip for Atmosphere
                 double decay = 5.0 - (valTime * 4.0); // Map 0-1 to 5-1 speed
                 if (decay < 0.1) decay = 0.1;
@@ -2158,19 +2267,19 @@ void MainWindow::setupUI() {
                 signal *= env;
             }
 
-            // 3. TEXTURE (Noise)
+            // TEXTURE (Noise)
             if (valTex > 0) {
                 double noise = ((double)rand()/RAND_MAX * 2.0 - 1.0);
                 signal += noise * valTex * 0.2;
             }
 
-            // 4. BITCRUSH (Step)
+            // BITCRUSH (Step)
             if (valCrush > 0) {
                 double steps = 16.0 - (valCrush * 14.0);
                 signal = std::floor(signal * steps) / steps;
             }
 
-            // 5. WONK (Sidechain)
+            // WONK (Sidechain)
             if (valWonk > 0) {
                 double pump = 0.5 * (1.0 + std::sin(t * 8.0)); // 8Hz LFO
                 signal *= (1.0 - (valWonk * pump));
@@ -2188,7 +2297,7 @@ void MainWindow::setupUI() {
         }
     };
 
-    // --- LOGIC: PRESET LOADER (MOVES SLIDERS) ---
+    // LOGIC: PRESET LOADER (MOVES SLIDERS) ---
     connect(macroStyleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int idx){
         // Helper to set all 6 sliders at once
         auto setS = [&](int c, int tx, int bc, int tm, int w, int wk) {
@@ -2227,7 +2336,7 @@ void MainWindow::setupUI() {
     connect(macroWidthSlider, &QSlider::valueChanged, updateMacroPreview);
     connect(macroWonkySlider, &QSlider::valueChanged, updateMacroPreview);
 
-    // --- PLAY BUTTON ---
+    // PLAY BUTTON ---
     connect(btnPlayMacro, &QPushButton::toggled, [=](bool checked){
         if(!checked) {
             m_ghostSynth->setAudioSource([](double){ return 0.0; });
@@ -2253,15 +2362,17 @@ void MainWindow::setupUI() {
     macroLayout->addStretch();
     modeTabs->addTab(macroTab, "Macro Morph");
 
-    // 22. --- TAB: STRING MACHINE (Evolving & Cinematic) ---
+    // ------------------------------------
+    // TAB 23: STRING MACHINE
+    // ------------------------------------
     QWidget *stringTab = new QWidget;
     QVBoxLayout *stringLayout = new QVBoxLayout(stringTab);
 
-    // 1. VISUALIZER (Must be created first!)
+    // VISUALIZER (Must be created first!)
     stringScope = new UniversalScope();
     stringLayout->addWidget(stringScope);
 
-    // 2. ZOOM SLIDER
+    // ZOOM SLIDER
     auto *zoomLay = new QHBoxLayout();
     zoomLay->addWidget(new QLabel("Scope Zoom:"));
     stringZoomSlider = new QSlider(Qt::Horizontal);
@@ -2270,12 +2381,12 @@ void MainWindow::setupUI() {
     zoomLay->addWidget(stringZoomSlider);
     stringLayout->addLayout(zoomLay);
 
-    // 3. DESCRIPTION
+    // DESCRIPTION
     QLabel *strDesc = new QLabel("<b>\nUse 'Age' to introduce vintage instability...</b>");
     strDesc->setStyleSheet("color: #333; padding: 10px; background-color: #e6f7ff; border-radius: 5px;");
     stringLayout->addWidget(strDesc);
 
-    // 4. GROUP 1: MODEL & CHORD
+    // MODEL & CHORD
     QGroupBox *strModelGroup = new QGroupBox("1. Core Sound");
     strModelGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #446688; margin-top: 10px; }");
     QFormLayout *strModelForm = new QFormLayout(strModelGroup);
@@ -2304,7 +2415,7 @@ void MainWindow::setupUI() {
     strModelForm->addRow("Chord Memory:", stringChordCombo);
     stringLayout->addWidget(strModelGroup);
 
-    // 5. GROUP 2: EVOLUTION DASHBOARD (SLIDERS)
+    // EVOLUTION DASHBOARD (SLIDERS)
     QGroupBox *strDashGroup = new QGroupBox("2. Evolution & Motion");
     strDashGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #446688; background-color: #f0f8ff; margin-top: 10px; }");
     QGridLayout *strGrid = new QGridLayout(strDashGroup);
@@ -2330,7 +2441,7 @@ void MainWindow::setupUI() {
 
     stringLayout->addWidget(strDashGroup);
 
-    // --- PRESET LOGIC: CONNECT DROPDOWN TO SLIDERS ---
+    // PRESET LOGIC
     connect(stringModelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int index){
         auto setVals = [&](int ens, int att, int evo, int mot, int age, int spc) {
             stringEnsembleSlider->setValue(ens);
@@ -2350,13 +2461,13 @@ void MainWindow::setupUI() {
         }
     });
 
-    // 6. GENERATE BUTTON
+    // GENERATE BUTTON
     QPushButton *btnGenStr = new QPushButton("GENERATE STRING MACHINE");
     btnGenStr->setStyleSheet("font-weight: bold; font-size: 14px; background-color: #446688; color: white; height: 50px; margin-top: 10px;");
     connect(btnGenStr, &QPushButton::clicked, this, &MainWindow::generateStringMachine);
     stringLayout->addWidget(btnGenStr);
 
-    // 7. SIMULATION LOGIC (Visualizer Math)
+    // SIMULATION LOGIC
     auto updateStringScope = [=]() {
         if (!stringEnsembleSlider || !stringAttackSlider) return;
 
@@ -2386,19 +2497,21 @@ void MainWindow::setupUI() {
         stringScope->updateScope(simFunc, 2.0, zoom);
     };
 
-    // 8. CONNECT SIGNALS (Live Update)
+    // CONNECT SIGNALS
     connect(stringEnsembleSlider, &QSlider::valueChanged, updateStringScope);
     connect(stringAttackSlider, &QSlider::valueChanged, updateStringScope);
     connect(stringZoomSlider, &QSlider::valueChanged, updateStringScope);
     connect(stringEvolveSlider, &QSlider::valueChanged, updateStringScope);
 
-    // Trigger once to draw initial line (Requires #include <QTimer>)
+    // Trigger once to draw initial line
     QTimer::singleShot(100, [=](){ updateStringScope(); });
 
     stringLayout->addStretch();
     modeTabs->addTab(stringTab, "String Machine");
 
-    // --- 23. HARDWARE LAB (ANALOG SYNTHESIS SUITE) ---
+    // ------------------------------------
+    // TAB 24: HARDWARE LAB
+    // ------------------------------------
     QWidget *hwTab = new QWidget();
     QVBoxLayout *hwLayout = new QVBoxLayout(hwTab);
 
@@ -2413,7 +2526,7 @@ void MainWindow::setupUI() {
 
     QFormLayout *hwForm = new QFormLayout();
 
-    // --- POPULATE THE HARDWARE LIBRARY ---
+    // --- HARDWARE LIBRARY ---
     hwPresetCombo = new QComboBox();
     hwPresetCombo->addItem("-- STUDIO CLASSICS --");
     hwPresetCombo->addItems({"01. Hissing Minimal (Signal)", "02. Analog Drift (Precision)", "03. Resonance Burner (Peak)",
@@ -2478,7 +2591,7 @@ void MainWindow::setupUI() {
 
     modeTabs->addTab(hwTab, "Hardware Lab");
 
-    // Live Visualizer Connection
+    // Live Visualiser Connection
     auto updateHwPreview = [=]() {
         adsrVisualizer->updateEnvelope(
             hwAttack->value() / 100.0,
@@ -2496,15 +2609,17 @@ void MainWindow::setupUI() {
     connect(btnRandHw, &QPushButton::clicked, this, &MainWindow::generateRandomHardware);
     connect(btnSaveHw, &QPushButton::clicked, this, &MainWindow::generateHardwareXpf);
 
-    // 24. WEST COAST LAB (Buchla Emulation) ---
+    // ------------------------------------
+    // TAB 25: WEST COAST LAB
+    // ------------------------------------
     QWidget *westTab = new QWidget();
     QVBoxLayout *westLayout = new QVBoxLayout(westTab);
 
-    // 1. VISUALIZER
+    // VISUALISER
     westScope = new UniversalScope();
     westLayout->addWidget(westScope);
 
-    // 2. ZOOM SLIDER
+    // ZOOM SLIDER
     auto *westZoomLay = new QHBoxLayout();
     westZoomLay->addWidget(new QLabel("Oscilloscope Zoom:"));
     westZoomSlider = new QSlider(Qt::Horizontal);
@@ -2513,12 +2628,12 @@ void MainWindow::setupUI() {
     westZoomLay->addWidget(westZoomSlider);
     westLayout->addLayout(westZoomLay);
 
-    // 3. DESCRIPTION
+    // DESCRIPTION
     QLabel *westDesc = new QLabel("<b>WEST COAST LAB</b><br>Nonlinear waveshaping based on Buchla 259/208 topologies.");
     westDesc->setStyleSheet("color: #d4af37; padding: 10px; background-color: #222; border-radius: 5px;");
     westLayout->addWidget(westDesc);
 
-    // 4. CONTROLS
+    // CONTROLS
     QFormLayout *westForm = new QFormLayout();
 
     westBuildMode = new QComboBox();
@@ -2557,7 +2672,7 @@ void MainWindow::setupUI() {
 
     westLayout->addLayout(westForm);
 
-    // 5. BUTTONS
+    // BUTTONS
     QPushButton *btnBongo = new QPushButton("LOAD BUCHLA BONGO PRESET");
     btnBongo->setStyleSheet("background-color: #444; color: #d4af37;");
     westLayout->addWidget(btnBongo);
@@ -2570,7 +2685,7 @@ void MainWindow::setupUI() {
     btnGenWest->setStyleSheet("font-weight: bold; background-color: #d4af37; color: black; height: 40px;");
     westLayout->addWidget(btnGenWest);
 
-    // 6. VISUALIZER LOGIC (C++ SIMULATION)
+    // VISUALISER LOGIC
     auto updateWestScope = [=]() {
         if (!westTimbreSlider || !westScope) return; // Safety
 
@@ -2591,11 +2706,11 @@ void MainWindow::setupUI() {
             double baseFreq = 60.0; // Low frequency to see the folds clearly
             double pi = 3.14159265;
 
-            // 1. FM Modulator
+            // FM Modulator
             // Standard FM: sin(c*t + I*sin(m*t))
             double mod = modIndex * std::sin(t * baseFreq * modRatio * 2 * pi);
 
-            // 2. Core Oscillator (Triangle or Sine)
+            // Core Oscillator (Triangle or Sine)
             // We use Phase Modulation (t + mod) to simulate FM for stability in the scope
             double phase = (t * baseFreq * 2 * pi) + mod;
             double core = 0.0;
@@ -2607,10 +2722,10 @@ void MainWindow::setupUI() {
                 core = std::sin(phase);
             }
 
-            // 3. Pre-Conditioning (Gain + Bias)
+            // Pre-Conditioning (Gain + Bias)
             double signal = (core * gain) + bias;
 
-            // 4. Wavefolding Algorithms
+            // Wavefolding Algorithms
             if (model == 2) { // Serge VCM (Iterative)
                 for(int i = 0; i < stages; ++i) {
                     double thresh = 0.2 + (i * 0.1);
@@ -2639,14 +2754,14 @@ void MainWindow::setupUI() {
                 signal = ((1.0 - order) * signal) + (order * folded);
             }
 
-            // 5. Half-Wave
+            // Half-Wave
             if (halfWave) {
                 if (signal < 0) signal = 0;
             }
 
-            // 6. Vactrol Envelope
+            // Vactrol Envelope
             if (useVactrol) {
-                double env = std::exp(-t * 15.0); // <--- MATCHES XPRESSIVE GENERATOR
+                double env = std::exp(-t * 15.0);
                 signal *= env;
             }
 
@@ -2654,12 +2769,10 @@ void MainWindow::setupUI() {
         };
 
         // Update Scope
-        // 1.0s duration is enough to see the "Bongo" decay
         westScope->updateScope(simFunc, 1.0, zoom);
     };
 
-    // 7. CONNECTIONS
-    // Connect EVERYTHING to the scope updater
+    // CONNECTIONS
     connect(westTimbreSlider, &QSlider::valueChanged, updateWestScope);
     connect(westSymmetrySlider, &QSlider::valueChanged, updateWestScope);
     connect(westOrderSlider, &QSlider::valueChanged, updateWestScope);
@@ -2698,136 +2811,512 @@ void MainWindow::setupUI() {
     westLayout->addStretch();
     modeTabs->addTab(westTab, "West Coast Lab");
 
-    // 26. MODULAR SYNTH
-        ModularSynthTab* modularTab = new ModularSynthTab(this);
+    // ------------------------------------
+    // TAB 26. MODULAR SYNTH (EXTERNAL CODE)
+    // ------------------------------------
+    ModularSynthTab* modularTab = new ModularSynthTab(this);
 
-        // 1. Handle Text Code Generation
-        connect(modularTab, &ModularSynthTab::expressionGenerated, this, [=](QString code){
-            statusBox->setText(code);
-            QApplication::clipboard()->setText(code);
+    // Handle Text Code Generation
+    connect(modularTab, &ModularSynthTab::expressionGenerated, this, [=](QString code){
+        statusBox->setText(code);
+        QApplication::clipboard()->setText(code);
+    });
+
+    // Handle PLAY Request
+    connect(modularTab, &ModularSynthTab::startPreview, this, [=](std::function<double(double)> func){
+        m_ghostSynth->setAudioSource(func);
+        m_ghostSynth->start();
+    });
+
+    // Handle STOP Request
+    connect(modularTab, &ModularSynthTab::stopPreview, this, [=](){
+        m_ghostSynth->setAudioSource([](double){ return 0.0; });
+        m_ghostSynth->stop();
+    });
+
+    modeTabs->addTab(modularTab, "Modular Grid");
+
+
+    // -------------------------------------
+    // TAB 27: SPECTRAL RESYNTHESISER
+    // -------------------------------------
+    QWidget *specTab = new QWidget();
+        auto *specLayout = new QVBoxLayout(specTab);
+
+        // THE SCOPE ---
+        specScope = new UniversalScope();
+        specScope->setMinimumHeight(180);
+        specLayout->addWidget(specScope);
+
+        // SETTINGS FORM ---
+        auto *specForm = new QFormLayout();
+
+        specBuildMode = new QComboBox();
+        specBuildMode->addItems({"Nightly (Nested Variables)", "Legacy (Additive Inline)"});
+
+        specWindowRes = new QDoubleSpinBox();
+        specWindowRes->setRange(1, 500);
+        specWindowRes->setValue(10); // Default to 10 as requested
+        specWindowRes->setSuffix(" Analysis Windows");
+
+        specTopHarmonics = new QSpinBox();
+        specTopHarmonics->setRange(1, 64); specTopHarmonics->setValue(8);
+        specTopHarmonics->setSuffix(" Harmonics");
+
+        specDecaySlider = new QSlider(Qt::Horizontal);
+        specDecaySlider->setRange(1, 100);
+        specDecaySlider->setValue(25);
+
+        specForm->addRow("Build Mode:", specBuildMode);
+        specForm->addRow("Time Resolution:", specWindowRes);
+        specForm->addRow("Spectral Detail:", specTopHarmonics);
+        specForm->addRow("Decay Speed:", specDecaySlider);
+        specLayout->addLayout(specForm);
+
+        // BUTTON & SELECTOR ROW ---
+        auto *specBtnLay = new QHBoxLayout();
+
+        specPitchCombo = new QComboBox();
+        specPitchCombo->addItems({"C-3", "G-3", "A-3", "C-4", "E-4", "A-4", "C-5"});
+        specPitchCombo->setCurrentText("A-4");
+        specBtnLay->addWidget(new QLabel("Pitch:"));
+        specBtnLay->addWidget(specPitchCombo);
+
+        btnDeChord = new QPushButton("De-Chord: OFF");
+        btnDeChord->setCheckable(true);
+        btnDeChord->setStyleSheet("background-color: #444; color: white; height: 35px;");
+        specBtnLay->addWidget(btnDeChord);
+
+        QPushButton *btnLoadSpec = new QPushButton("Load Stab (.wav)");
+        btnLoadSpec->setStyleSheet("height: 35px;");
+        specBtnLay->addWidget(btnLoadSpec);
+
+        btnPlaySpec = new QPushButton("▶ Play Preview");
+        btnPlaySpec->setCheckable(true);
+        btnPlaySpec->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 35px;");
+        specBtnLay->addWidget(btnPlaySpec);
+
+        specLayout->addLayout(specBtnLay);
+
+        // EXPRESSION BOX ---
+        specExpressionBox = new QTextEdit();
+        specExpressionBox->setPlaceholderText("Generated spectral formula will appear here...");
+        specExpressionBox->setMaximumHeight(100);
+        specExpressionBox->setReadOnly(true);
+        specLayout->addWidget(specExpressionBox);
+
+        modeTabs->addTab(specTab, "Spectral Resynth");
+
+        // CONNECTIONS ---
+        connect(specWindowRes, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [=](){ updateSpectralPreview(); });
+        connect(specTopHarmonics, QOverload<int>::of(&QSpinBox::valueChanged), [=](){ updateSpectralPreview(); });
+        connect(specBuildMode, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateSpectralPreview(); });
+        connect(specPitchCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateSpectralPreview(); });
+        connect(specDecaySlider, &QSlider::valueChanged, [=](){ updateSpectralPreview(); });
+
+        connect(btnDeChord, &QPushButton::toggled, [=](bool checked){
+            m_deChordEnabled = checked;
+            btnDeChord->setText(checked ? "De-Chord: ON (Mono)" : "De-Chord: OFF");
+            btnDeChord->setStyleSheet(checked ? "background-color: #0066ff; color: white;" : "background-color: #444; color: white;");
+            updateSpectralPreview();
         });
 
-        // 2. Handle PLAY Request
-        connect(modularTab, &ModularSynthTab::startPreview, this, [=](std::function<double(double)> func){
-            m_ghostSynth->setAudioSource(func);
-            m_ghostSynth->start();
-        });
-
-        // 3. Handle STOP Request
-        connect(modularTab, &ModularSynthTab::stopPreview, this, [=](){
-            m_ghostSynth->setAudioSource([](double){ return 0.0; });
-            m_ghostSynth->stop();
-        });
-
-        modeTabs->addTab(modularTab, "Modular Grid");
-
-        // =========================================================
-        // 27. SPECTRAL RESYNTHESISER
-        // =========================================================
-            QWidget *specTab = new QWidget();
-            auto *specLayout = new QVBoxLayout(specTab);
-
-            // --- A. THE SCOPE ---
-            specScope = new UniversalScope();
-            specScope->setMinimumHeight(180);
-            specLayout->addWidget(specScope);
-
-            // --- B. SETTINGS FORM ---
-            auto *specForm = new QFormLayout();
-
-            specBuildMode = new QComboBox();
-            specBuildMode->addItems({"Nightly (Nested Variables)", "Legacy (Additive Inline)"});
-
-            specWindowRes = new QDoubleSpinBox();
-            specWindowRes->setRange(1, 500);
-            specWindowRes->setValue(10); // Default to 10 as requested
-            specWindowRes->setSuffix(" Analysis Windows");
-
-            specTopHarmonics = new QSpinBox();
-            specTopHarmonics->setRange(1, 64); specTopHarmonics->setValue(8);
-            specTopHarmonics->setSuffix(" Harmonics");
-
-            specDecaySlider = new QSlider(Qt::Horizontal);
-            specDecaySlider->setRange(1, 100);
-            specDecaySlider->setValue(25);
-
-            specForm->addRow("Build Mode:", specBuildMode);
-            specForm->addRow("Time Resolution:", specWindowRes);
-            specForm->addRow("Spectral Detail:", specTopHarmonics);
-            specForm->addRow("Decay Speed:", specDecaySlider);
-            specLayout->addLayout(specForm);
-
-            // --- C. BUTTON & SELECTOR ROW ---
-            auto *specBtnLay = new QHBoxLayout();
-
-            specPitchCombo = new QComboBox();
-            specPitchCombo->addItems({"C-3", "G-3", "A-3", "C-4", "E-4", "A-4", "C-5"});
-            specPitchCombo->setCurrentText("A-4");
-            specBtnLay->addWidget(new QLabel("Pitch:"));
-            specBtnLay->addWidget(specPitchCombo);
-
-            btnDeChord = new QPushButton("De-Chord: OFF");
-            btnDeChord->setCheckable(true);
-            btnDeChord->setStyleSheet("background-color: #444; color: white; height: 35px;");
-            specBtnLay->addWidget(btnDeChord);
-
-            QPushButton *btnLoadSpec = new QPushButton("Load Stab (.wav)");
-            btnLoadSpec->setStyleSheet("height: 35px;");
-            specBtnLay->addWidget(btnLoadSpec);
-
-            btnPlaySpec = new QPushButton("▶ Play Preview");
-            btnPlaySpec->setCheckable(true);
-            btnPlaySpec->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 35px;");
-            specBtnLay->addWidget(btnPlaySpec);
-
-            specLayout->addLayout(specBtnLay);
-
-            // --- D. EXPRESSION BOX ---
-            specExpressionBox = new QTextEdit();
-            specExpressionBox->setPlaceholderText("Generated spectral formula will appear here...");
-            specExpressionBox->setMaximumHeight(100);
-            specExpressionBox->setReadOnly(true);
-            specLayout->addWidget(specExpressionBox);
-
-            modeTabs->addTab(specTab, "Spectral Resynth");
-
-            // --- CONNECTIONS ---
-            connect(specWindowRes, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [=](){ updateSpectralPreview(); });
-            connect(specTopHarmonics, QOverload<int>::of(&QSpinBox::valueChanged), [=](){ updateSpectralPreview(); });
-            connect(specBuildMode, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateSpectralPreview(); });
-            connect(specPitchCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateSpectralPreview(); });
-            connect(specDecaySlider, &QSlider::valueChanged, [=](){ updateSpectralPreview(); });
-
-            connect(btnDeChord, &QPushButton::toggled, [=](bool checked){
-                m_deChordEnabled = checked;
-                btnDeChord->setText(checked ? "De-Chord: ON (Mono)" : "De-Chord: OFF");
-                btnDeChord->setStyleSheet(checked ? "background-color: #0066ff; color: white;" : "background-color: #444; color: white;");
+        connect(btnLoadSpec, &QPushButton::clicked, this, [=](){
+            loadWav();
+            if(!originalData.empty()) {
+                specSampleData = originalData;
+                if(specSampleData.size() > (fileFs * 2)) specSampleData.resize(fileFs * 2);
                 updateSpectralPreview();
+            }
+        });
+
+        connect(btnPlaySpec, &QPushButton::toggled, [=](bool checked){
+            if(!checked) {
+                m_ghostSynth->stop();
+                btnPlaySpec->setText("▶ Play Preview");
+                btnPlaySpec->setStyleSheet("background-color: #335533; color: white;");
+            } else {
+                m_ghostSynth->start();
+                btnPlaySpec->setText("⏹ Stop");
+                btnPlaySpec->setStyleSheet("background-color: #338833; color: white;");
+                updateSpectralPreview();
+            }
+        });
+
+        // -------------------------------------
+        // TAB 28: SUBTRACTIVE LAB
+        // -------------------------------------
+        QWidget *subTab = new QWidget();
+        QVBoxLayout *subMainLayout = new QVBoxLayout(subTab);
+
+        // TOP SECTION: THE ANALYSERS
+        QHBoxLayout *vizLayout = new QHBoxLayout();
+        subScope = new UniversalScope();     // Waveform
+        subSpectrum = new UniversalScope();  // Spectral Analyzer
+        vizLayout->addWidget(subScope);
+        vizLayout->addWidget(subSpectrum);
+        subMainLayout->addLayout(vizLayout);
+
+        // THE CONTROL RACK (Horizontal Flow)
+        QHBoxLayout *rackLayout = new QHBoxLayout();
+
+        // OSCILLATORS (Rotary Dials) ---
+        QGroupBox *oscUnit = new QGroupBox("1. OSCILLATORS");
+        QGridLayout *oscGrid = new QGridLayout(oscUnit);
+
+        subOsc1Dial = new QDial(); subOsc1Dial->setRange(0, 3); subOsc1Dial->setNotchesVisible(true);
+        subOsc2Dial = new QDial(); subOsc2Dial->setRange(0, 3); subOsc2Dial->setNotchesVisible(true);
+        subDetuneSlider = new QSlider(Qt::Horizontal); subDetuneSlider->setRange(0, 50);
+
+        oscGrid->addWidget(new QLabel("Osc 1 Type"), 0, 0); oscGrid->addWidget(subOsc1Dial, 1, 0);
+        oscGrid->addWidget(new QLabel("Osc 2 Type"), 0, 1); oscGrid->addWidget(subOsc2Dial, 1, 1);
+        oscGrid->addWidget(new QLabel("Detune Osc 2"), 2, 0, 1, 2); oscGrid->addWidget(subDetuneSlider, 3, 0, 1, 2);
+        rackLayout->addWidget(oscUnit);
+
+        // UNIT 2: MIXER ---
+        QGroupBox *mixUnit = new QGroupBox("2. MIXER");
+        QVBoxLayout *mixVLay = new QVBoxLayout(mixUnit);
+        subMixSlider = new QSlider(Qt::Vertical); subMixSlider->setRange(0, 100); subMixSlider->setValue(50);
+        subShowMathToggle = new QCheckBox("Show Math Overlay");
+        subShowMathToggle->setChecked(true);
+        mixVLay->addWidget(subMixSlider, 0, Qt::AlignCenter);
+        mixVLay->addWidget(new QLabel("Mix O1/O2"), 0, Qt::AlignCenter);
+        mixVLay->addWidget(subShowMathToggle);
+        rackLayout->addWidget(mixUnit);
+
+        // UNIT 3: FULL ADSR ENVELOPE ---
+
+        QGroupBox *adsrUnit = new QGroupBox("3. ADSR AMPLIFIER");
+        QHBoxLayout *adsrHLay = new QHBoxLayout(adsrUnit);
+        subAttSlider = new QSlider(Qt::Vertical); subDecSlider = new QSlider(Qt::Vertical);
+        subSusSlider = new QSlider(Qt::Vertical); subRelSlider = new QSlider(Qt::Vertical);
+        for(auto* s : {subAttSlider, subDecSlider, subSusSlider, subRelSlider}) s->setRange(0, 100);
+        subSusSlider->setValue(70); subDecSlider->setValue(30); subRelSlider->setValue(20);
+
+        auto addAdsrKnob = [&](QString name, QSlider* s) {
+            QVBoxLayout *v = new QVBoxLayout(); v->addWidget(s, 0, Qt::AlignCenter);
+            v->addWidget(new QLabel(name), 0, Qt::AlignCenter); adsrHLay->addLayout(v);
+        };
+        addAdsrKnob("A", subAttSlider); addAdsrKnob("D", subDecSlider);
+        addAdsrKnob("S", subSusSlider); addAdsrKnob("R", subRelSlider);
+        rackLayout->addWidget(adsrUnit);
+
+        subMainLayout->addLayout(rackLayout);
+
+        // MASTER OUTPUT BUTTON
+        btnSubPlayMaster = new QPushButton("▶ START SYNTH ENGINE");
+        btnSubPlayMaster->setCheckable(true);
+        btnSubPlayMaster->setStyleSheet("height: 60px; font-weight: bold; background-color: #335533; color: white;");
+        subMainLayout->addWidget(btnSubPlayMaster);
+
+        modeTabs->addTab(subTab, "Subtractive Lab");
+
+        // CONNECTIONS (Loop through for efficiency)
+        QList<QWidget*> subWidgets = {subOsc1Dial, subOsc2Dial, subDetuneSlider, subMixSlider,
+                                          subAttSlider, subDecSlider, subSusSlider, subRelSlider};
+        for(auto* w : subWidgets) {
+            if(auto* d = qobject_cast<QDial*>(w)) connect(d, &QDial::valueChanged, this, &MainWindow::updateSubtractivePreview);
+            if(auto* s = qobject_cast<QSlider*>(w)) connect(s, &QSlider::valueChanged, this, &MainWindow::updateSubtractivePreview);
+        }
+        connect(subShowMathToggle, &QCheckBox::toggled, this, &MainWindow::updateSubtractivePreview);
+
+        connect(btnSubPlayMaster, &QPushButton::toggled, [=](bool checked){
+            if(checked) {
+                m_ghostSynth->start(); // Use the existing SynthEngine
+                btnSubPlayMaster->setText("⏹ STOP ENGINE");
+                btnSubPlayMaster->setStyleSheet("background-color: #883333; color: white;");
+            } else {
+                m_ghostSynth->stop();
+                btnSubPlayMaster->setText("▶ START SYNTH ENGINE");
+                btnSubPlayMaster->setStyleSheet("background-color: #335533; color: white;");
+            }
+            updateSubtractivePreview();
+        });
+
+
+        // ------------------------------------
+        // TAB 29: PIXEL SYNTH
+        // ------------------------------------
+        pixelTab = new QWidget();
+        QVBoxLayout *pixelLayout = new QVBoxLayout(pixelTab);
+
+        // IMAGE PREVIEW AREA
+        pixelPreviewLabel = new QLabel("No Image Loaded");
+        pixelPreviewLabel->setAlignment(Qt::AlignCenter);
+        pixelPreviewLabel->setStyleSheet("border: 2px dashed #666; background-color: #222; color: #AAA;");
+        pixelPreviewLabel->setMinimumHeight(200);
+        pixelPreviewLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        pixelLayout->addWidget(pixelPreviewLabel);
+
+        // SETTINGS GROUP
+        QGroupBox *pixSettings = new QGroupBox("Resolution & Physics");
+        QGridLayout *pixGrid = new QGridLayout(pixSettings);
+
+        pixelBuildMode = new QComboBox();
+        pixelBuildMode->addItems({"Nightly (Nested Variables)", "Legacy (Additive Chain)"});
+
+        pixelTimeSteps = new QSpinBox();
+        pixelTimeSteps->setRange(4, 256); pixelTimeSteps->setValue(32);
+        pixelTimeSteps->setSuffix(" Time Slices");
+        pixelTimeSteps->setToolTip("How many slices to cut the image into (X-Axis).");
+
+        pixelFreqBands = new QSpinBox();
+        pixelFreqBands->setRange(10, 1000); pixelFreqBands->setValue(100);
+        pixelFreqBands->setSuffix(" Freq Bands");
+        pixelFreqBands->setToolTip("Vertical resolution (Y-Axis).");
+
+        pixelMaxPartials = new QSlider(Qt::Horizontal);
+        pixelMaxPartials->setRange(1, 50); pixelMaxPartials->setValue(10);
+        QLabel *lblPartials = new QLabel("Max Voices: 10");
+        connect(pixelMaxPartials, &QSlider::valueChanged, [=](int v){ lblPartials->setText(QString("Max Voices: %1").arg(v)); });
+
+        pixelDuration = new QDoubleSpinBox(); pixelDuration->setValue(2.0); pixelDuration->setSuffix(" sec");
+
+        pixelMinFreq = new QDoubleSpinBox(); pixelMinFreq->setRange(20, 1000); pixelMinFreq->setValue(100); pixelMinFreq->setPrefix("Low: ");
+        pixelMaxFreq = new QDoubleSpinBox(); pixelMaxFreq->setRange(100, 20000); pixelMaxFreq->setValue(5000); pixelMaxFreq->setPrefix("High: ");
+
+        pixelLogScale = new QCheckBox("Logarithmic Scale (Musical)");
+        pixelLogScale->setChecked(true);
+
+        pixGrid->addWidget(new QLabel("Build Mode:"), 0, 0); pixGrid->addWidget(pixelBuildMode, 0, 1);
+        pixGrid->addWidget(new QLabel("Duration:"), 0, 2);   pixGrid->addWidget(pixelDuration, 0, 3);
+
+        pixGrid->addWidget(new QLabel("X-Res (Time):"), 1, 0); pixGrid->addWidget(pixelTimeSteps, 1, 1);
+        pixGrid->addWidget(new QLabel("Y-Res (Freq):"), 1, 2); pixGrid->addWidget(pixelFreqBands, 1, 3);
+
+        pixGrid->addWidget(lblPartials, 2, 0);      pixGrid->addWidget(pixelMaxPartials, 2, 1);
+        pixGrid->addWidget(pixelLogScale, 2, 2);
+
+        QHBoxLayout *freqLay = new QHBoxLayout();
+        freqLay->addWidget(pixelMinFreq); freqLay->addWidget(pixelMaxFreq);
+        pixGrid->addLayout(freqLay, 3, 0, 1, 4);
+
+        pixelLayout->addWidget(pixSettings);
+
+        // BUTTONS
+        QHBoxLayout *pixBtnLay = new QHBoxLayout();
+
+        btnLoadPixel = new QPushButton("Load Image (JPG/PNG)");
+        btnLoadPixel->setStyleSheet("height: 40px;");
+
+        btnGenPixel = new QPushButton("GENERATE FORMULA");
+        btnGenPixel->setStyleSheet("height: 40px; background-color: #444; color: white; font-weight: bold;");
+
+        btnPlayPixel = new QPushButton("▶ Play");
+        btnPlayPixel->setCheckable(true);
+        btnPlayPixel->setStyleSheet("height: 40px; background-color: #335533; color: white; font-weight: bold;");
+
+        pixBtnLay->addWidget(btnLoadPixel);
+        pixBtnLay->addWidget(btnGenPixel);
+        pixBtnLay->addWidget(btnPlayPixel);
+        pixelLayout->addLayout(pixBtnLay);
+
+        modeTabs->addTab(pixelTab, "Pixel Synth");
+
+        // CONNECTIONS
+        connect(btnLoadPixel, &QPushButton::clicked, [=](){
+            QString path = QFileDialog::getOpenFileName(this, "Open Image", "", "Images (*.png *.jpg *.bmp)");
+            if(path.isEmpty()) return;
+            pixelLoadedImage.load(path);
+            // Show Preview (Scaled to fit)
+            pixelPreviewLabel->setPixmap(QPixmap::fromImage(pixelLoadedImage).scaled(pixelPreviewLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            pixelPreviewLabel->setText("");
             });
 
-            connect(btnLoadSpec, &QPushButton::clicked, this, [=](){
-                loadWav();
-                if(!originalData.empty()) {
-                    specSampleData = originalData;
-                    if(specSampleData.size() > (fileFs * 2)) specSampleData.resize(fileFs * 2);
-                    updateSpectralPreview();
+        connect(btnGenPixel, &QPushButton::clicked, this, &MainWindow::generatePixelSynth);
+
+        connect(btnPlayPixel, &QPushButton::toggled, [=](bool checked){
+            if(checked) {
+                m_ghostSynth->start();
+            } else {
+                m_ghostSynth->stop();
+            }
+        });
+
+        // ------------------------------------
+        // TAB 30: DJ SCRATCH GENERATOR
+        // ------------------------------------
+        QWidget *scratchTab = new QWidget();
+        QVBoxLayout *scratchLayout = new QVBoxLayout(scratchTab);
+
+        // Visualizer
+        scratchScope = new UniversalScope();
+        scratchScope->setMinimumHeight(180);
+        scratchLayout->addWidget(scratchScope);
+
+        QGroupBox *scratchCtrlGroup = new QGroupBox("Turntable Physics");
+        QFormLayout *scratchForm = new QFormLayout(scratchCtrlGroup);
+
+        scratchBuildMode = new QComboBox();
+        scratchBuildMode->addItems({"Nightly (Variables)", "Legacy (Additive)"});
+
+        scratchPatternCombo = new QComboBox();
+        scratchPatternCombo->addItems({"Baby Scratch", "Transformer", "Chirp", "Flare"});
+
+        scratchVinylPitch = new QSlider(Qt::Horizontal);
+        scratchVinylPitch->setRange(40, 440); scratchVinylPitch->setValue(220);
+
+        scratchFaderSpeed = new QSlider(Qt::Horizontal);
+        scratchFaderSpeed->setRange(1, 20); scratchFaderSpeed->setValue(6);
+
+        scratchGritSlider = new QSlider(Qt::Horizontal);
+        scratchGritSlider->setRange(0, 100); scratchGritSlider->setValue(15);
+
+        scratchForm->addRow("Build Mode:", scratchBuildMode);
+        scratchForm->addRow("Scratch Technique:", scratchPatternCombo);
+        scratchForm->addRow("Vinyl Pitch (f):", scratchVinylPitch);
+        scratchForm->addRow("Hand Speed (Hz):", scratchFaderSpeed);
+        scratchForm->addRow("Groove Grit:", scratchGritSlider);
+        scratchLayout->addWidget(scratchCtrlGroup);
+
+        // Buttons
+        btnPlayScratch = new QPushButton("▶ Test Scratch Loop");
+        btnPlayScratch->setCheckable(true);
+        btnPlayScratch->setStyleSheet("height: 40px; background-color: #333355; color: white; font-weight: bold;");
+
+        QPushButton *btnGenScratch = new QPushButton("GENERATE SCRATCH FORMULA");
+        btnGenScratch->setStyleSheet("height: 40px; font-weight: bold;");
+
+        scratchLayout->addWidget(btnPlayScratch);
+        scratchLayout->addWidget(btnGenScratch);
+        modeTabs->addTab(scratchTab, "Scratch Lab");
+
+        // --- CONNECTIONS (The "Wires") ---
+        connect(btnGenScratch, &QPushButton::clicked, this, &MainWindow::generateScratchLogic);
+
+        // Connect sliders to update the Scope in real-time
+        connect(scratchVinylPitch, &QSlider::valueChanged, [=](){ updateScratchPreview(); });
+        connect(scratchFaderSpeed, &QSlider::valueChanged, [=](){ updateScratchPreview(); });
+        connect(scratchGritSlider, &QSlider::valueChanged, [=](){ updateScratchPreview(); });
+        connect(scratchPatternCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateScratchPreview(); });
+
+        connect(btnPlayScratch, &QPushButton::toggled, [=](bool checked){
+            if(checked) {
+                m_ghostSynth->start();
+                updateScratchPreview();
+            } else {
+                m_ghostSynth->stop();
+            }
+        });
+
+        // ---------------------------------------------------------
+            // TAB 31: NATURE MEGA LAB
+            // ---------------------------------------------------------
+            QWidget *natureTab = new QWidget();
+            QVBoxLayout *natureLayout = new QVBoxLayout(natureTab);
+
+            // 1. TOP BAR: Mode & Build Type
+            QGroupBox *natureModeBox = new QGroupBox("Environment Settings");
+            QHBoxLayout *natureModeLayout = new QHBoxLayout(natureModeBox);
+
+            natureTypeCombo = new QComboBox();
+            natureTypeCombo->addItems({
+                "Forest Birds (FM)",
+                "Night Crickets (Pulse)",
+                "Guinea Pig Herd (Harmonic)",
+                "Rushing Stream (Granular)",
+                "Rainstorm (Stochastic)",
+                "Thunder & Rumble (Explosive)",
+                "Swamp Frogs (Resonant)"
+            });
+
+            natureBuildMode = new QComboBox();
+            natureBuildMode->addItems({"Nightly (Variables)", "Legacy (Additive)"});
+
+            natureModeLayout->addWidget(new QLabel("Model:"));
+            natureModeLayout->addWidget(natureTypeCombo, 1);
+            natureModeLayout->addWidget(new QLabel("Build:"));
+            natureModeLayout->addWidget(natureBuildMode, 1);
+            natureLayout->addWidget(natureModeBox);
+
+            // 2. The Mega Slider Bank
+            QGroupBox *paramBox = new QGroupBox("Physics Parameters");
+            QGridLayout *paramGrid = new QGridLayout(paramBox);
+
+            for(int i=0; i<8; i++) {
+                natureLabels[i] = new QLabel(QString("Param %1").arg(i+1));
+                natureLabels[i]->setAlignment(Qt::AlignCenter);
+                natureLabels[i]->setStyleSheet("font-size: 10px; color: #555;");
+
+                // Dynamic pointers to our class members
+                QSlider** targetSlider = nullptr;
+                switch(i) {
+                    case 0: targetSlider = &natureParam1; break;
+                    case 1: targetSlider = &natureParam2; break;
+                    case 2: targetSlider = &natureParam3; break;
+                    case 3: targetSlider = &natureParam4; break;
+                    case 4: targetSlider = &natureParam5; break;
+                    case 5: targetSlider = &natureParam6; break;
+                    case 6: targetSlider = &natureParam7; break;
+                    case 7: targetSlider = &natureParam8; break;
                 }
+
+                *targetSlider = new QSlider(Qt::Vertical);
+                (*targetSlider)->setRange(0, 100);
+                (*targetSlider)->setValue(50);
+
+                // Add to grid (2 rows of 4)
+                int row = (i < 4) ? 0 : 2;
+                int col = i % 4;
+
+                paramGrid->addWidget(*targetSlider, row, col, Qt::AlignHCenter);
+                paramGrid->addWidget(natureLabels[i], row+1, col, Qt::AlignHCenter);
+
+                // Connect update
+                connect(*targetSlider, &QSlider::valueChanged, this, &MainWindow::generateNatureLogic);
+            }
+            natureLayout->addWidget(paramBox);
+
+            // 3. Visuals & Controls
+            natureScope = new UniversalScope();
+            natureScope->setMinimumHeight(120);
+            natureLayout->addWidget(natureScope);
+
+            // BUTTON LAYOUT
+            QHBoxLayout *natureBtnLay = new QHBoxLayout();
+
+            btnPlayNature = new QPushButton("▶ Play Preview");
+            btnPlayNature->setCheckable(true);
+            btnPlayNature->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
+
+            btnGenNature = new QPushButton("GENERATE STRING");
+            btnGenNature->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 40px;");
+
+            natureBtnLay->addWidget(btnPlayNature);
+            natureBtnLay->addWidget(btnGenNature);
+            natureLayout->addLayout(natureBtnLay);
+
+            // CONNECTIONS
+            connect(natureTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int index){
+                updateNatureLabels(index);
+                generateNatureLogic();
             });
 
-            connect(btnPlaySpec, &QPushButton::toggled, [=](bool checked){
+            // Play Toggle Logic
+            connect(btnPlayNature, &QPushButton::toggled, [=](bool checked){
                 if(!checked) {
+                    m_ghostSynth->setAudioSource([](double){ return 0.0; });
                     m_ghostSynth->stop();
-                    btnPlaySpec->setText("▶ Play Preview");
-                    btnPlaySpec->setStyleSheet("background-color: #335533; color: white;");
+                    btnPlayNature->setText("▶ Play Preview");
+                    btnPlayNature->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
                 } else {
                     m_ghostSynth->start();
-                    btnPlaySpec->setText("⏹ Stop");
-                    btnPlaySpec->setStyleSheet("background-color: #338833; color: white;");
-                    updateSpectralPreview();
+                    btnPlayNature->setText("⏹ Stop");
+                    btnPlayNature->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
+                    generateNatureLogic(); // Trigger sound
                 }
             });
 
-    // 28. NEED TO KNOW / NOTES TAB
+            connect(btnGenNature, &QPushButton::clicked, this, &MainWindow::generateNatureLogic);
+
+            modeTabs->addTab(natureTab, "Nature Lab");
+
+            // Initialize labels
+            updateNatureLabels(0);
+
+    // ------------------------------------
+    // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
+    // ------------------------------------
     QWidget *notesTab = new QWidget();
     auto *notesLayout = new QVBoxLayout(notesTab);
 
@@ -2846,15 +3335,10 @@ void MainWindow::setupUI() {
         "<li><b></b></li>"
         "<li><b>:</b></li>"
         "</ul>"
-
-
         );
 
     notesLayout->addWidget(notesText);
     modeTabs->addTab(notesTab, "Need to Know");
-
-
-    // Above here for interfaces
 
     statusBox = new QTextEdit(); statusBox->setMaximumHeight(100);
     rightLayout->addWidget(statusBox);
@@ -2878,414 +3362,30 @@ void MainWindow::setupUI() {
     connect(btnGenVel, &QPushButton::clicked, this, &MainWindow::generateVelocilogic);
     connect(btnNoise, &QPushButton::clicked, this, &MainWindow::generateNoiseForge);
     connect(btnSaveXpf, &QPushButton::clicked, this, &MainWindow::saveXpfInstrument);
-    connect(btnFil, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
+    connect(btnGenFilter, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
     connect(btnRand, &QPushButton::clicked, this, &MainWindow::generateRandomPatch);
 }
 
-// The workings ------------------------
+// =========================================================
+// =========================================================
+// SYNTHESIS ALGORITHMS & DSP ROUTINES
+// =========================================================
+// =========================================================
 
 
-void MainWindow::loadBesselPreset(int idx) {
-    if (idx == 0 || idx == 9 || idx == 18 || idx == 28) return;
-    auto setFM = [&](QString cw, QString mw, double cm, double mm, double i) {
-        besselCarrierWave->setCurrentText(cw); besselModWave->setCurrentText(mw);
-        besselCarrierMult->setValue(cm); besselModMult->setValue(mm); besselModIndex->setValue(i);
-    };
-    switch(idx) {
-    case 1:  setFM("sinew", "sinew", 1.0, 14.0, 1.2); break;
-    case 2:  setFM("sinew", "sinew", 1.0, 3.5, 2.5); break;
-    case 3:  setFM("trianglew", "sinew", 1.0, 8.0, 0.8); break;
-    case 4:  setFM("sinew", "sinew", 2.0, 1.0, 0.5); break;
-    case 5:  setFM("sinew", "sinew", 1.0, 19.0, 3.0); break;
-    case 10: setFM("sinew", "saww", 1.0, 1.0, 3.5); break;
-    case 11: setFM("sinew", "sinew", 1.0, 1.0, 1.8); break;
-    case 19: setFM("sinew", "sinew", 1.0, 3.5, 2.0); break;
-    case 20: setFM("sinew", "sinew", 1.0, 7.11, 4.0); break;
-    case 37: setFM("sinew", "saww", 1.0, 8.0, 6.0); break;
-    case 40: setFM("sinew", "saww", 8.0, 0.1, 50.0); break;
-    default: setFM("sinew", "sinew", 1.0, 2.0, 2.0); break;
-    }
-}
+// SHARED
 
-void MainWindow::generateConsoleWave() {
-    // Get the build mode (Modern vs Legacy)
-    int mode = buildModeConsole ? buildModeConsole->currentIndex() : 0;
 
-    QString result;
-    auto *rng = QRandomGenerator::global();
+QString MainWindow::getModulatorFormula(int index) { return QString("(0.5 + %1(t * %2) * %3)").arg(mods[index].shape->currentText()).arg(mods[index].rate->value()).arg(mods[index].depth->value()); }
 
-    if (mode == 0) {
-        // --- MODERN (Float Math) ---
-        QStringList waves = {"sin", "cos", "tri", "saw", "sqr"};
-        QStringList mods = {
-            "",
-            "* (1.0 - t*0.5)",        // Decay
-            "* (0.5 + 0.5*sin(t*4))", // Tremolo
-            "+ 0.1*sin(t*50)",        // FM Grit
-            "* ((t*10 % 2) - 1)"      // Sample & Hold
-        };
-        QStringList quantizers = {
-            "",
-            "floor(x * 4)/4",    // 2-bit
-            "floor(x * 16)/16",  // 4-bit
-            "x > 0 ? 1 : -1"     // 1-bit Comparator
-        };
 
-        QString w = waves[rng->bounded(waves.size())];
-        QString m = mods[rng->bounded(mods.size())];
-        QString q = quantizers[rng->bounded(quantizers.size())];
 
-        // Randomize Frequency Multiplier
-        double freqMult = (rng->bounded(4) + 1) * 0.5; // 0.5, 1.0, 1.5, 2.0
 
-        // Build the Core: "sin(t * f * 1.5)"
-        QString core = QString("%1(t * f * %2)").arg(w).arg(freqMult);
+void MainWindow::copyToClipboard() { QApplication::clipboard()->setText(statusBox->toPlainText()); }
 
-        // Add Modifiers
-        QString full = core + m;
 
-        // Add Quantizer
-        if (q.isEmpty()) {
-            result = full;
-        } else {
-            result = q.replace("x", "(" + full + ")");
-        }
 
-    } else {
-        // --- LEGACY (Bytebeat / Bitwise) ---
-        QStringList ops = {"&", "|", "^", ">>", "<<"};
-        QStringList vals = {"t", "t*2", "t/2", "t>>4", "t&128"};
-
-        QString a = vals[rng->bounded(vals.size())];
-        QString b = vals[rng->bounded(vals.size())];
-        QString op = ops[rng->bounded(ops.size())];
-
-        result = QString("(%1 %2 %3) & 255").arg(a, op, b);
-    }
-
-    // --- OUTPUT ---
-
-    // 1. Debug Print
-    qDebug() << "GENERATED:" << result;
-
-    // 2. Copy to Clipboard
-    QGuiApplication::clipboard()->setText(result);
-
-    // 3. VISUAL CONFIRMATION (This was missing!)
-    statusBox->setText(result);
-}
-
-void MainWindow::generateSFXMacro() {
-    double f1 = sfxStartFreq->value(), f2 = sfxEndFreq->value(), d = sfxDur->value();
-    QString audio = QString("sinew(integrate(%1 * exp(-t * %2)))").arg(f1).arg(std::log(f1/f2)/d);
-    statusBox->setText((buildModeSFX->currentIndex() == 0) ? QString("(t < %1 ? %2 : 0)").arg(d).arg(audio) : QString("(t < %1) * %2").arg(d).arg(audio));
-}
-
-void MainWindow::generateArpAnimator() {
-    // 1. CALCULATE SPEED
-    double hz = 0;
-    if (arpBpmSync->isChecked()) {
-        double bpm = arpBpmVal->value();
-        // 1/16th note = BPM / 60 * 4
-        // Hubbard Speed (1/64) is 4x faster than that
-        int divIdx = arpSpeedDiv->currentIndex();
-        if (divIdx == 4) hz = 50.0; // PAL Frame (Classic C64 standard)
-        else {
-            double multiplier = (divIdx == 0) ? 4.0 : (divIdx == 1) ? 8.0 : (divIdx == 2) ? 12.0 : 16.0;
-            hz = (bpm / 60.0) * multiplier;
-        }
-    } else {
-        hz = arpSpeed->value();
-    }
-
-    // 2. GET INTERVALS (Parse the combobox text)
-    // Helper to extract number from string like "+7 (Perfect 5th)"
-    auto getSemi = [](QString s) {
-        return s.split(" ")[0].toInt();
-    };
-    int note1 = 0; // Root is always 0
-    int note2 = getSemi(arpInterval1->currentText());
-    int note3 = getSemi(arpInterval2->currentText());
-
-    // 3. GENERATE WAVEFORM LOGIC
-    QString waveName = arpWave->currentText();
-    double pwm = arpPwmSlider->value() / 100.0;
-
-    // We define a lambda to generate the "Audio" part for a specific pitch
-    auto genAudio = [&](QString pitchMult) {
-        if (waveName.contains("Pulse")) {
-            // Pulse Width formula: (sin(f) > width ? 1 : -1)
-            // We scale PWM to -1..1 range for the engine
-            return QString("(sinew(integrate(f*%1)) > %2 ? 1 : -1)")
-                .arg(pitchMult).arg((pwm * 2.0) - 1.0);
-        }
-        else if (waveName.contains("Metal")) {
-            // Ring Mod: Square * Detuned Square
-            return QString("(squarew(integrate(f*%1)) * squarew(integrate(f*%1*2.41)))")
-                .arg(pitchMult);
-        }
-        else if (waveName.contains("Noise")) {
-            return QString("randv(t*10000)"); // Noise ignores pitch usually
-        }
-        else {
-            QString osc = waveName.contains("Saw") ? "saww" : "trianglew";
-            return QString("%1(integrate(f*%2))").arg(osc).arg(pitchMult);
-        }
-    };
-
-    QString finalExpr;
-
-    // 4. BUILD THE ARP (Nested vs Legacy)
-
-    // Calculate Pitch Multipliers: 2^(semitones/12)
-    QString p1 = "1.0";
-    QString p2 = QString::number(std::pow(2.0, note2 / 12.0), 'f', 4);
-    QString p3 = QString::number(std::pow(2.0, note3 / 12.0), 'f', 4);
-
-    if (buildModeArp->currentIndex() == 0) { // NIGHTLY (Clean Switching)
-        // Logic: var step := floor(t * speed) % 3;
-        // (step == 0 ? Note1 : (step == 1 ? Note2 : Note3))
-
-        QString selector = QString("mod(floor(t*%1), 3)").arg(hz);
-
-        finalExpr = QString("(%1 < 1 ? %2 : (%1 < 2 ? %3 : %4))")
-                        .arg(selector)
-                        .arg(genAudio(p1))
-                        .arg(genAudio(p2))
-                        .arg(genAudio(p3));
-
-    } else { // LEGACY (Additive)
-        // Logic: ((Phase 0) * Note1) + ((Phase 1) * Note2) ...
-        // We use mod(floor(t*spd), 3) to find the current step index
-
-        QString stepCheck = QString("mod(floor(t*%1), 3)").arg(hz);
-
-        finalExpr = QString("((%1 < 1) * %2) + ((%1 >= 1 & %1 < 2) * %3) + ((%1 >= 2) * %4)")
-                        .arg(stepCheck)
-                        .arg(genAudio(p1))
-                        .arg(genAudio(p2))
-                        .arg(genAudio(p3));
-    }
-
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalExpr));
-}
-
-
-void MainWindow::generateBesselFM() {
-    QString fExpr = QString("f*%1 + (%2(integrate(f*%3))*%4*f*%3)").arg(besselCarrierMult->value()).arg(besselModWave->currentText()).arg(besselModMult->value()).arg(besselModIndex->value());
-    statusBox->setText(QString("clamp(-1, %1(integrate(%2)), 1)").arg(besselCarrierWave->currentText(), fExpr));
-}
-
-void MainWindow::generateHarmonicLab() {
-    QStringList t;
-    for(int i=0; i<16; ++i) {
-        double v = harmonicSliders[i]->value() / 100.0;
-        if(v > 0) t << QString("%1 * sinew(integrate(f * %2))").arg(v).arg(i+1);
-    }
-    statusBox->setText(t.isEmpty() ? "0" : QString("clamp(-1, %1, 1)").arg(t.join(" + ")));
-}
-
-void MainWindow::generateLeadStack() {
-    int voices = leadUnisonCount->value();
-    double detune = leadDetuneSlider->value() / 200.0; // 0.0 to 0.5 range
-    double sub = leadSubSlider->value() / 100.0;
-    double noise = leadNoiseSlider->value() / 100.0;
-    double drift = leadVibeSlider->value() / 100.0;
-
-    QString wName = leadWaveType->currentText().toLower();
-    QString func = "saww";
-    if(wName.contains("square")) func = "squarew";
-    else if(wName.contains("triangle")) func = "trianglew";
-    else if(wName.contains("sine")) func = "sinew";
-
-    QStringList stack;
-
-    // 1. Generate Unison Voices
-    for (int i = 0; i < voices; ++i) {
-        // Calculate offset centered around 1.0
-        // e.g. 5 voices: -2, -1, 0, 1, 2 scaled by detune
-        double ratio = (voices > 1) ? ((double)i / (voices - 1)) - 0.5 : 0.0;
-        double mult = 1.0 + (ratio * detune);
-
-        QString freqExpr = QString("f * %1").arg(mult, 0, 'f', 4);
-
-        // Add Drift if active (Random slow sine LFO)
-        if(drift > 0) {
-            freqExpr += QString(" * (1 + %1 * sinew(t*3))").arg(drift * 0.02);
-        }
-
-        // Add to stack
-        stack << QString("%1(integrate(%2))").arg(func).arg(freqExpr);
-    }
-
-    QString finalExpr = "(" + stack.join(" + ") + ")";
-
-    // 2. Normalize Volume (Divide by count)
-    finalExpr = QString("(%1 / %2)").arg(finalExpr).arg(voices);
-
-    // 3. Add Sub Oscillator
-    if (sub > 0) {
-        finalExpr += QString(" + (%1 * squarew(integrate(f*0.5)))").arg(sub);
-    }
-
-    // 4. Add Noise
-    if (noise > 0) {
-        finalExpr += QString(" + (%1 * randv(t*10000))").arg(noise);
-    }
-
-    // 5. Final Clamp
-    finalExpr = QString("clamp(-1, %1, 1)").arg(finalExpr);
-
-    statusBox->setText(finalExpr);
-    QApplication::clipboard()->setText(finalExpr);
-}
-
-void MainWindow::generateVelocilogic() {
-    int rows = velMapTable->rowCount();
-    if (rows == 0) return;
-
-    QString finalFormula;
-
-    // --- MODE A: NIGHTLY (Nested Ternary) ---
-    if (velMapMode->currentIndex() == 0) {
-        QString nestedBody = "0";
-        int startIdx = rows - 1;
-
-        // Base case optimization
-        if (velMapTable->item(startIdx, 0)->text().toInt() >= 127) {
-            nestedBody = velMapTable->item(startIdx, 1)->text();
-            startIdx--;
-        }
-
-        for (int i = startIdx; i >= 0; --i) {
-            // Convert MIDI (0-127) to Volume (0.0-1.0)
-            double rawLimit = velMapTable->item(i, 0)->text().toDouble();
-            double normLimit = rawLimit / 127.0;
-
-            QString code = velMapTable->item(i, 1)->text();
-
-            // USE 'v' INSTEAD OF 'vel'
-            nestedBody = QString("(v < %1 ? %2 : %3)")
-                             .arg(normLimit, 0, 'f', 3)
-                             .arg(code)
-                             .arg(nestedBody);
-        }
-        finalFormula = nestedBody;
-    }
-
-    // --- MODE B: LEGACY (Additive) ---
-    else {
-        QStringList segments;
-        double lowerBound = 0.0;
-
-        for (int i = 0; i < rows; ++i) {
-            // Convert MIDI (0-127) to Volume (0.0-1.0)
-            double rawLimit = velMapTable->item(i, 0)->text().toDouble();
-            double upperBound = rawLimit / 127.0;
-            QString code = velMapTable->item(i, 1)->text();
-
-            QString rangeCheck;
-
-            // 1. First Zone
-            if (i == 0 && lowerBound <= 0.001) {
-                rangeCheck = QString("(v < %1)").arg(upperBound, 0, 'f', 3);
-            }
-            // 2. Last Zone
-            else if (i == rows - 1 && rawLimit >= 127) {
-                rangeCheck = QString("(v >= %1)").arg(lowerBound, 0, 'f', 3);
-            }
-            // 3. Middle Zones (Use * for AND)
-            else {
-                rangeCheck = QString("((v >= %1) * (v < %2))")
-                .arg(lowerBound, 0, 'f', 3)
-                    .arg(upperBound, 0, 'f', 3);
-            }
-
-            segments << QString("(%1 * (%2))").arg(rangeCheck).arg(code);
-            lowerBound = upperBound;
-        }
-        finalFormula = segments.join(" + ");
-    }
-
-    QString result = QString("clamp(-1, %1, 1)").arg(finalFormula);
-    statusBox->setText(result);
-    QApplication::clipboard()->setText(result);
-}
-void MainWindow::generateNoiseForge() {
-    statusBox->setText(QString("randv(floor(t * %1))").arg(noiseRes->value()));
-}
-
-void MainWindow::generateXPFPackager() {
-    QString c = xpfInput->toPlainText().replace("\"", "&quot;").replace("<", "&lt;");
-    statusBox->setText(QString("<?xml version=\"1.0\"?>\n<xpressive version=\"0.1\" O1=\"%1\" />").arg(c));
-}
-
-void MainWindow::generateFilterForge() {
-    int taps = (int)filterTaps->value();
-    QString expr = "(W1";
-    for(int i=1; i<taps; ++i) expr += (filterType->currentIndex()==0 ? "+" : "-") + QString("last(%1)").arg(i);
-    statusBox->setText(QString("clamp(-1, %1 / %2, 1)").arg(expr).arg(taps));
-}
-
-// [In mainwindow.cpp, replace the old generateRandomPatch function with this]
-
-void MainWindow::generateRandomPatch() {
-    int theme = std::rand() % 3;
-    double ch = chaosSlider->value() / 100.0;
-    QString textStr;
-    double pi = 3.14159;
-
-    // We define the math for audio/scope here
-    if (theme == 0) { // FM Synthesis
-        double c = (std::rand() % 4) + 1;       // Carrier Ratio
-        double m = (std::rand() % 8) + 1;       // Mod Ratio
-        double i = (std::rand() % 15) * ch + 1; // FM Index (Intensity)
-
-        // String for Clipboard
-        textStr = QString("sinew(integrate(f*%1 + sinew(integrate(f*%2))*%3*f*%2))")
-                  .arg(c).arg(m).arg(i);
-
-        // Function for Audio Engine
-        currentRandFunc = [=](double t) {
-            double f = 220.0; // Preview at A3
-            double mod = i * std::sin(t * f * m * 2 * pi);
-            return std::sin((t * f * c * 2 * pi) + mod);
-        };
-    }
-    else if (theme == 1) { // Bitcrushed Sawtooth
-        double steps = (int)(16 * ch + 2);
-
-        textStr = QString("floor(saww(integrate(f)) * %1) / %1").arg(steps);
-
-        currentRandFunc = [=](double t) {
-            double f = 220.0;
-            double saw = 2.0 * (std::fmod(t * f, 1.0)) - 1.0;
-            return std::floor(saw * steps) / steps;
-        };
-    }
-    else { // Additive Sine
-        textStr = "sinew(integrate(f)) + 0.5*sinew(integrate(f*2))";
-
-        currentRandFunc = [=](double t) {
-            double f = 220.0;
-            return std::sin(t * f * 2 * pi) + 0.5 * std::sin(t * f * 2.0 * 2 * pi);
-        };
-    }
-
-    // 1. Update UI Text
-    statusBox->setText(QString("clamp(-1, %1, 1)").arg(textStr));
-
-    // 2. Update Scope
-    if (randScope && currentRandFunc) {
-        randScope->updateScope(currentRandFunc, 0.05, 1.0); // Fast zoom (0.05s) to see waveform
-    }
-
-    // 3. Update Audio (If currently playing)
-    if (btnPlayRand->isChecked() && currentRandFunc) {
-        m_ghostSynth->setAudioSource(currentRandFunc);
-    }
-}
-
+// TAB 1: SID ARCHITECT
 void MainWindow::saveSidExpr() {
     if (sidSegments.empty()) return;
 
@@ -3346,6 +3446,38 @@ void MainWindow::clearAllSid() {
     waveVisualizer->updateData(sidSegments);
 }
 
+QString MainWindow::getSegmentWaveform(const SidSegment& s, const QString& fBase) {
+    QString wave = s.waveType->currentText();
+    if (wave.contains("PWM")) return QString("sgn(mod(t, 1/%1) < (%2 / %1)) * 2 - 1").arg(fBase, getModulatorFormula(wave.contains("4") ? 3 : 4));
+    if (wave.contains("FM:")) return QString("trianglew(integrate(%1 + (%2 * 500)))").arg(fBase, getModulatorFormula(0));
+    if (wave.contains("Arp")) return getArpFormula(wave.contains("1") ? 0 : 1);
+    if (wave == "randv") return "randv(t * srate)";
+    return QString("%1(integrate(%2))").arg(wave, fBase);
+}
+
+void MainWindow::addSidSegment() {
+    auto *frame = new QFrame(); auto *h = new QHBoxLayout(frame);
+    auto *type = new QComboBox(); type->addItems({"trianglew", "squarew", "saww", "randv", "PWM (Mod 4)", "PWM (Mod 5)", "Arp 1", "Arp 2", "FM: Mod 1", "sinew"});
+    auto *dur = new QDoubleSpinBox(); dur->setValue(0.1); auto *off = new QDoubleSpinBox(); off->setRange(-10000, 10000);
+    auto *dec = new QDoubleSpinBox(); dec->setValue(0); auto *rem = new QPushButton("X");
+    h->addWidget(type); h->addWidget(dur); h->addWidget(off); h->addWidget(dec); h->addWidget(rem);
+    sidSegmentsLayout->addWidget(frame); sidSegments.push_back({type, dur, dec, off, rem, frame});
+    connect(rem, &QPushButton::clicked, this, &MainWindow::removeSidSegment);
+}
+
+void MainWindow::removeSidSegment() {
+    QPushButton* btn = qobject_cast<QPushButton*>(sender());
+    for (auto it = sidSegments.begin(); it != sidSegments.end(); ++it) if (it->deleteBtn == btn) { it->container->deleteLater(); sidSegments.erase(it); break; }
+}
+
+QString MainWindow::getArpFormula(int index) {
+    QString wave = arps[index].wave->currentText(), speed = arps[index].sync->isChecked() ? QString("(tempo/60) * %1").arg(arps[index].multiplier->currentText().remove('x')) : QString::number(arps[index].speed->value());
+    QString r1 = (arps[index].chord->currentText() == "Minor") ? "1.1892" : "1.2599", r2 = (arps[index].chord->currentText() == "Dim") ? "1.4142" : "1.4983";
+    return QString("%1(integrate(f * (mod(t * %2, 3) < 1 ? 1 : (mod(t * %2, 3) < 2 ? %3 : %4))))").arg(wave, speed, r1, r2);
+}
+
+
+// TAB 2: PCM SAMPLER
 void MainWindow::loadWav() {
     QString path = QFileDialog::getOpenFileName(this, "Select WAV", "", "WAV (*.wav)");
     if (path.isEmpty()) return;
@@ -3356,7 +3488,7 @@ void MainWindow::loadWav() {
     QDataStream stream(&file);
     stream.setByteOrder(QDataStream::LittleEndian);
 
-    // 1. Basic Header Checks
+    // Basic Header Checks
     char riff[4], wave[4];
     file.read(riff, 4);
     file.seek(8);
@@ -3367,7 +3499,7 @@ void MainWindow::loadWav() {
         return;
     }
 
-    // 2. Scan Chunks (robustly)
+    // Scan Chunks (robustly)
     uint16_t audioFormat = 0; // 1=PCM, 3=Float
     uint16_t numChannels = 0;
     uint32_t sampleRate = 0;
@@ -3407,15 +3539,11 @@ void MainWindow::loadWav() {
         return;
     }
 
-    // 3. Prepare Data
+    // Prepare Data
     fileFs = sampleRate;
     originalData.clear();
     file.seek(dataOffset);
     QByteArray raw = file.read(dataSize);
-
-    // 4. Decode based on Format
-    // Format 3 = IEEE Float (0.0 to 1.0)
-    // Format 1 = PCM (Integers)
 
     if (audioFormat == 3 && bitsPerSample == 32) {
         // --- 32-BIT FLOAT ---
@@ -3499,8 +3627,6 @@ void MainWindow::loadWav() {
     statusBox->setText(QString("Loaded: %1Hz, %2-bit, %3 Ch").arg(sampleRate).arg(bitsPerSample).arg(numChannels));
 }
 
-// FIX: Outputting normalized floats (-1.0 to 1.0) but quantised to 4-bit steps.
-// This matches MATLAB logic: q = q / (levels-1) * 2 - 1
 void MainWindow::saveExpr() {
     if (originalData.empty()) return;
     double targetFs = sampleRateCombo->currentText().toDouble();
@@ -3508,7 +3634,7 @@ void MainWindow::saveExpr() {
     int maxS = std::min((int)originalData.size(), (int)(maxDurSpin->value() * targetFs));
 
     double maxVal = 0.0;
-    // 1. Scan for Normalization
+    // Scan for Normalisation
     if (normalizeCheck->isChecked()) {
         for(int i=0; i < maxS; ++i) {
             double d = std::abs(originalData[int(i*step)]);
@@ -3520,10 +3646,10 @@ void MainWindow::saveExpr() {
     for(int i=0; i < maxS; ++i) {
         double d = originalData[int(i*step)];
 
-        // 2. Normalize (-1.0 to 1.0)
+        //  Normalise (-1.0 to 1.0)
         if (normalizeCheck->isChecked()) d /= maxVal;
 
-        // 3. Quantize to 4-bit (16 levels), then Scale Back to -1..1
+        // 3. Quantise to 4-bit (16 levels), then Scale Back to -1..1
         // MATLAB equivalent: q = round((y+1)*0.5*15) / 15 * 2 - 1
         if (normalizeCheck->isChecked()) { // Reuse check for "4-bit mode"
             double temp = (d + 1.0) * 0.5 * 15.0; // Scale to 0..15
@@ -3567,458 +3693,175 @@ QString MainWindow::generateLegacyPCM(const std::vector<double>& q, double sr) {
     return buildLegacyTree(0, N - 1);
 }
 
-QString MainWindow::getSegmentWaveform(const SidSegment& s, const QString& fBase) {
-    QString wave = s.waveType->currentText();
-    if (wave.contains("PWM")) return QString("sgn(mod(t, 1/%1) < (%2 / %1)) * 2 - 1").arg(fBase, getModulatorFormula(wave.contains("4") ? 3 : 4));
-    if (wave.contains("FM:")) return QString("trianglew(integrate(%1 + (%2 * 500)))").arg(fBase, getModulatorFormula(0));
-    if (wave.contains("Arp")) return getArpFormula(wave.contains("1") ? 0 : 1);
-    if (wave == "randv") return "randv(t * srate)";
-    return QString("%1(integrate(%2))").arg(wave, fBase);
-}
+// TAB 3: CONSOLE LAB
+void MainWindow::generateConsoleWave() {
+    // Get the build mode (Modern vs Legacy)
+    int mode = buildModeConsole ? buildModeConsole->currentIndex() : 0;
 
-QString MainWindow::getModulatorFormula(int index) { return QString("(0.5 + %1(t * %2) * %3)").arg(mods[index].shape->currentText()).arg(mods[index].rate->value()).arg(mods[index].depth->value()); }
+    QString result;
+    auto *rng = QRandomGenerator::global();
 
-QString MainWindow::getArpFormula(int index) {
-    QString wave = arps[index].wave->currentText(), speed = arps[index].sync->isChecked() ? QString("(tempo/60) * %1").arg(arps[index].multiplier->currentText().remove('x')) : QString::number(arps[index].speed->value());
-    QString r1 = (arps[index].chord->currentText() == "Minor") ? "1.1892" : "1.2599", r2 = (arps[index].chord->currentText() == "Dim") ? "1.4142" : "1.4983";
-    return QString("%1(integrate(f * (mod(t * %2, 3) < 1 ? 1 : (mod(t * %2, 3) < 2 ? %3 : %4))))").arg(wave, speed, r1, r2);
-}
+    if (mode == 0) {
+        // --- MODERN (Float Math) ---
+        QStringList waves = {"sin", "cos", "tri", "saw", "sqr"};
+        QStringList mods = {
+            "",
+            "* (1.0 - t*0.5)",        // Decay
+            "* (0.5 + 0.5*sin(t*4))", // Tremolo
+            "+ 0.1*sin(t*50)",        // FM Grit
+            "* ((t*10 % 2) - 1)"      // Sample & Hold
+        };
+        QStringList quantizers = {
+            "",
+            "floor(x * 4)/4",    // 2-bit
+            "floor(x * 16)/16",  // 4-bit
+            "x > 0 ? 1 : -1"     // 1-bit Comparator
+        };
 
-void MainWindow::addSidSegment() {
-    auto *frame = new QFrame(); auto *h = new QHBoxLayout(frame);
-    auto *type = new QComboBox(); type->addItems({"trianglew", "squarew", "saww", "randv", "PWM (Mod 4)", "PWM (Mod 5)", "Arp 1", "Arp 2", "FM: Mod 1", "sinew"});
-    auto *dur = new QDoubleSpinBox(); dur->setValue(0.1); auto *off = new QDoubleSpinBox(); off->setRange(-10000, 10000);
-    auto *dec = new QDoubleSpinBox(); dec->setValue(0); auto *rem = new QPushButton("X");
-    h->addWidget(type); h->addWidget(dur); h->addWidget(off); h->addWidget(dec); h->addWidget(rem);
-    sidSegmentsLayout->addWidget(frame); sidSegments.push_back({type, dur, dec, off, rem, frame});
-    connect(rem, &QPushButton::clicked, this, &MainWindow::removeSidSegment);
-}
+        QString w = waves[rng->bounded(waves.size())];
+        QString m = mods[rng->bounded(mods.size())];
+        QString q = quantizers[rng->bounded(quantizers.size())];
 
-void MainWindow::removeSidSegment() {
-    QPushButton* btn = qobject_cast<QPushButton*>(sender());
-    for (auto it = sidSegments.begin(); it != sidSegments.end(); ++it) if (it->deleteBtn == btn) { it->container->deleteLater(); sidSegments.erase(it); break; }
-}
+        // Randomize Frequency Multiplier
+        double freqMult = (rng->bounded(4) + 1) * 0.5; // 0.5, 1.0, 1.5, 2.0
 
-void MainWindow::copyToClipboard() { QApplication::clipboard()->setText(statusBox->toPlainText()); }
+        // Build the Core: "sin(t * f * 1.5)"
+        QString core = QString("%1(t * f * %2)").arg(w).arg(freqMult);
 
+        // Add Modifiers
+        QString full = core + m;
 
-// --- NEW IMPLEMENTATION: PHONETIC LAB (SAM) ---
-
-void MainWindow::initSamLibrary() {
-    // Phonemes mapped from SAM source tables.
-    // https://github.com/s-macke/SAM
-    // Structure: {Name, F1, F2, F3, Voiced, A1, A2, A3, LENGTH}
-
-    // --- VOICED VOWELS (Long & Loud) ---
-    samLibrary["IY"] = {"IY", 10, 84, 110, true, 15, 10, 5, 18};
-    samLibrary["IH"] = {"IH", 14, 73, 93,  true, 15, 10, 5, 15};
-    samLibrary["EH"] = {"EH", 19, 67, 91,  true, 15, 10, 5, 16};
-    samLibrary["AE"] = {"AE", 24, 63, 88,  true, 15, 10, 5, 18};
-    samLibrary["AA"] = {"AA", 27, 40, 89,  true, 15, 10, 5, 18};
-    samLibrary["AH"] = {"AH", 23, 44, 87,  true, 15, 10, 5, 16};
-    samLibrary["AO"] = {"AO", 21, 31, 88,  true, 15, 10, 5, 18};
-    samLibrary["UH"] = {"UH", 16, 37, 82,  true, 15, 10, 5, 15};
-    samLibrary["AX"] = {"AX", 20, 45, 89,  true, 15, 10, 5, 12};
-    samLibrary["IX"] = {"IX", 14, 73, 93,  true, 15, 10, 5, 12};
-    samLibrary["ER"] = {"ER", 18, 49, 62,  true, 15, 10, 5, 18};
-    samLibrary["UX"] = {"UX", 14, 36, 82,  true, 15, 10, 5, 15};
-    samLibrary["OH"] = {"OH", 18, 30, 88,  true, 15, 10, 5, 18};
-
-    // --- DIPHTHONGS (Very Long) ---
-    samLibrary["EY"] = {"EY", 19, 72, 90,  true, 15, 10, 5, 20};
-    samLibrary["AY"] = {"AY", 27, 39, 88,  true, 15, 10, 5, 22};
-    samLibrary["OY"] = {"OY", 21, 31, 88,  true, 15, 10, 5, 22};
-    samLibrary["AW"] = {"AW", 27, 43, 88,  true, 15, 10, 5, 22};
-    samLibrary["OW"] = {"OW", 18, 30, 88,  true, 15, 10, 5, 20};
-    samLibrary["UW"] = {"UW", 13, 34, 82,  true, 15, 10, 5, 18};
-
-    // --- LIQUIDS & NASALS (Medium) ---
-    samLibrary["M*"] = {"M*", 6,  46, 81,  true, 12, 8, 4, 15};
-    samLibrary["N*"] = {"N*", 6,  54, 121, true, 12, 8, 4, 15};
-    samLibrary["NX"] = {"NX", 6,  86, 101, true, 12, 8, 4, 15};
-    samLibrary["R*"] = {"R*", 18, 50, 60,  true, 12, 8, 4, 14};
-    samLibrary["L*"] = {"L*", 14, 30, 110, true, 12, 8, 4, 14};
-    samLibrary["W*"] = {"W*", 11, 24, 90,  true, 12, 8, 4, 12};
-    samLibrary["Y*"] = {"Y*", 9,  83, 110, true, 12, 8, 4, 12};
-
-    // --- VOICED CONSONANTS (Short) ---
-    samLibrary["Z*"] = {"Z*", 9,  51, 93,  true, 10, 6, 3, 10};
-    samLibrary["ZH"] = {"ZH", 10, 66, 103, true, 10, 6, 3, 10};
-    samLibrary["V*"] = {"V*", 8,  40, 76,  true, 10, 6, 3, 8};
-    samLibrary["DH"] = {"DH", 10, 47, 93,  true, 10, 6, 3, 8};
-    samLibrary["J*"] = {"J*", 6,  66, 121, true, 10, 6, 3, 8};
-    samLibrary["B*"] = {"B*", 6,  26, 81,  true, 10, 6, 3, 6};
-    samLibrary["D*"] = {"D*", 6,  66, 121, true, 10, 6, 3, 6};
-    samLibrary["G*"] = {"G*", 6,  110, 112, true, 10, 6, 3, 6};
-    samLibrary["GX"] = {"GX", 6,  84, 94,  true, 10, 6, 3, 6};
-
-    // --- UNVOICED / NOISE ---
-
-    // Fricatives (Sustained Noise)
-    samLibrary["S*"] = {"S*", 6,  73, 99,  false, 8, 0, 0, 12};
-    samLibrary["SH"] = {"SH", 6,  79, 106, false, 8, 0, 0, 12};
-    samLibrary["F*"] = {"F*", 6,  26, 81,  false, 8, 0, 0, 10};
-    samLibrary["TH"] = {"TH", 6,  66, 121, false, 8, 0, 0, 10};
-    samLibrary["/H"] = {"/H", 14, 73, 93,  false, 8, 0, 0, 10};
-    samLibrary["CH"] = {"CH", 6,  79, 101, false, 8, 0, 0, 10};
-
-    // Plosives (Bursts) - UPDATED FOR AUDIBILITY
-    samLibrary["P*"] = {"P*", 6,  26, 81,  false, 10, 0, 0, 5};
-    samLibrary["T*"] = {"T*", 6,  66, 121, false, 10, 0, 0, 5};
-    samLibrary["K*"] = {"K*", 6,  85, 101, false, 10, 0, 0, 6};
-    samLibrary["KX"] = {"KX", 6,  84, 94,  false, 10, 0, 0, 6};
-
-    // Special Characters
-    samLibrary[" *"] = {" *", 0, 0, 0, false, 0, 0, 0, 5};
-    samLibrary[".*"] = {".*", 19, 67, 91, false, 0, 0, 0, 10};
-
-    // Internal Bridge Phonemes
-    for(int b=43; b<=77; ++b) {
-        QString key = QString("**%1").arg(b);
-        if(!samLibrary.contains(key)) samLibrary[key] = {"**", 6, 60, 100, true, 10, 5, 2, 8};
-    }
-}
-
-void MainWindow::generatePhoneticFormula() {
-    QStringList input = phoneticInput->toPlainText().split(" ", Qt::SkipEmptyParts);
-
-    // --- SETTINGS ---
-    double frameTime = 0.012;
-    double hzScale = 19.5;
-
-    // Engine Logic: 0 = Legacy (Additive), 1 = Nightly (Nested Ternary)
-    bool isNightly = (parsingStyleCombo->currentIndex() == 1);
-    bool isLofi = (parserModeCombo->currentIndex() == 1);
-
-    // Temp structure to hold parsed phonemes before assembly
-    struct ParsedSegment {
-        QString content;
-        double duration;
-    };
-    QList<ParsedSegment> sequence;
-
-    // --- 1. PARSE INPUT TO DATA ---
-    for(int i = 0; i < std::min((int)input.size(), 128); ++i) {
-        QString rawToken = input[i].toUpper();
-        QRegularExpression re("([A-Z\\*\\/\\.\\?\\,\\-]+)(\\d*)");
-        QRegularExpressionMatch match = re.match(rawToken);
-
-        QString key = match.captured(1);
-        QString stressStr = match.captured(2);
-
-        if(!samLibrary.contains(key)) continue;
-        SAMPhoneme p = samLibrary[key];
-
-        // Stress Logic
-        int stress = stressStr.isEmpty() ? 4 : stressStr.toInt();
-        double pitchMult = 0.85 + (stress * 0.05);
-        double duration = (p.length * frameTime) * (0.8 + (stress * 0.05));
-
-        QString content;
-
-        if (p.voiced) {
-            // VOICED SYNTHESIS
-            double freq1 = p.f1 * hzScale;
-            double freq2 = p.f2 * hzScale;
-            double freq3 = p.f3 * hzScale;
-
-            QString s1 = QString("%1*sinew(integrate(%2))").arg(p.a1 * 0.05).arg(freq1);
-            QString s2 = QString("%1*sinew(integrate(%2))").arg(p.a2 * 0.05).arg(freq2);
-            QString s3 = QString("%1*sinew(integrate(%2))").arg(p.a3 * 0.05).arg(freq3);
-            QString glottal = QString("(0.8 * (1 - mod(t*f*%1, 1)))").arg(pitchMult);
-
-            content = QString("((%1 + %2 + %3) * %4)").arg(s1, s2, s3, glottal);
+        // Add Quantizer
+        if (q.isEmpty()) {
+            result = full;
         } else {
-            // NOISE SYNTHESIS
-            double rawF1 = (p.f1 > 0 ? p.f1 : 100);
-            double noiseColor = (rawF1 > 90 ? 90 : rawF1) * 80.0;
-            double noiseAmp = (p.length < 8) ? 0.9 : 0.4;
-
-            content = QString("(%1 * randv(t*%2))").arg(noiseAmp).arg(noiseColor);
+            result = q.replace("x", "(" + full + ")");
         }
-
-        sequence.append({content, duration});
-    }
-
-    if (sequence.isEmpty()) return;
-
-    QString finalFormula;
-
-    // --- 2. ASSEMBLE FORMULA ---
-    if (isNightly) {
-        // NIGHTLY BUILD: Nested Ternary Logic (Recursive Backwards)
-        // Matches "Modern" logic in SID Architect
-
-        QString nestedBody = "0"; // End of chain (silence)
-        double totalTime = 0;
-        for(const auto &s : sequence) totalTime += s.duration;
-
-        double currentTime = totalTime;
-
-        // Iterate backwards from last sound to first
-        for (int i = sequence.size() - 1; i >= 0; --i) {
-            ParsedSegment seg = sequence[i];
-            currentTime -= seg.duration;
-
-            // Envelopes relative to local segment start (currentTime)
-            // Fast attack/release to prevent clicks
-            double fadeSpeed = 120.0;
-            QString attack = QString("min(1, (t-%1)*%2)").arg(currentTime).arg(fadeSpeed);
-            QString decay = QString("min(1, (%1-t)*%2)").arg(currentTime + seg.duration).arg(fadeSpeed);
-
-            double tEnd = currentTime + seg.duration;
-
-            // Structure: (t < end_time ? (sound * env) : (next_nested_block))
-            nestedBody = QString("(t < %1 ? (%2 * %3 * %4) : %5)")
-                             .arg(tEnd, 0, 'f', 4)
-                             .arg(seg.content)
-                             .arg(attack)
-                             .arg(decay)
-                             .arg(nestedBody);
-        }
-        finalFormula = nestedBody;
 
     } else {
-        // LEGACY PARSING: Additive Logic (Forwards)
-        // Calculates all segments simultaneously and sums them
+        // --- LEGACY (Bytebeat / Bitwise) ---
+        QStringList ops = {"&", "|", "^", ">>", "<<"};
+        QStringList vals = {"t", "t*2", "t/2", "t>>4", "t&128"};
 
-        QStringList stringSegments;
-        double time = 0.0;
+        QString a = vals[rng->bounded(vals.size())];
+        QString b = vals[rng->bounded(vals.size())];
+        QString op = ops[rng->bounded(ops.size())];
 
-        for (const auto &seg : sequence) {
-            double fadeSpeed = 120.0; // Same envelope speed
-            QString attack = QString("min(1, (t-%1)*%2)").arg(time).arg(fadeSpeed);
-            QString decay = QString("min(1, (%1-t)*%2)").arg(time + seg.duration).arg(fadeSpeed);
-
-            // Structure: ((Range Check) * Sound * Env)
-            QString block = QString("((t >= %1 & t < %2) * %3 * %4 * %5)")
-                                .arg(time)
-                                .arg(time + seg.duration)
-                                .arg(seg.content)
-                                .arg(attack)
-                                .arg(decay);
-            stringSegments << block;
-            time += seg.duration;
-        }
-        finalFormula = stringSegments.join(" + ");
+        result = QString("(%1 %2 %3) & 255").arg(a, op, b);
     }
 
-    // --- 3. POST-PROCESSING (Audio Quality) ---
-    if (isLofi) {
-        // Bitcrush / Retro mode: Quantize to 16 steps
-        finalFormula = QString("clamp(-1, floor((%1) * 16)/16, 1)").arg(finalFormula);
+    // --- OUTPUT ---
+
+    // 1. Debug Print
+    qDebug() << "GENERATED:" << result;
+
+    // 2. Copy to Clipboard
+    QGuiApplication::clipboard()->setText(result);
+
+    // 3. VISUAL CONFIRMATION (This was missing!)
+    statusBox->setText(result);
+}
+
+// TAB 4: SFX MACRO
+void MainWindow::generateSFXMacro() {
+    double f1 = sfxStartFreq->value(), f2 = sfxEndFreq->value(), d = sfxDur->value();
+    QString audio = QString("sinew(integrate(%1 * exp(-t * %2)))").arg(f1).arg(std::log(f1/f2)/d);
+    statusBox->setText((buildModeSFX->currentIndex() == 0) ? QString("(t < %1 ? %2 : 0)").arg(d).arg(audio) : QString("(t < %1) * %2").arg(d).arg(audio));
+}
+
+// TAB 5: ARP ANIMATOR
+void MainWindow::generateArpAnimator() {
+    // 1. CALCULATE SPEED
+    double hz = 0;
+    if (arpBpmSync->isChecked()) {
+        double bpm = arpBpmVal->value();
+        // 1/16th note = BPM / 60 * 4
+        // Hubbard Speed (1/64) is 4x faster than that
+        int divIdx = arpSpeedDiv->currentIndex();
+        if (divIdx == 4) hz = 50.0; // PAL Frame (Classic C64 standard)
+        else {
+            double multiplier = (divIdx == 0) ? 4.0 : (divIdx == 1) ? 8.0 : (divIdx == 2) ? 12.0 : 16.0;
+            hz = (bpm / 60.0) * multiplier;
+        }
     } else {
-        // High Quality: Simple safety clamp
-        finalFormula = QString("clamp(-1, %1, 1)").arg(finalFormula);
+        hz = arpSpeed->value();
     }
 
-    statusBox->setText(finalFormula);
-    QApplication::clipboard()->setText(finalFormula);
+    // GET INTERVALS (Parse the combobox text)
+    // Helper to extract number from string like "+7 (Perfect 5th)"
+    auto getSemi = [](QString s) {
+        return s.split(" ")[0].toInt();
+    };
+    int note1 = 0; // Root is always 0
+    int note2 = getSemi(arpInterval1->currentText());
+    int note3 = getSemi(arpInterval2->currentText());
+
+    // GENERATE WAVEFORM LOGIC
+    QString waveName = arpWave->currentText();
+    double pwm = arpPwmSlider->value() / 100.0;
+
+    // We define a lambda to generate the "Audio" part for a specific pitch
+    auto genAudio = [&](QString pitchMult) {
+        if (waveName.contains("Pulse")) {
+            // Pulse Width formula: (sin(f) > width ? 1 : -1)
+            // We scale PWM to -1..1 range for the engine
+            return QString("(sinew(integrate(f*%1)) > %2 ? 1 : -1)")
+                .arg(pitchMult).arg((pwm * 2.0) - 1.0);
+        }
+        else if (waveName.contains("Metal")) {
+            // Ring Mod: Square * Detuned Square
+            return QString("(squarew(integrate(f*%1)) * squarew(integrate(f*%1*2.41)))")
+                .arg(pitchMult);
+        }
+        else if (waveName.contains("Noise")) {
+            return QString("randv(t*10000)"); // Noise ignores pitch usually
+        }
+        else {
+            QString osc = waveName.contains("Saw") ? "saww" : "trianglew";
+            return QString("%1(integrate(f*%2))").arg(osc).arg(pitchMult);
+        }
+    };
+
+    QString finalExpr;
+
+    // BUILD THE ARP (Nested vs Legacy)
+
+    // Calculate Pitch Multipliers: 2^(semitones/12)
+    QString p1 = "1.0";
+    QString p2 = QString::number(std::pow(2.0, note2 / 12.0), 'f', 4);
+    QString p3 = QString::number(std::pow(2.0, note3 / 12.0), 'f', 4);
+
+    if (buildModeArp->currentIndex() == 0) { // NIGHTLY (Clean Switching)
+        // Logic: var step := floor(t * speed) % 3;
+        // (step == 0 ? Note1 : (step == 1 ? Note2 : Note3))
+
+        QString selector = QString("mod(floor(t*%1), 3)").arg(hz);
+
+        finalExpr = QString("(%1 < 1 ? %2 : (%1 < 2 ? %3 : %4))")
+                        .arg(selector)
+                        .arg(genAudio(p1))
+                        .arg(genAudio(p2))
+                        .arg(genAudio(p3));
+
+    } else { // LEGACY (Additive)
+        // Logic: ((Phase 0) * Note1) + ((Phase 1) * Note2) ...
+        // We use mod(floor(t*spd), 3) to find the current step index
+
+        QString stepCheck = QString("mod(floor(t*%1), 3)").arg(hz);
+
+        finalExpr = QString("((%1 < 1) * %2) + ((%1 >= 1 & %1 < 2) * %3) + ((%1 >= 2) * %4)")
+                        .arg(stepCheck)
+                        .arg(genAudio(p1))
+                        .arg(genAudio(p2))
+                        .arg(genAudio(p3));
+    }
+
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(finalExpr));
 }
 
-// ---------------------------------------------------------
-// HELPER: Finds a character but ignores anything inside brackets
-// Critical for not splitting math like "sin(t+1)"
-// ---------------------------------------------------------
-int findScopeAwareChar(const QString &str, char target) {
-    int balance = 0;
-    for (int i = 0; i < str.length(); ++i) {
-        if (str[i] == '(') balance++;
-        else if (str[i] == ')') balance--;
-        else if (str[i] == target && balance == 0) return i;
-    }
-    return -1;
-}
-
-// ---------------------------------------------------------
-// FUNCTION 1: Legacy (Time t) --> Nightly (Samples s)
-// * Converts "t < 0.1" to "s <= 799" *
-// ---------------------------------------------------------
-// ---------------------------------------------------------
-// FUNCTION 1: Legacy (Chain) --> Nightly (Balanced Tree)
-// * Solves the "Stack Overflow" / Bracket Pile-up error *
-// ---------------------------------------------------------
-// ---------------------------------------------------------
-// FUNCTION 1: QWidget *besselTab = new QWidget()l "Make it Nightly"
-// * Accepts 't' (Time) OR 's' (Samples)
-// * Outputs perfectly balanced 'var s' tree
-// ---------------------------------------------------------
-// ---------------------------------------------------------
-// FUNCTION 1: Universal "Make it Nightly"
-// * Uses RECURSION to handle both Trees and Chains
-// * Digs out the true values and rebuilds a clean 'var s' tree
-// ---------------------------------------------------------
-// ---------------------------------------------------------
-// FUNCTION 1: Legacy (Time) --> Nightly (Samples)
-// * Auto-Detects Sample Rate (2000 vs 8000)
-// * Preserves your Tree Brackets perfectly
-// * Removes "clamp"
-// ---------------------------------------------------------
-QString MainWindow::convertLegacyToNightly(QString input) {
-    // 1. Clean formatting
-    input = input.replace("\n", "").replace(" ", "").trimmed();
-
-    // Remove "clamp" wrapper if present (User requested raw output)
-    if (input.startsWith("clamp(")) {
-        int c = input.indexOf(','), p = input.lastIndexOf(')');
-        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
-    }
-    if (input.startsWith("0.000+")) input = input.mid(6);
-
-    // 2. AUTO-DETECT SAMPLE RATE
-    // We scan the text for the smallest non-zero number.
-    // Example: If we see "0.000500", we know Rate = 1 / 0.0005 = 2000.
-    double sampleRate = 8000.0; // Default fallback
-
-    QRegularExpression floatReg("0\\.00[0-9]+"); // Look for small decimals
-    auto matches = floatReg.globalMatch(input);
-    double minVal = 1.0;
-    bool foundAny = false;
-
-    while (matches.hasNext()) {
-        double val = matches.next().captured(0).toDouble();
-        if (val > 0.000001 && val < minVal) {
-            minVal = val;
-            foundAny = true;
-        }
-    }
-    if (foundAny) {
-        // Round to nearest hundred to avoid precision errors (e.g., 1999.99 -> 2000)
-        sampleRate = std::round(1.0 / minVal);
-    }
-
-    // 3. TREE PRESERVATION MODE
-    // If the input contains nested '?' (like your example),
-    // we do NOT rebuild the tree. We just regex-swap 't' for 's'.
-    // This keeps your brackets 100% identical.
-    if (input.contains("?")) {
-
-        static QRegularExpression tReg("t<([0-9\\.]+)");
-        QString result;
-        int lastPos = 0;
-
-        auto it = tReg.globalMatch(input);
-        while (it.hasNext()) {
-            QRegularExpressionMatch match = it.next();
-
-            // Keep the text structure exactly as is
-            result.append(input.mid(lastPos, match.capturedStart() - lastPos));
-
-            // MATH: Convert Time -> Sample
-            // Formula: s <= floor(t * rate) - 1
-            double tVal = match.captured(1).toDouble();
-            int sVal = std::floor(tVal * sampleRate) - 1;
-            if (sVal < 0) sVal = 0;
-
-            // Swap "t < 0.005" with "s <= 9"
-            result.append(QString("s<=%1").arg(sVal));
-
-            lastPos = match.capturedEnd();
-        }
-        result.append(input.mid(lastPos));
-
-        // Output correct header, NO CLAMP
-        return QString("var s:=floor(t*%1);\n%2")
-            .arg(int(sampleRate))
-            .arg(result);
-    }
-
-    // 4. CHAIN MODE (Fallback)
-    // Only used if you give it a flat chain (SID/Arp)
-    // ... (Your previous flattening logic could go here if needed,
-    // but for PCM trees, the block above handles it perfectly) ...
-
-    return "Error: Input format not recognized (Try standard Legacy PCM).";
-}
-
-// ---------------------------------------------------------
-// FUNCTION 2: Nightly (Samples s) --> Legacy (Time t)
-// * Converts "s <= 799" to "t < 0.1" *
-// ---------------------------------------------------------
-QString MainWindow::convertNightlyToLegacy(QString input) {
-    input = input.replace("\n", "").replace(" ", "").trimmed();
-    if (input.startsWith("clamp(")) {
-        int c = input.indexOf(','), p = input.lastIndexOf(')');
-        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
-    }
-
-    // --- MODE A: PCM Tree Detected ("var s") ---
-    // This is the main one used for PCM files
-    static QRegularExpression pcmVar("var\\s*s\\s*:=\\s*floor\\(t\\s*\\*\\s*([0-9]+)\\);");
-    auto pcmMatch = pcmVar.match(input);
-
-    if (pcmMatch.hasMatch()) {
-        double sr = pcmMatch.captured(1).toDouble();
-        if (sr == 0) sr = 8000;
-        input.remove(pcmMatch.captured(0)); // Remove var declaration
-
-        // Replace all "s <= 123" with "t < 0.015"
-        static QRegularExpression sReg("s\\s*<=\\s*([0-9]+)");
-        QString result;
-        int lastPos = 0;
-        auto it = sReg.globalMatch(input);
-        while (it.hasNext()) {
-            QRegularExpressionMatch m = it.next();
-            result.append(input.mid(lastPos, m.capturedStart() - lastPos));
-
-            // MATH: Convert Sample Index -> Time
-            // (Sample + 1) / Rate is the start time of the NEXT sample
-            double tVal = (m.captured(1).toDouble() + 1.0) / sr;
-            result.append(QString("t < %1").arg(QString::number(tVal, 'f', 6)));
-            lastPos = m.capturedEnd();
-        }
-        result.append(input.mid(lastPos));
-
-        // Return wrapped (The tree structure ? : is valid in Legacy too!)
-        return QString("clamp(-1, %1, 1)").arg(result);
-    }
-
-    // --- MODE B: Standard Chain Fallback ---
-    // If the input isn't PCM (doesn't have var s), we treat it as a SID chain
-    if (input.startsWith("0.000+")) input = input.mid(6);
-
-    QStringList additiveParts;
-    double lastStartTime = 0.0;
-    QString currentLayer = input;
-
-    while (true) {
-        int questIdx = currentLayer.indexOf('?');
-        if (questIdx == -1) break;
-
-        QString postQuest = currentLayer.mid(questIdx + 1);
-        int localColon = findScopeAwareChar(postQuest, ':');
-        if (localColon == -1) break;
-        int colonIdx = questIdx + 1 + localColon;
-
-        int timeEnd = questIdx - 1;
-        int timeStart = currentLayer.lastIndexOf("t<", timeEnd);
-        QString timeStr = (timeStart != -1) ? currentLayer.mid(timeStart + 2, timeEnd - timeStart - 1) : "0";
-
-        QString content = currentLayer.mid(questIdx + 1, colonIdx - questIdx - 1);
-
-        QString remainder = currentLayer.mid(colonIdx + 1);
-        while (remainder.startsWith("(") && remainder.endsWith(")") &&
-               findScopeAwareChar(remainder.mid(1, remainder.length()-2), ':') != -1) {
-            remainder = remainder.mid(1, remainder.length() - 2);
-        }
-
-        additiveParts << QString("((t >= %1 & t < %2) * %3)")
-                             .arg(QString::number(lastStartTime, 'f', 6))
-                             .arg(timeStr).arg(content);
-
-        lastStartTime = timeStr.toDouble();
-        currentLayer = remainder;
-    }
-
-    if (additiveParts.isEmpty()) return "Error: Logic mismatch.";
-    return QString("clamp(-1, %1, 1)").arg(additiveParts.join(" + "));
-}
-
-// ---------------------------------------------------------
-// PRESET LOADER: THE MASTERS COLLECTION
-// ---------------------------------------------------------
+// TAB 6: WAVETABLE FORGE
 void MainWindow::loadWavetablePreset(int index) {
-    // --- FIX: BLOCK SIGNALS TO PREVENT CRASH DURING LOAD ---
+
     wtTrackerTable->blockSignals(true);
 
     wtTrackerTable->setRowCount(0);
@@ -4107,17 +3950,12 @@ void MainWindow::loadWavetablePreset(int index) {
 
     // 2. UNBLOCK AND UPDATE
     wtTrackerTable->blockSignals(false);
-
-
     if(wtTrackerTable->rowCount() > 0) {
         // This forces the 'cellChanged' signal to fire safely now
         wtTrackerTable->item(0,0)->setText(wtTrackerTable->item(0,0)->text());
     }
 }
 
-// ---------------------------------------------------------
-// GENERATOR: WITH NEW "SPECIAL" WAVEFORMS
-// ---------------------------------------------------------
 void MainWindow::generateWavetableForge() {
     int rows = wtTrackerTable->rowCount();
     if (rows == 0) return;
@@ -4211,9 +4049,199 @@ void MainWindow::generateWavetableForge() {
     }
 }
 
-// ---------------------------------------------------------
-// XPF PACKAGER: INJECTS CODE INTO INSTRUMENT TEMPLATE
-// ---------------------------------------------------------
+// TAB 7: BESSEL FM
+void MainWindow::loadBesselPreset(int idx) {
+    if (idx == 0 || idx == 9 || idx == 18 || idx == 28) return;
+    auto setFM = [&](QString cw, QString mw, double cm, double mm, double i) {
+        besselCarrierWave->setCurrentText(cw); besselModWave->setCurrentText(mw);
+        besselCarrierMult->setValue(cm); besselModMult->setValue(mm); besselModIndex->setValue(i);
+    };
+    switch(idx) {
+    case 1:  setFM("sinew", "sinew", 1.0, 14.0, 1.2); break;
+    case 2:  setFM("sinew", "sinew", 1.0, 3.5, 2.5); break;
+    case 3:  setFM("trianglew", "sinew", 1.0, 8.0, 0.8); break;
+    case 4:  setFM("sinew", "sinew", 2.0, 1.0, 0.5); break;
+    case 5:  setFM("sinew", "sinew", 1.0, 19.0, 3.0); break;
+    case 10: setFM("sinew", "saww", 1.0, 1.0, 3.5); break;
+    case 11: setFM("sinew", "sinew", 1.0, 1.0, 1.8); break;
+    case 19: setFM("sinew", "sinew", 1.0, 3.5, 2.0); break;
+    case 20: setFM("sinew", "sinew", 1.0, 7.11, 4.0); break;
+    case 37: setFM("sinew", "saww", 1.0, 8.0, 6.0); break;
+    case 40: setFM("sinew", "saww", 8.0, 0.1, 50.0); break;
+    default: setFM("sinew", "sinew", 1.0, 2.0, 2.0); break;
+    }
+}
+
+void MainWindow::generateBesselFM() {
+    QString fExpr = QString("f*%1 + (%2(integrate(f*%3))*%4*f*%3)").arg(besselCarrierMult->value()).arg(besselModWave->currentText()).arg(besselModMult->value()).arg(besselModIndex->value());
+    statusBox->setText(QString("clamp(-1, %1(integrate(%2)), 1)").arg(besselCarrierWave->currentText(), fExpr));
+}
+
+// TAB 8: HARMONIC LAB
+void MainWindow::generateHarmonicLab() {
+    QStringList t;
+    for(int i=0; i<16; ++i) {
+        double v = harmonicSliders[i]->value() / 100.0;
+        if(v > 0) t << QString("%1 * sinew(integrate(f * %2))").arg(v).arg(i+1);
+    }
+    statusBox->setText(t.isEmpty() ? "0" : QString("clamp(-1, %1, 1)").arg(t.join(" + ")));
+}
+
+// TAB 9: DRUM DESIGNER
+void MainWindow::generateDrumXpf() {
+    QString waveFunc = drumWaveCombo->currentText().toLower() + "w";
+    if(waveFunc == "sinew") waveFunc = "sinew";
+
+    double decayBase = drumDecaySlider->value();
+    double expFactor = drumExpSlider->value(); //
+
+    // Pitch Drop Formula
+    QString pitch = QString("(f + (%1 * exp(-t * %2)))").arg(drumPitchDropSlider->value()).arg(decayBase / 2.0);
+
+    // Osc + Noise Mix
+    double nMix = drumNoiseSlider->value() / 100.0;
+    QString source = QString("((%1(integrate(%2)) * %3) + (randv(t*10000) * %4))")
+                         .arg(waveFunc).arg(pitch).arg(1.0 - nMix).arg(nMix);
+
+    // Final Exponential Volume Shape
+    QString formula = QString("(%1 * exp(-t * %2))").arg(source).arg(decayBase * expFactor);
+    formula = formula.replace("\"", "&quot;");
+
+    int typeIndex = drumTypeCombo->currentIndex();
+    int filterType = 0; // Default LPF (0)
+    if (typeIndex == 1 || typeIndex == 4 || typeIndex == 6) filterType = 2; // BPF
+    if (typeIndex == 2 || typeIndex == 5) filterType = 1; // HPF
+
+
+
+
+
+    QString xpf = getXpfTemplate()
+                      .arg(drumTypeCombo->currentText()).arg(drumPitchSlider->value())
+                      .arg(formula).arg(drumToneSlider->value())
+                      .arg(drumSnapSlider->value() / 100.0).arg(filterType)
+                      .arg(0.1).arg(0.5);
+
+    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
+    if (clickedButton == btnSaveDrumXpf) {
+        QString fileName = QFileDialog::getSaveFileName(this, "Save Drum", "", "LMMS Preset (*.xpf)");
+        if (!fileName.isEmpty()) {
+            QFile file(fileName);
+            if (file.open(QIODevice::WriteOnly)) {
+                QTextStream stream(&file);
+                stream << xpf;
+                file.close();
+                statusBox->setText("Drum saved: " + fileName);
+            }
+        }
+    } else {
+        QApplication::clipboard()->setText(xpf);
+        statusBox->setText("Drum XPF copied to clipboard!");
+    }
+}
+
+QString MainWindow::getXpfTemplate() {
+    QStringList lines;
+    lines << "<?xml version=\"1.0\"?>"
+          << "<!DOCTYPE lmms-project>"
+          << "<lmms-project version=\"20\" creator=\"WaveConv\" type=\"instrumenttracksettings\">"
+          << "<head/>"
+          << "<instrumenttracksettings name=\"%1\" muted=\"0\" solo=\"0\">"
+          << "<instrumenttrack vol=\"100\" pan=\"0\" basenote=\"%2\" pitchrange=\"1\">"
+          << "<instrument name=\"xpressive\">"
+          << "<xpressive version=\"0.1\" O1=\"%3\" O2=\"0\" bin=\"\">"
+          << "<key/></xpressive></instrument>"
+          << "<eldata fcut=\"%4\" fres=\"%5\" ftype=\"%6\" fwet=\"1\">"
+          << "<elvol rel=\"0.1\" dec=\"0.5\" sustain=\"0\" amt=\"0\"/>" // AMT=0 for manual ADSR
+          << "</eldata></instrumenttrack></instrumenttracksettings></lmms-project>";
+    return lines.join("\n");
+}
+
+
+// TAB 10: VELOCILOGIC
+void MainWindow::generateVelocilogic() {
+    int rows = velMapTable->rowCount();
+    if (rows == 0) return;
+
+    QString finalFormula;
+
+    // NIGHTLY (Nested Ternary) ---
+    if (velMapMode->currentIndex() == 0) {
+        QString nestedBody = "0";
+        int startIdx = rows - 1;
+
+        // Base case optimization
+        if (velMapTable->item(startIdx, 0)->text().toInt() >= 127) {
+            nestedBody = velMapTable->item(startIdx, 1)->text();
+            startIdx--;
+        }
+
+        for (int i = startIdx; i >= 0; --i) {
+            // Convert MIDI (0-127) to Volume (0.0-1.0)
+            double rawLimit = velMapTable->item(i, 0)->text().toDouble();
+            double normLimit = rawLimit / 127.0;
+
+            QString code = velMapTable->item(i, 1)->text();
+
+            // USE 'v' INSTEAD OF 'vel'
+            nestedBody = QString("(v < %1 ? %2 : %3)")
+                             .arg(normLimit, 0, 'f', 3)
+                             .arg(code)
+                             .arg(nestedBody);
+        }
+        finalFormula = nestedBody;
+    }
+
+    // LEGACY (Additive) ---
+    else {
+        QStringList segments;
+        double lowerBound = 0.0;
+
+        for (int i = 0; i < rows; ++i) {
+            // Convert MIDI (0-127) to Volume (0.0-1.0)
+            double rawLimit = velMapTable->item(i, 0)->text().toDouble();
+            double upperBound = rawLimit / 127.0;
+            QString code = velMapTable->item(i, 1)->text();
+
+            QString rangeCheck;
+
+            // 1. First Zone
+            if (i == 0 && lowerBound <= 0.001) {
+                rangeCheck = QString("(v < %1)").arg(upperBound, 0, 'f', 3);
+            }
+            // 2. Last Zone
+            else if (i == rows - 1 && rawLimit >= 127) {
+                rangeCheck = QString("(v >= %1)").arg(lowerBound, 0, 'f', 3);
+            }
+            // 3. Middle Zones (Use * for AND)
+            else {
+                rangeCheck = QString("((v >= %1) * (v < %2))")
+                .arg(lowerBound, 0, 'f', 3)
+                    .arg(upperBound, 0, 'f', 3);
+            }
+
+            segments << QString("(%1 * (%2))").arg(rangeCheck).arg(code);
+            lowerBound = upperBound;
+        }
+        finalFormula = segments.join(" + ");
+    }
+
+    QString result = QString("clamp(-1, %1, 1)").arg(finalFormula);
+    statusBox->setText(result);
+    QApplication::clipboard()->setText(result);
+}
+
+// TAB 11: NOISE FORGE
+void MainWindow::generateNoiseForge() {
+    statusBox->setText(QString("randv(floor(t * %1))").arg(noiseRes->value()));
+}
+
+// TAB 12: XPF PACKAGER
+void MainWindow::generateXPFPackager() {
+    QString c = xpfInput->toPlainText().replace("\"", "&quot;").replace("<", "&lt;");
+    statusBox->setText(QString("<?xml version=\"1.0\"?>\n<xpressive version=\"0.1\" O1=\"%1\" />").arg(c));
+}
+
 void MainWindow::saveXpfInstrument() {
     // ... (The logic I gave you in the previous step goes here) ...
     // If you need the full logic block again, let me know!
@@ -4290,9 +4318,534 @@ void MainWindow::saveXpfInstrument() {
         statusBox->setText("Error: Could not save file.");
     }
 }
+
+
+// TAB 13: FILTER FORGE
+void MainWindow::generateFilterForge() {
+    double cutoff = filterCutoffSlider->value() / 100.0;
+    bool isHP = (filterType->currentIndex() == 1);
+    int waveIdx = filterWaveform->currentIndex();
+
+    QString source = "sinew(integrate(f))";
+    if (waveIdx == 1) source = "saww(integrate(f))";
+    if (waveIdx == 2) source = "squarew(integrate(f))";
+
+    QString result;
+    if (isHP) {
+        // High Pass: var out := (source - last(1)) * cutoff + last(1) * 0.9;
+        // This calculates the difference (Highs) and smooths it.
+        result = QString("var hp := (%1 - last(1));\n"
+                         "var out := (hp * %2) + (last(1) * 0.1);\n"
+                         "out").arg(source).arg(cutoff);
+    } else {
+        // Low Pass: var out := (source * (1 - cutoff)) + (last(1) * cutoff);
+        // Standard One-Pole smoothing logic.
+        result = QString("var lp := (%1 * %2) + (last(1) * %3);\n"
+                         "lp").arg(source).arg(1.0 - cutoff).arg(cutoff);
+    }
+
+    QString finalCode = QString("clamp(-1, %1, 1)").arg(result);
+    statusBox->setText(finalCode);
+    QApplication::clipboard()->setText(finalCode);
+}
+
+// TAB 14: LEAD STACKER
+void MainWindow::generateLeadStack() {
+    int voices = leadUnisonCount->value();
+    double detune = leadDetuneSlider->value() / 200.0; // 0.0 to 0.5 range
+    double sub = leadSubSlider->value() / 100.0;
+    double noise = leadNoiseSlider->value() / 100.0;
+    double drift = leadVibeSlider->value() / 100.0;
+
+    QString wName = leadWaveType->currentText().toLower();
+    QString func = "saww";
+    if(wName.contains("square")) func = "squarew";
+    else if(wName.contains("triangle")) func = "trianglew";
+    else if(wName.contains("sine")) func = "sinew";
+
+    QStringList stack;
+
+    // Generate Unison Voices
+    for (int i = 0; i < voices; ++i) {
+        // Calculate offset centered around 1.0
+        // e.g. 5 voices: -2, -1, 0, 1, 2 scaled by detune
+        double ratio = (voices > 1) ? ((double)i / (voices - 1)) - 0.5 : 0.0;
+        double mult = 1.0 + (ratio * detune);
+
+        QString freqExpr = QString("f * %1").arg(mult, 0, 'f', 4);
+
+        // Add Drift if active (Random slow sine LFO)
+        if(drift > 0) {
+            freqExpr += QString(" * (1 + %1 * sinew(t*3))").arg(drift * 0.02);
+        }
+
+        // Add to stack
+        stack << QString("%1(integrate(%2))").arg(func).arg(freqExpr);
+    }
+
+    QString finalExpr = "(" + stack.join(" + ") + ")";
+
+    // Normalize Volume (Divide by count)
+    finalExpr = QString("(%1 / %2)").arg(finalExpr).arg(voices);
+
+    // Add Sub Oscillator
+    if (sub > 0) {
+        finalExpr += QString(" + (%1 * squarew(integrate(f*0.5)))").arg(sub);
+    }
+
+    // Add Noise
+    if (noise > 0) {
+        finalExpr += QString(" + (%1 * randv(t*10000))").arg(noise);
+    }
+
+    // Final Clamp
+    finalExpr = QString("clamp(-1, %1, 1)").arg(finalExpr);
+
+    statusBox->setText(finalExpr);
+    QApplication::clipboard()->setText(finalExpr);
+}
+
+
+// TAB 15: RANDOMISER
+void MainWindow::generateRandomPatch() {
+    int theme = std::rand() % 3;
+    double ch = chaosSlider->value() / 100.0;
+    QString textStr;
+    double pi = 3.14159;
+
+    // We define the math for audio/scope here
+    if (theme == 0) { // FM Synthesis
+        double c = (std::rand() % 4) + 1;       // Carrier Ratio
+        double m = (std::rand() % 8) + 1;       // Mod Ratio
+        double i = (std::rand() % 15) * ch + 1; // FM Index (Intensity)
+
+        // String for Clipboard
+        textStr = QString("sinew(integrate(f*%1 + sinew(integrate(f*%2))*%3*f*%2))")
+                  .arg(c).arg(m).arg(i);
+
+        // Function for Audio Engine
+        currentRandFunc = [=](double t) {
+            double f = 220.0; // Preview at A3
+            double mod = i * std::sin(t * f * m * 2 * pi);
+            return std::sin((t * f * c * 2 * pi) + mod);
+        };
+    }
+    else if (theme == 1) { // Bitcrushed Sawtooth
+        double steps = (int)(16 * ch + 2);
+
+        textStr = QString("floor(saww(integrate(f)) * %1) / %1").arg(steps);
+
+        currentRandFunc = [=](double t) {
+            double f = 220.0;
+            double saw = 2.0 * (std::fmod(t * f, 1.0)) - 1.0;
+            return std::floor(saw * steps) / steps;
+        };
+    }
+    else { // Additive Sine
+        textStr = "sinew(integrate(f)) + 0.5*sinew(integrate(f*2))";
+
+        currentRandFunc = [=](double t) {
+            double f = 220.0;
+            return std::sin(t * f * 2 * pi) + 0.5 * std::sin(t * f * 2.0 * 2 * pi);
+        };
+    }
+
+    // Update UI Text
+    statusBox->setText(QString("clamp(-1, %1, 1)").arg(textStr));
+
+    // Update Scope
+    if (randScope && currentRandFunc) {
+        randScope->updateScope(currentRandFunc, 0.05, 1.0); // Fast zoom (0.05s) to see waveform
+    }
+
+    // Update Audio (If currently playing)
+    if (btnPlayRand->isChecked() && currentRandFunc) {
+        m_ghostSynth->setAudioSource(currentRandFunc);
+    }
+}
+
+// TAB 16: PHONETIC LAB (SAM)
+void MainWindow::initSamLibrary() {
+    // Phonemes mapped from SAM source tables.
+    // https://github.com/s-macke/SAM
+    // Structure: {Name, F1, F2, F3, Voiced, A1, A2, A3, LENGTH}
+
+    // --- VOICED VOWELS (Long & Loud) ---
+    samLibrary["IY"] = {"IY", 10, 84, 110, true, 15, 10, 5, 18};
+    samLibrary["IH"] = {"IH", 14, 73, 93,  true, 15, 10, 5, 15};
+    samLibrary["EH"] = {"EH", 19, 67, 91,  true, 15, 10, 5, 16};
+    samLibrary["AE"] = {"AE", 24, 63, 88,  true, 15, 10, 5, 18};
+    samLibrary["AA"] = {"AA", 27, 40, 89,  true, 15, 10, 5, 18};
+    samLibrary["AH"] = {"AH", 23, 44, 87,  true, 15, 10, 5, 16};
+    samLibrary["AO"] = {"AO", 21, 31, 88,  true, 15, 10, 5, 18};
+    samLibrary["UH"] = {"UH", 16, 37, 82,  true, 15, 10, 5, 15};
+    samLibrary["AX"] = {"AX", 20, 45, 89,  true, 15, 10, 5, 12};
+    samLibrary["IX"] = {"IX", 14, 73, 93,  true, 15, 10, 5, 12};
+    samLibrary["ER"] = {"ER", 18, 49, 62,  true, 15, 10, 5, 18};
+    samLibrary["UX"] = {"UX", 14, 36, 82,  true, 15, 10, 5, 15};
+    samLibrary["OH"] = {"OH", 18, 30, 88,  true, 15, 10, 5, 18};
+
+    // --- DIPHTHONGS (Very Long) ---
+    samLibrary["EY"] = {"EY", 19, 72, 90,  true, 15, 10, 5, 20};
+    samLibrary["AY"] = {"AY", 27, 39, 88,  true, 15, 10, 5, 22};
+    samLibrary["OY"] = {"OY", 21, 31, 88,  true, 15, 10, 5, 22};
+    samLibrary["AW"] = {"AW", 27, 43, 88,  true, 15, 10, 5, 22};
+    samLibrary["OW"] = {"OW", 18, 30, 88,  true, 15, 10, 5, 20};
+    samLibrary["UW"] = {"UW", 13, 34, 82,  true, 15, 10, 5, 18};
+
+    // --- LIQUIDS & NASALS (Medium) ---
+    samLibrary["M*"] = {"M*", 6,  46, 81,  true, 12, 8, 4, 15};
+    samLibrary["N*"] = {"N*", 6,  54, 121, true, 12, 8, 4, 15};
+    samLibrary["NX"] = {"NX", 6,  86, 101, true, 12, 8, 4, 15};
+    samLibrary["R*"] = {"R*", 18, 50, 60,  true, 12, 8, 4, 14};
+    samLibrary["L*"] = {"L*", 14, 30, 110, true, 12, 8, 4, 14};
+    samLibrary["W*"] = {"W*", 11, 24, 90,  true, 12, 8, 4, 12};
+    samLibrary["Y*"] = {"Y*", 9,  83, 110, true, 12, 8, 4, 12};
+
+    // --- VOICED CONSONANTS (Short) ---
+    samLibrary["Z*"] = {"Z*", 9,  51, 93,  true, 10, 6, 3, 10};
+    samLibrary["ZH"] = {"ZH", 10, 66, 103, true, 10, 6, 3, 10};
+    samLibrary["V*"] = {"V*", 8,  40, 76,  true, 10, 6, 3, 8};
+    samLibrary["DH"] = {"DH", 10, 47, 93,  true, 10, 6, 3, 8};
+    samLibrary["J*"] = {"J*", 6,  66, 121, true, 10, 6, 3, 8};
+    samLibrary["B*"] = {"B*", 6,  26, 81,  true, 10, 6, 3, 6};
+    samLibrary["D*"] = {"D*", 6,  66, 121, true, 10, 6, 3, 6};
+    samLibrary["G*"] = {"G*", 6,  110, 112, true, 10, 6, 3, 6};
+    samLibrary["GX"] = {"GX", 6,  84, 94,  true, 10, 6, 3, 6};
+
+    // --- UNVOICED / NOISE ---
+
+    // Fricatives (Sustained Noise)
+    samLibrary["S*"] = {"S*", 6,  73, 99,  false, 8, 0, 0, 12};
+    samLibrary["SH"] = {"SH", 6,  79, 106, false, 8, 0, 0, 12};
+    samLibrary["F*"] = {"F*", 6,  26, 81,  false, 8, 0, 0, 10};
+    samLibrary["TH"] = {"TH", 6,  66, 121, false, 8, 0, 0, 10};
+    samLibrary["/H"] = {"/H", 14, 73, 93,  false, 8, 0, 0, 10};
+    samLibrary["CH"] = {"CH", 6,  79, 101, false, 8, 0, 0, 10};
+
+    // Plosives (Bursts) - UPDATED FOR AUDIBILITY
+    samLibrary["P*"] = {"P*", 6,  26, 81,  false, 10, 0, 0, 5};
+    samLibrary["T*"] = {"T*", 6,  66, 121, false, 10, 0, 0, 5};
+    samLibrary["K*"] = {"K*", 6,  85, 101, false, 10, 0, 0, 6};
+    samLibrary["KX"] = {"KX", 6,  84, 94,  false, 10, 0, 0, 6};
+
+    // Special Characters
+    samLibrary[" *"] = {" *", 0, 0, 0, false, 0, 0, 0, 5};
+    samLibrary[".*"] = {".*", 19, 67, 91, false, 0, 0, 0, 10};
+
+    // Internal Bridge Phonemes
+    for(int b=43; b<=77; ++b) {
+        QString key = QString("**%1").arg(b);
+        if(!samLibrary.contains(key)) samLibrary[key] = {"**", 6, 60, 100, true, 10, 5, 2, 8};
+    }
+}
+
+void MainWindow::generatePhoneticFormula() {
+    QStringList input = phoneticInput->toPlainText().split(" ", Qt::SkipEmptyParts);
+
+    // SETTINGS ---
+    double frameTime = 0.012;
+    double hzScale = 19.5;
+
+    // Engine Logic: 0 = Legacy (Additive), 1 = Nightly (Nested Ternary)
+    bool isNightly = (parsingStyleCombo->currentIndex() == 1);
+    bool isLofi = (parserModeCombo->currentIndex() == 1);
+
+    // Temp structure to hold parsed phonemes before assembly
+    struct ParsedSegment {
+        QString content;
+        double duration;
+    };
+    QList<ParsedSegment> sequence;
+
+    // PARSE INPUT TO DATA ---
+    for(int i = 0; i < std::min((int)input.size(), 128); ++i) {
+        QString rawToken = input[i].toUpper();
+        QRegularExpression re("([A-Z\\*\\/\\.\\?\\,\\-]+)(\\d*)");
+        QRegularExpressionMatch match = re.match(rawToken);
+
+        QString key = match.captured(1);
+        QString stressStr = match.captured(2);
+
+        if(!samLibrary.contains(key)) continue;
+        SAMPhoneme p = samLibrary[key];
+
+        // Stress Logic
+        int stress = stressStr.isEmpty() ? 4 : stressStr.toInt();
+        double pitchMult = 0.85 + (stress * 0.05);
+        double duration = (p.length * frameTime) * (0.8 + (stress * 0.05));
+
+        QString content;
+
+        if (p.voiced) {
+            // VOICED SYNTHESIS
+            double freq1 = p.f1 * hzScale;
+            double freq2 = p.f2 * hzScale;
+            double freq3 = p.f3 * hzScale;
+
+            QString s1 = QString("%1*sinew(integrate(%2))").arg(p.a1 * 0.05).arg(freq1);
+            QString s2 = QString("%1*sinew(integrate(%2))").arg(p.a2 * 0.05).arg(freq2);
+            QString s3 = QString("%1*sinew(integrate(%2))").arg(p.a3 * 0.05).arg(freq3);
+            QString glottal = QString("(0.8 * (1 - mod(t*f*%1, 1)))").arg(pitchMult);
+
+            content = QString("((%1 + %2 + %3) * %4)").arg(s1, s2, s3, glottal);
+        } else {
+            // NOISE SYNTHESIS
+            double rawF1 = (p.f1 > 0 ? p.f1 : 100);
+            double noiseColor = (rawF1 > 90 ? 90 : rawF1) * 80.0;
+            double noiseAmp = (p.length < 8) ? 0.9 : 0.4;
+
+            content = QString("(%1 * randv(t*%2))").arg(noiseAmp).arg(noiseColor);
+        }
+
+        sequence.append({content, duration});
+    }
+
+    if (sequence.isEmpty()) return;
+
+    QString finalFormula;
+
+    // ASSEMBLE FORMULA ---
+    if (isNightly) {
+        // NIGHTLY BUILD: Nested Ternary Logic (Recursive Backwards)
+        // Matches "Modern" logic in SID Architect
+
+        QString nestedBody = "0"; // End of chain (silence)
+        double totalTime = 0;
+        for(const auto &s : sequence) totalTime += s.duration;
+
+        double currentTime = totalTime;
+
+        // Iterate backwards from last sound to first
+        for (int i = sequence.size() - 1; i >= 0; --i) {
+            ParsedSegment seg = sequence[i];
+            currentTime -= seg.duration;
+
+            // Envelopes relative to local segment start (currentTime)
+            // Fast attack/release to prevent clicks
+            double fadeSpeed = 120.0;
+            QString attack = QString("min(1, (t-%1)*%2)").arg(currentTime).arg(fadeSpeed);
+            QString decay = QString("min(1, (%1-t)*%2)").arg(currentTime + seg.duration).arg(fadeSpeed);
+
+            double tEnd = currentTime + seg.duration;
+
+            // Structure: (t < end_time ? (sound * env) : (next_nested_block))
+            nestedBody = QString("(t < %1 ? (%2 * %3 * %4) : %5)")
+                             .arg(tEnd, 0, 'f', 4)
+                             .arg(seg.content)
+                             .arg(attack)
+                             .arg(decay)
+                             .arg(nestedBody);
+        }
+        finalFormula = nestedBody;
+
+    } else {
+        // LEGACY PARSING: Additive Logic (Forwards)
+        // Calculates all segments simultaneously and sums them
+
+        QStringList stringSegments;
+        double time = 0.0;
+
+        for (const auto &seg : sequence) {
+            double fadeSpeed = 120.0; // Same envelope speed
+            QString attack = QString("min(1, (t-%1)*%2)").arg(time).arg(fadeSpeed);
+            QString decay = QString("min(1, (%1-t)*%2)").arg(time + seg.duration).arg(fadeSpeed);
+
+            // Structure: ((Range Check) * Sound * Env)
+            QString block = QString("((t >= %1 & t < %2) * %3 * %4 * %5)")
+                                .arg(time)
+                                .arg(time + seg.duration)
+                                .arg(seg.content)
+                                .arg(attack)
+                                .arg(decay);
+            stringSegments << block;
+            time += seg.duration;
+        }
+        finalFormula = stringSegments.join(" + ");
+    }
+
+    // --- 3. POST-PROCESSING (Audio Quality) ---
+    if (isLofi) {
+        // Bitcrush / Retro mode: Quantize to 16 steps
+        finalFormula = QString("clamp(-1, floor((%1) * 16)/16, 1)").arg(finalFormula);
+    } else {
+        // High Quality: Simple safety clamp
+        finalFormula = QString("clamp(-1, %1, 1)").arg(finalFormula);
+    }
+
+    statusBox->setText(finalFormula);
+    QApplication::clipboard()->setText(finalFormula);
+}
+
+int findScopeAwareChar(const QString &str, char target) {
+    int balance = 0;
+    for (int i = 0; i < str.length(); ++i) {
+        if (str[i] == '(') balance++;
+        else if (str[i] == ')') balance--;
+        else if (str[i] == target && balance == 0) return i;
+    }
+    return -1;
+}
+
+QString MainWindow::convertLegacyToNightly(QString input) {
+    // 1. Clean formatting
+    input = input.replace("\n", "").replace(" ", "").trimmed();
+
+    // Remove "clamp" wrapper if present (User requested raw output)
+    if (input.startsWith("clamp(")) {
+        int c = input.indexOf(','), p = input.lastIndexOf(')');
+        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
+    }
+    if (input.startsWith("0.000+")) input = input.mid(6);
+
+    // 2. AUTO-DETECT SAMPLE RATE
+    // We scan the text for the smallest non-zero number.
+    // Example: If we see "0.000500", we know Rate = 1 / 0.0005 = 2000.
+    double sampleRate = 8000.0; // Default fallback
+
+    QRegularExpression floatReg("0\\.00[0-9]+"); // Look for small decimals
+    auto matches = floatReg.globalMatch(input);
+    double minVal = 1.0;
+    bool foundAny = false;
+
+    while (matches.hasNext()) {
+        double val = matches.next().captured(0).toDouble();
+        if (val > 0.000001 && val < minVal) {
+            minVal = val;
+            foundAny = true;
+        }
+    }
+    if (foundAny) {
+        // Round to nearest hundred to avoid precision errors (e.g., 1999.99 -> 2000)
+        sampleRate = std::round(1.0 / minVal);
+    }
+
+    if (input.contains("?")) {
+
+        static QRegularExpression tReg("t<([0-9\\.]+)");
+        QString result;
+        int lastPos = 0;
+
+        auto it = tReg.globalMatch(input);
+        while (it.hasNext()) {
+            QRegularExpressionMatch match = it.next();
+
+            // Keep the text structure exactly as is
+            result.append(input.mid(lastPos, match.capturedStart() - lastPos));
+
+            // MATH: Convert Time -> Sample
+            // Formula: s <= floor(t * rate) - 1
+            double tVal = match.captured(1).toDouble();
+            int sVal = std::floor(tVal * sampleRate) - 1;
+            if (sVal < 0) sVal = 0;
+
+            // Swap "t < 0.005" with "s <= 9"
+            result.append(QString("s<=%1").arg(sVal));
+
+            lastPos = match.capturedEnd();
+        }
+        result.append(input.mid(lastPos));
+
+        // Output correct header, NO CLAMP
+        return QString("var s:=floor(t*%1);\n%2")
+            .arg(int(sampleRate))
+            .arg(result);
+    }
+
+    return "Error: Input format not recognized (Try standard Legacy PCM).";
+}
+
 // ---------------------------------------------------------
-// GENERATOR: KEY MAPPER (KEYBOARD SPLITS)
+// FUNCTION 2: Nightly (Samples s) --> Legacy (Time t)
+// * Converts "s <= 799" to "t < 0.1" *
 // ---------------------------------------------------------
+QString MainWindow::convertNightlyToLegacy(QString input) {
+    input = input.replace("\n", "").replace(" ", "").trimmed();
+    if (input.startsWith("clamp(")) {
+        int c = input.indexOf(','), p = input.lastIndexOf(')');
+        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
+    }
+
+    // --- MODE A: PCM Tree Detected ("var s") ---
+    // This is the main one used for PCM files
+    static QRegularExpression pcmVar("var\\s*s\\s*:=\\s*floor\\(t\\s*\\*\\s*([0-9]+)\\);");
+    auto pcmMatch = pcmVar.match(input);
+
+    if (pcmMatch.hasMatch()) {
+        double sr = pcmMatch.captured(1).toDouble();
+        if (sr == 0) sr = 8000;
+        input.remove(pcmMatch.captured(0)); // Remove var declaration
+
+        // Replace all "s <= 123" with "t < 0.015"
+        static QRegularExpression sReg("s\\s*<=\\s*([0-9]+)");
+        QString result;
+        int lastPos = 0;
+        auto it = sReg.globalMatch(input);
+        while (it.hasNext()) {
+            QRegularExpressionMatch m = it.next();
+            result.append(input.mid(lastPos, m.capturedStart() - lastPos));
+
+            // MATH: Convert Sample Index -> Time
+            // (Sample + 1) / Rate is the start time of the NEXT sample
+            double tVal = (m.captured(1).toDouble() + 1.0) / sr;
+            result.append(QString("t < %1").arg(QString::number(tVal, 'f', 6)));
+            lastPos = m.capturedEnd();
+        }
+        result.append(input.mid(lastPos));
+
+        // Return wrapped (The tree structure ? : is valid in Legacy too!)
+        return QString("clamp(-1, %1, 1)").arg(result);
+    }
+
+    // --- MODE B: Standard Chain Fallback ---
+    // If the input isn't PCM (doesn't have var s), we treat it as a SID chain
+    if (input.startsWith("0.000+")) input = input.mid(6);
+
+    QStringList additiveParts;
+    double lastStartTime = 0.0;
+    QString currentLayer = input;
+
+    while (true) {
+        int questIdx = currentLayer.indexOf('?');
+        if (questIdx == -1) break;
+
+        QString postQuest = currentLayer.mid(questIdx + 1);
+        int localColon = findScopeAwareChar(postQuest, ':');
+        if (localColon == -1) break;
+        int colonIdx = questIdx + 1 + localColon;
+
+        int timeEnd = questIdx - 1;
+        int timeStart = currentLayer.lastIndexOf("t<", timeEnd);
+        QString timeStr = (timeStart != -1) ? currentLayer.mid(timeStart + 2, timeEnd - timeStart - 1) : "0";
+
+        QString content = currentLayer.mid(questIdx + 1, colonIdx - questIdx - 1);
+
+        QString remainder = currentLayer.mid(colonIdx + 1);
+        while (remainder.startsWith("(") && remainder.endsWith(")") &&
+               findScopeAwareChar(remainder.mid(1, remainder.length()-2), ':') != -1) {
+            remainder = remainder.mid(1, remainder.length() - 2);
+        }
+
+        additiveParts << QString("((t >= %1 & t < %2) * %3)")
+                             .arg(QString::number(lastStartTime, 'f', 6))
+                             .arg(timeStr).arg(content);
+
+        lastStartTime = timeStr.toDouble();
+        currentLayer = remainder;
+    }
+
+    if (additiveParts.isEmpty()) return "Error: Logic mismatch.";
+    return QString("clamp(-1, %1, 1)").arg(additiveParts.join(" + "));
+}
+
+
+// TAB 17: LOGIC CONVERTER
+
+    // Need to move right code in here
+
+
+
+// TAB 18: KEY MAPPER
 void MainWindow::generateKeyMapper() {
     int rows = keyMapTable->rowCount();
     if (rows == 0) {
@@ -4357,9 +4910,7 @@ void MainWindow::generateKeyMapper() {
     QApplication::clipboard()->setText(result);
 }
 
-// ---------------------------------------------------------
-// GENERATOR: STEP GATE
-// ---------------------------------------------------------
+// TAB 19: STEP GATE
 void MainWindow::generateStepGate() {
     // 1. Calculate Rate
     // Base: 16th notes at Tempo. Formula: (tempo/60) * 4
@@ -4422,72 +4973,7 @@ void MainWindow::generateStepGate() {
     QApplication::clipboard()->setText(statusBox->toPlainText());
 }
 
-QString MainWindow::getXpfTemplate() {
-    QStringList lines;
-    lines << "<?xml version=\"1.0\"?>"
-          << "<!DOCTYPE lmms-project>"
-          << "<lmms-project version=\"20\" creator=\"WaveConv\" type=\"instrumenttracksettings\">"
-          << "<head/>"
-          << "<instrumenttracksettings name=\"%1\" muted=\"0\" solo=\"0\">"
-          << "<instrumenttrack vol=\"100\" pan=\"0\" basenote=\"%2\" pitchrange=\"1\">"
-          << "<instrument name=\"xpressive\">"
-          << "<xpressive version=\"0.1\" O1=\"%3\" O2=\"0\" bin=\"\">"
-          << "<key/></xpressive></instrument>"
-          << "<eldata fcut=\"%4\" fres=\"%5\" ftype=\"%6\" fwet=\"1\">"
-          << "<elvol rel=\"0.1\" dec=\"0.5\" sustain=\"0\" amt=\"0\"/>" // AMT=0 for manual ADSR
-          << "</eldata></instrumenttrack></instrumenttracksettings></lmms-project>";
-    return lines.join("\n");
-}
-
-void MainWindow::generateDrumXpf() {
-    QString waveFunc = drumWaveCombo->currentText().toLower() + "w";
-    if(waveFunc == "sinew") waveFunc = "sinew";
-
-    double decayBase = drumDecaySlider->value();
-    double expFactor = drumExpSlider->value(); //
-
-    // Pitch Drop Formula
-    QString pitch = QString("(f + (%1 * exp(-t * %2)))").arg(drumPitchDropSlider->value()).arg(decayBase / 2.0);
-
-    // Osc + Noise Mix
-    double nMix = drumNoiseSlider->value() / 100.0;
-    QString source = QString("((%1(integrate(%2)) * %3) + (randv(t*10000) * %4))")
-                         .arg(waveFunc).arg(pitch).arg(1.0 - nMix).arg(nMix);
-
-    // Final Exponential Volume Shape
-    QString formula = QString("(%1 * exp(-t * %2))").arg(source).arg(decayBase * expFactor);
-    formula = formula.replace("\"", "&quot;");
-
-    int typeIndex = drumTypeCombo->currentIndex();
-    int filterType = 0; // Default LPF (0)
-    if (typeIndex == 1 || typeIndex == 4 || typeIndex == 6) filterType = 2; // BPF
-    if (typeIndex == 2 || typeIndex == 5) filterType = 1; // HPF
-
-    QString xpf = getXpfTemplate()
-                      .arg(drumTypeCombo->currentText()).arg(drumPitchSlider->value())
-                      .arg(formula).arg(drumToneSlider->value())
-                      .arg(drumSnapSlider->value() / 100.0).arg(filterType)
-                      .arg(0.1).arg(0.5);
-
-    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
-    if (clickedButton == btnSaveDrumXpf) {
-        QString fileName = QFileDialog::getSaveFileName(this, "Save Drum", "", "LMMS Preset (*.xpf)");
-        if (!fileName.isEmpty()) {
-            QFile file(fileName);
-            if (file.open(QIODevice::WriteOnly)) {
-                QTextStream stream(&file);
-                stream << xpf;
-                file.close();
-                statusBox->setText("Drum saved: " + fileName);
-            }
-        }
-    } else {
-        QApplication::clipboard()->setText(xpf);
-        statusBox->setText("Drum XPF copied to clipboard!");
-    }
-}
-
-
+// TAB 20: NUMBERS 1981
 void MainWindow::generateNumbers1981() {
     int steps = (numStepsCombo->currentIndex() == 0) ? 16 : 32;
     double dur = numDuration->value();
@@ -4496,7 +4982,7 @@ void MainWindow::generateNumbers1981() {
     // Formula: (tempo / 15) is roughly 4 steps per beat if tempo is 60.
     QString speedMath = "(tempo / 15.0)";
 
-    // 1. Determine the Pitch Source
+    // Determine the Pitch Source
     QString pitchSource;
 
     if (isRandom) {
@@ -4518,14 +5004,14 @@ void MainWindow::generateNumbers1981() {
                           .arg(speedMath).arg(steps).arg(nested);
     }
 
-    // 2. Gate Logic
+    // Gate Logic
     QString gate = QString("(mod(t * %1, 1) < %2)").arg(speedMath).arg(dur);
 
-    // 3. O1 (Left)
+    // O1 (Left)
     QString o1 = QString("squarew(integrate(f * semitone(%1))) * %2")
                      .arg(pitchSource).arg(gate);
 
-    // 4. O2 (Right) - Detuned + Vibrato
+    // O2 (Right) - Detuned + Vibrato
     QString pitchSourceO2 = pitchSource;
 
     if (isRandom) {
@@ -4538,13 +5024,14 @@ void MainWindow::generateNumbers1981() {
     QString o2 = QString("squarew(integrate(f * 1.02 * semitone(%1))) * %2")
                      .arg(pitchSourceO2).arg(gate);
 
-    // 5. Output
+    // Output
     numOut1->setText(o1);
     numOut2->setText(o2);
 }
 
+// TAB 21: DELAY ARCHITECT
 void MainWindow::generateDelayArchitect() {
-    // 1. Determine Source Audio
+    // Determine Source Audio
     QString source;
     int idx = delayWaveCombo->currentIndex();
     if (idx == 0) source = "(trianglew(integrate(f)) * exp(-t * 20))"; // Pluck
@@ -4552,7 +5039,7 @@ void MainWindow::generateDelayArchitect() {
     else if (idx == 2) source = "(squarew(integrate(f)) * exp(-t * 10))";
     else source = QString("(%1)").arg(delayCustomInput->toPlainText());
 
-    // 2. Calculate Delay Variables
+    // Calculate Delay Variables
     double time = delayTimeSpin->value();       // e.g. 0.2s
     double rate = delayRateSpin->value();       // e.g. 8000Hz
     double fb = delayFeedbackSpin->value();     // e.g. 0.6
@@ -4560,7 +5047,7 @@ void MainWindow::generateDelayArchitect() {
 
     int samples = (int)(time * rate);           // Convert Time to Sample Count (e.g. 1600)
 
-    // 3. Build Multitap Chain
+    // Build Multitap Chain
     // Formula: Source + Tap1 + Tap2...
     // Tap N: last(samples * N) * (feedback ^ N) * (t > time * N)
 
@@ -4580,11 +5067,12 @@ void MainWindow::generateDelayArchitect() {
         chain << tap;
     }
 
-    // 4. Output
+    // Output
     statusBox->setText(QString("clamp(-1, %1, 1)").arg(chain.join(" + ")));
     QApplication::clipboard()->setText(statusBox->toPlainText());
 }
 
+// TAB 22: MACRO MORPH
 void MainWindow::generateMacroMorph() {
     int style = macroStyleCombo->currentIndex();
     bool isLegacy = (macroBuildMode->currentIndex() == 1);
@@ -4599,7 +5087,6 @@ void MainWindow::generateMacroMorph() {
 
     QString osc, env;
 
-    // --- 2. ALGORITHM LIBRARY ---
     switch(style) {
     case 0: // SUPER SAWS (Anthemic)
         // 3 Detuned Saws averaged
@@ -4734,14 +5221,14 @@ void MainWindow::generateMacroMorph() {
     }
     }
 
-    // --- 3. GLOBAL PROCESSING CHAIN ---
+    //PROCESSING CHAIN ---
 
-    // A. Apply Envelope (Skip for Atmosphere)
+    // Apply Envelope (Skip for Atmosphere)
     if (style != 7) {
         osc = QString("(%1 * %2)").arg(osc).arg(env);
     }
 
-    // B. TEXTURE LAYER (Noise/Grain)
+    // TEXTURE LAYER (Noise/Grain)
     if (mTex > 0 || style == 7) {
         // High frequency noise
         QString noise = QString("(randv(t * 8000) * %1)").arg(mTex * 0.25);
@@ -4749,7 +5236,7 @@ void MainWindow::generateMacroMorph() {
         else osc = QString("(%1 + %2)").arg(osc).arg(noise);
     }
 
-    // C. WONK (Sidechain / Ducking)
+    // WONK (Sidechain / Ducking)
     if (mWonk > 0) {
         // AM Modulation simulating sidechain compression
         // 8.0 is roughly 120BPM quarter notes
@@ -4757,7 +5244,7 @@ void MainWindow::generateMacroMorph() {
         osc = QString("(%1 * %2)").arg(osc).arg(sidechain);
     }
 
-    // D. BITCRUSH (Quantization)
+    // BITCRUSH (Quantization)
     // Applied last for maximum artifacting
     if (mGrit > 0 && style != 8 && style != 9) {
         // (Skip for Cyberpunk/Hardstyle as they use Grit for distortion instead)
@@ -4766,18 +5253,20 @@ void MainWindow::generateMacroMorph() {
         osc = QString("floor(%1 * %2) / %2").arg(osc).arg(steps);
     }
 
-    // 4. FINAL OUTPUT
+    // FINAL OUTPUT
     // Clamp result to prevent clipping in LMMS
     QString finalResult = QString("clamp(-1, %1, 1)").arg(osc);
 
     statusBox->setText(finalResult);
     QApplication::clipboard()->setText(finalResult);
 }
+
+// TAB 23: STRING MACHINE
 void MainWindow::generateStringMachine() {
     int model = stringModelCombo->currentIndex();
     int chord = stringChordCombo->currentIndex();
 
-    // Normalized Values
+    // Normalised Values
     double valEns    = stringEnsembleSlider->value() / 100.0;
     double valAtt    = stringAttackSlider->value() / 100.0;
     double valEvolve = stringEvolveSlider->value() / 100.0;
@@ -4785,7 +5274,7 @@ void MainWindow::generateStringMachine() {
     double valAge    = stringAgeSlider->value() / 100.0;
     double valRel    = stringSpaceSlider->value() / 100.0;
 
-    // --- 1. DEFINE THE OSCILLATOR "CELL" ---
+    // DEFINE THE OSCILLATOR "CELL" ---
     auto getOsc = [&](double detuneMult, double mix, double phaseOffset) {
         QString shape;
 
@@ -4799,7 +5288,7 @@ void MainWindow::generateStringMachine() {
                         .arg(pwmSpeed)
                         .arg(phaseOffset); // Phase offset ensures lines don't overlap on scope
         }
-        // Amazing String / Solina Logic:
+        // String / Solina Logic:
         else {
             // EVOLUTION LOGIC:
             // Mixes Triangle (Dark) -> Saw (Bright) over time based on 'Evolve' slider
@@ -4838,7 +5327,7 @@ void MainWindow::generateStringMachine() {
         return QString("(%1 * %2)").arg(shape).arg(mix);
     };
 
-    // --- 2. BUILD THE ENSEMBLE ---
+    // BUILD THE ENSEMBLE ---
     double spread = 1.0 + (valEns * 0.015);
 
     // We pass distinct Phase Offsets (0, 2, 4) to ensure the visual lines separate
@@ -4848,7 +5337,7 @@ void MainWindow::generateStringMachine() {
 
     QString cell = QString("(%1 + %2 + %3)").arg(oscC, oscL, oscR);
 
-    // --- 3. CHORD MEMORY LOGIC ---
+    // CHORD MEMORY LOGIC ---
     QString stack;
     if (chord == 0) stack = cell; // Manual
     else if (chord == 1) stack = QString("(%1 + 0.5*%2)").arg(cell).arg(cell.replace("(f", "(f*2"));
@@ -4875,20 +5364,12 @@ void MainWindow::generateStringMachine() {
         stack = QString("(0.4*%1+0.3*%2+0.3*%3)").arg(c1,c2,c3);
     }
 
-    // --- 4. EVOLUTION ENVELOPE ---
-    // User requested "evolving strings" logic like: (t < 0.6) * (t/0.6)
-    // We make the '0.6' adjustable via Attack Slider.
-
+    // EVOLUTION ENVELOPE ---
     double attTime = 0.01 + (valAtt * 2.0); // 0 to 2 seconds
     double relTime = 0.1 + (valRel * 3.0);  // Release tail
 
     // Attack Logic
     QString envLogic = QString("min(1, t / %1)").arg(attTime);
-
-    // Release Logic (Simulated for raw code export)
-    // Note: True release requires note-off events which pure math formulas can't always see
-    // without a 'gate' variable, but we can simulate a "decay" curve if they hold the note.
-    // For now, we stick to the Attack Swell as requested for the "Amazing" evolution.
 
     QString finalResult = QString("(%1 * %2)").arg(stack).arg(envLogic);
 
@@ -4896,6 +5377,7 @@ void MainWindow::generateStringMachine() {
     QApplication::clipboard()->setText(statusBox->toPlainText());
 }
 
+// TAB 24: HARDWARE LAB
 void MainWindow::loadHardwarePreset(int idx) {
     if (idx <= 0) return;
     struct HardwarePatch { QString wave; int a, d, s, r, f, q, ps, pd, vs, vd, n; bool peak; };
@@ -4989,22 +5471,23 @@ void MainWindow::generateRandomHardware() {
     hwSustain->setValue(std::rand() % 80);
     hwRelease->setValue(10 + (std::rand() % 50));
 
-    // Randomize Filter
+    // Randomise Filter
     hwCutoff->setValue(500 + (std::rand() % 8000));
     hwResonance->setValue(std::rand() % 90);
 
-    // Randomize Movement
+    // Randomise Movement
     hwPwmSpeed->setValue(std::rand() % 100);
     hwPwmDepth->setValue(std::rand() % 70);
     hwVibSpeed->setValue(std::rand() % 50);
     hwVibDepth->setValue(std::rand() % 30);
 
-    // Randomize Noise Mix
+    // Randomise Noise Mix
     hwNoiseMix->setValue(std::rand() % 40);
 
-    statusBox->setText("Hardware Parameters Randomized!");
+    statusBox->setText("Hardware Parameters Randomised!");
 }
 
+// TAB 25: WEST COAST LAB
 void MainWindow::generateWestCoast() {
     int model = westModelSelect->currentIndex();
     double gain = westTimbreSlider->value() / 10.0;
@@ -5013,19 +5496,19 @@ void MainWindow::generateWestCoast() {
     double modIndex = westModIndexSlider->value() / 10.0;
     int stages = westFoldStages->value();
 
-    // 1. MODULATION ENGINE (FM)
+    // MODULATION ENGINE (FM)
     // The modulator frequency is relative to the fundamental 'f' [cite: 177]
     QString modulator = QString("(%1 * sinew(integrate(f * %2)))").arg(modIndex).arg(modRatio);
 
-    // 2. CORE OSCILLATOR (Principal)
+    // CORE OSCILLATOR (Principal)
     // FM is applied by adding the modulator to the frequency inside the integrator [cite: 220]
     QString core = (model == 1) ? "trianglew(integrate(f + " + modulator + "))"
                                 : "sinew(integrate(f + " + modulator + "))";
 
-    // 3. INPUT PRE-CONDITIONING
+    // INPUT PRE-CONDITIONING
     QString input = QString("(%1 * %2 + %3)").arg(core).arg(gain).arg(bias);
 
-    // 4. ADVANCED CIRCUIT EMULATION
+    // ADVANCED CIRCUIT EMULATION
     QString folder;
     if (model == 2) { // Serge Middle VCM (Series Diode String)
         // Series topology: output iterates through multiple folds based on 'stages' [cite: 124, 129]
@@ -5041,13 +5524,13 @@ void MainWindow::generateWestCoast() {
         folder = QString("((1-%1)*%2 + %1*(2*abs(%2)-1))").arg(westOrderSlider->value()/100.0).arg(input);
     }
 
-    // 5. HALF-WAVE MODIFICATION
+    // HALF-WAVE MODIFICATION
     // Emulates clipping or folding only the positive excursion
     if (westHalfWaveFold->isChecked()) {
         folder = QString("max(0, %1)").arg(folder);
     }
 
-    // 6. VACTROL LPG SIMULATION
+    // VACTROL LPG SIMULATION
     if (westVactrolSim->isChecked()) {
         // High spectral brightness at attack, rapid darkening via exponential decay [cite: 180, 181]
         folder = QString("(%1 * exp(-t * 15))").arg(folder);
@@ -5057,6 +5540,10 @@ void MainWindow::generateWestCoast() {
     QApplication::clipboard()->setText(statusBox->toPlainText());
 }
 
+// TAB 26. SYNTH ENGINE
+    // IN SEPERATE .CPP
+
+// TAB 27: SPECTRAL RESYNTHESISER!!!!!!!!!
 void MainWindow::updateSpectralPreview() {
     if (specSampleData.empty()) return;
 
@@ -5075,7 +5562,7 @@ void MainWindow::updateSpectralPreview() {
     else if(pText.contains("C-4")) fundamental = 261.63;
     else if(pText.contains("C-5")) fundamental = 523.25;
 
-    // --- 1. AUDIO ENGINE (Looping & Analysis) ---
+    // AUDIO ENGINE (Looping & Analysis) ---
     std::function<double(double)> resynthAlgo = [=](double t) {
         double loopTime = std::fmod(t, totalDur + 0.1);
         if (loopTime >= totalDur) return 0.0;
@@ -5095,7 +5582,7 @@ void MainWindow::updateSpectralPreview() {
         return signal * 0.3;
     };
 
-    // --- 2. GENERATE WINDOWED XPRESSIVE FORMULA ---
+    // GENERATE WINDOWED XPRESSIVE FORMULA ---
     QString finalFormula;
     if (isNightly) {
         finalFormula = QString("var w := floor(t * (%1 / %2));\n").arg(numWindows).arg(totalDur);
@@ -5135,3 +5622,393 @@ void MainWindow::updateSpectralPreview() {
     }
 }
 
+// TAB 28: SUBTRACTIVE LAB!!!!!!!
+void MainWindow::updateSubtractivePreview() {
+    QString waves[] = {"saww", "squarew", "trianglew", "sinew"};
+    QString w1 = waves[subOsc1Dial->value()];
+    QString w2 = waves[subOsc2Dial->value()];
+
+    // Normalize ADSR values
+    double a = (subAttSlider->value() / 100.0) * 0.5 + 0.01;
+    double d = (subDecSlider->value() / 100.0) * 1.0 + 0.01;
+    double s = subSusSlider->value() / 100.0;
+    double r = (subRelSlider->value() / 100.0) * 2.0 + 0.01; // Exponential factor
+
+    double mix2 = subMixSlider->value() / 100.0;
+    double mix1 = 1.0 - mix2;
+    double detune = 1.0 + (subDetuneSlider->value() / 1200.0);
+
+    // Xpressive ADSR using conditional ternary logic
+    QString envExpr = QString(
+        "((t < %1) ? (t/%1) : "                       // Attack stage
+        "(t < %2) ? (1 - (t-%1)/%3 * (1-%4)) : "      // Decay stage
+        "(t < 2.0) ? %4 : "                           // Sustain stage
+        "(%4 * exp(-(t-2.0)/%5)))"                    // Exponential Release stage
+    ).arg(a).arg(a+d).arg(d).arg(s).arg(r);
+
+    QString finalExpr = QString("clamp(-1, (%1*%2(integrate(f)) + %3*%4(integrate(f*%5))) * %6, 1)")
+                        .arg(mix1).arg(w1).arg(mix2).arg(w2).arg(detune).arg(envExpr);
+
+    statusBox->setText(finalExpr); // Output to main UI
+
+    auto subAlgo = [=](double t) {
+        double f = 220.0;
+        auto getS = [](QString type, double ph) {
+            if(type == "saww") return 2.0 * std::fmod(ph, 1.0) - 1.0;
+            if(type == "squarew") return (std::fmod(ph, 1.0) > 0.5) ? 1.0 : -1.0;
+            if(type == "trianglew") return (2.0/3.14159) * std::asin(std::sin(ph * 6.2831));
+            return std::sin(ph * 6.2831);
+        };
+
+        double curEnv = 0;
+        if (t < a) curEnv = t / a;
+        else if (t < a + d) curEnv = 1.0 - ((t - a) / d) * (1.0 - s);
+        else if (t < 2.0) curEnv = s;
+        else curEnv = s * std::exp(-(t - 2.0) / r);
+
+        return ((mix1 * getS(w1, t * f)) + (mix2 * getS(w2, t * f * detune))) * curEnv;
+    };
+
+    subScope->updateScope(subAlgo, 3.0, 1.0); // Visualize full envelope
+    if(btnSubPlayMaster->isChecked()) m_ghostSynth->setAudioSource(subAlgo);
+}
+
+// TAB 29: PIXEL SYNTH !!!!!!
+void MainWindow::generatePixelSynth() {
+    if (pixelLoadedImage.isNull()) {
+        statusBox->setText("Error: No image loaded!");
+        return;
+    }
+
+    // SETUP PARAMETERS
+    int steps = pixelTimeSteps->value();       // X-Axis Resolution
+    int bands = pixelFreqBands->value();       // Y-Axis Resolution
+    int maxPartials = pixelMaxPartials->value();
+    double dur = pixelDuration->value();
+    double minF = pixelMinFreq->value();
+    double maxF = pixelMaxFreq->value();
+    bool logScale = pixelLogScale->isChecked();
+    bool nightly = (pixelBuildMode->currentIndex() == 0);
+
+    // RESIZE IMAGE (Downsample for analysis)
+    // We resize to (steps x bands) to make pixel access O(1)
+    QImage scanImg = pixelLoadedImage.scaled(steps, bands, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+    // SHOW PROCESSING POPUP (Important!)
+    QProgressDialog progress("Scanning Pixels & Calculating Harmonics...", "Cancel", 0, steps, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0); // Show immediately
+
+    QStringList timeSlices;
+    double timePerStep = dur / steps;
+
+    // MAIN LOOP (X-AXIS / TIME)
+    for (int x = 0; x < steps; ++x) {
+        if (progress.wasCanceled()) break;
+        progress.setValue(x);
+
+        // A. Collect Pixels in this column
+        struct PixelData { double freq; double amp; };
+        std::vector<PixelData> columnPixels;
+
+        for (int y = 0; y < bands; ++y) {
+            // Get pixel brightness (0-255)
+            // Y is usually top-down in images, but low freq is bottom in audio.
+            // So we read (bands - 1 - y) to flip it.
+            QRgb pixel = scanImg.pixel(x, bands - 1 - y);
+            double brightness = qGray(pixel) / 255.0;
+
+            if (brightness > 0.05) { // Noise floor gate
+                // Map Y to Frequency
+                double normalizedY = (double)y / (bands - 1);
+                double freq;
+
+                if (logScale) {
+                    // Logarithmic (Musical) mapping
+                    // f = min * (max/min)^y
+                    freq = minF * std::pow(maxF / minF, normalizedY);
+                } else {
+                    // Linear (Coagula/Scientific) mapping
+                    freq = minF + (maxF - minF) * normalizedY;
+                }
+
+                columnPixels.push_back({freq, brightness});
+            }
+        }
+
+        // Sort by Loudness (Optimization)
+        // We only want the loudest sine waves to save CPU
+        std::sort(columnPixels.begin(), columnPixels.end(), [](const PixelData &a, const PixelData &b){
+            return a.amp > b.amp;
+        });
+
+        // Build Formula for this slice
+        QStringList oscillatorSum;
+        int count = 0;
+        for (const auto& p : columnPixels) {
+            if (count >= maxPartials) break;
+            // Formula: amp * sin(f * t * 2pi) -> sinew(integrate(freq))
+            // We use simple frequency multiplication for static partials
+            oscillatorSum << QString("%1*sinew(integrate(%2))").arg(p.amp, 0, 'f', 3).arg(p.freq, 0, 'f', 1);
+            count++;
+        }
+
+        QString sliceFormula = oscillatorSum.isEmpty() ? "0" : oscillatorSum.join("+");
+
+         timeSlices << sliceFormula;
+    }
+    progress.setValue(steps);
+
+    // ASSEMBLE FINAL FORMULA
+    QString finalCode;
+
+    if (nightly) {
+        // Nested Ternary: var step := floor(t * rate); ...
+        QString nested = "0";
+        for (int i = steps - 1; i >= 0; --i) {
+            nested = QString("(s == %1 ? (%2) : %3)").arg(i).arg(timeSlices[i]).arg(nested);
+        }
+        double rate = steps / dur;
+        finalCode = QString("var s := floor(t * %1);\n%2").arg(rate).arg(nested);
+
+    } else {
+        // Legacy Additive: ((t > start & t < end) * val) + ...
+        QStringList adds;
+        for (int i = 0; i < steps; ++i) {
+            double tStart = i * timePerStep;
+            double tEnd = (i + 1) * timePerStep;
+            adds << QString("((t >= %1 & t < %2) * (%3))")
+                    .arg(tStart, 0, 'f', 4).arg(tEnd, 0, 'f', 4).arg(timeSlices[i]);
+        }
+        finalCode = adds.join(" + ");
+    }
+
+    // FINALISE
+    finalCode = QString("clamp(-1, %1, 1)").arg(finalCode);
+    statusBox->setText(finalCode);
+    QApplication::clipboard()->setText(finalCode);
+}
+
+
+// TAB 30: SCRATCH
+void MainWindow::updateScratchPreview() {
+    double baseF = scratchVinylPitch->value();
+    double handHz = scratchFaderSpeed->value();
+    double grit = scratchGritSlider->value() / 100.0;
+    int pattern = scratchPatternCombo->currentIndex();
+
+    auto scratchAlgo = [=](double t) {
+        // Hand Motion: Oscillates the playback speed
+        double motion = 1.0 + std::sin(t * handHz * 6.2831);
+
+        // Fader Logic
+        double fader = 1.0;
+        if (pattern == 1) fader = (std::sin(t * handHz * 12.56) > 0) ? 1.0 : 0.0; // Transformer
+        if (pattern == 2) fader = (std::sin(t * handHz * 6.28) > 0.6) ? 1.0 : 0.0; // Chirp
+
+        // Audio Signal
+        double signal = std::sin(t * baseF * motion * 6.2831);
+
+        // Add Grit (Noise modulated by hand movement)
+        if (grit > 0) {
+            double noise = ((double)rand()/RAND_MAX * 2.0 - 1.0) * grit * 0.2;
+            signal += noise * std::abs(motion);
+        }
+
+        return signal * fader;
+    };
+
+    scratchScope->updateScope(scratchAlgo, 0.5, 1.0);
+    if (btnPlayScratch->isChecked()) m_ghostSynth->setAudioSource(scratchAlgo);
+}
+
+void MainWindow::generateScratchLogic() {
+    double handHz = scratchFaderSpeed->value();
+    int pattern = scratchPatternCombo->currentIndex();
+    bool isNightly = (scratchBuildMode->currentIndex() == 0);
+
+    QString formula;
+    if (isNightly) {
+        // Variable-based version for Nightly build
+        QString faderLogic = (pattern == 1) ? QString("squarew(t * %1) > 0 ? 1 : 0").arg(handHz*2) : "1";
+        formula = QString("var hand := sinew(t * %1);\n"
+                          "var fader := %2;\n"
+                          "clamp(-1, saww(integrate(f * (1 + hand))) * fader, 1)")
+                  .arg(handHz).arg(faderLogic);
+    } else {
+        // Inline version for Legacy build
+        QString fader = (pattern == 1) ? QString("(squarew(t * %1) > 0)").arg(handHz*2) : "1";
+        formula = QString("clamp(-1, saww(integrate(f * (1 + sinew(t * %1)))) * %2, 1)")
+                  .arg(handHz).arg(fader);
+    }
+
+    statusBox->setText(formula);
+    QApplication::clipboard()->setText(formula);
+}
+
+// TAB 31
+
+void MainWindow::updateNatureLabels(int index) {
+    QStringList labels;
+    switch(index) {
+        case 0: labels = QStringList{"Bird Pitch", "Chirp Rate", "FM Depth", "Flock Size", "Tone", "Distance", "Trill Speed", "Echo"}; break;
+        case 1: labels = QStringList{"Cricket Pitch", "Chirp Speed", "Pulse Width", "Jitter", "Leg Scrape", "Resonance", "Swarm", "Dampen"}; break;
+        case 2: labels = QStringList{"Wheek Pitch", "Urgency", "Vibrato", "Herd Size", "Breath", "Vocal Formant", "Rise Time", "Fall Time"}; break;
+        case 3: labels = QStringList{"Flow Rate", "Turbulence", "Bubble Amt", "Bubble Pitch", "Rock Size", "Depth", "Foam", "Stereo"}; break;
+        case 4: labels = QStringList{"Rain Intensity", "Droplet Size", "Wind Speed", "Gust Var", "Roof Tone", "Splash", "Stereo", "Distance"}; break;
+        case 5: labels = QStringList{"Rumble Freq", "Crack Rate", "Distance", "Blast Pwr", "Echo Tail", "Wind Howl", "Rain Mix", "Pre-Delay"}; break;
+        case 6: labels = QStringList{"Croak Pitch", "Ribbit Rate", "Throat Size", "Wetness", "Swamp Gas", "Echo", "Insect Mix", "Night"}; break;
+        default: labels = QStringList{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"}; break;
+    }
+
+    for(int i=0; i<8; i++) {
+        if(i < labels.size()) natureLabels[i]->setText(labels[i]);
+    }
+}
+
+void MainWindow::generateNatureLogic() {
+    int type = natureTypeCombo->currentIndex();
+    bool isNightly = (natureBuildMode->currentIndex() == 0);
+
+    // Normalize sliders 0.0 to 1.0
+    double p1 = natureParam1->value() / 100.0;
+    double p2 = natureParam2->value() / 100.0;
+    double p3 = natureParam3->value() / 100.0;
+    double p4 = natureParam4->value() / 100.0;
+    double p5 = natureParam5->value() / 100.0;
+    double p6 = natureParam6->value() / 100.0;
+    double p7 = natureParam7->value() / 100.0;
+    double p8 = natureParam8->value() / 100.0;
+
+
+    std::function<double(double)> natureAlgo;
+    auto noise = [](double s) { return std::sin(s * 12.9898) * 43758.5453 - std::floor(std::sin(s * 12.9898) * 43758.5453); };
+
+    if (type == 0) { // FOREST BIRDS
+        natureAlgo = [=](double t) {
+            double out = 0.0;
+            for(int i=0; i<3; i++) {
+                double birdOffset = i * 1.5;
+                double rhythm = t * (0.5 + p2 * 2.0) + birdOffset + (noise(std::floor(t)) * p4);
+                if (std::fmod(rhythm, 2.0) < 0.2 + (p4*0.1)) {
+                    double localT = std::fmod(rhythm, 2.0) * (5.0 + p7*5.0);
+                    double pitch = (2000 + p1*3000) + std::sin(localT * (20 + p3*50)) * (500 * p3);
+                    double amp = std::exp(-localT * (2.0 + p8));
+                    out += std::sin(localT * pitch) * amp * p5;
+                }
+            }
+            return std::clamp(out, -0.8, 0.8);
+        };
+    }
+    else if (type == 1) { // CRICKETS
+        natureAlgo = [=](double t) {
+            double rate = 5.0 + p2 * 15.0;
+            double chirp = std::fmod(t * rate, 1.0);
+            double carrier = std::sin(t * (3000 + p1 * 4000) * 6.28);
+            double env = (chirp < 0.5) ? std::sin(chirp * 3.14) * (std::sin(t*150)>0?1:0) : 0.0;
+            return carrier * env * (0.5 + p5);
+        };
+    }
+    else if (type == 3) { // STREAM
+        natureAlgo = [=](double t) {
+            double flow = 0.0;
+            for(int i=1; i<5; i++) flow += std::sin(t * i * (50 + p1*200) + noise(t*i)) / i;
+            double bubbles = (noise(t*100) > (0.95 - p3*0.2)) ? std::sin(t*800*6.28)*0.5 : 0.0;
+            return (flow * 0.4 * p5) + (bubbles * p3);
+        };
+    }
+    // ... (Other audio modes remain similar to previous code, using C++ math) ...
+    else {
+        // Fallback for types not fully implemented in C++ preview yet
+         natureAlgo = [=](double t) { return (noise(t*5000) * p5 * 0.5); };
+    }
+
+    QString code;
+
+    if (type == 0) { // FOREST BIRDS
+        // Logic: 3 sine oscillators with different speeds summed together
+        double speed = 0.5 + p2 * 2.0;
+        double pitch = 1000 + p1 * 2000;
+        double fm = 20 + p3 * 50;
+
+        // Helper to make a single bird string
+        auto birdStr = [&](double offset) {
+            QString rhythm = QString("mod(t*%1 + %2, 2.0)").arg(speed).arg(offset);
+            QString env = QString("exp(-%1 * 5.0)").arg(rhythm); // Decay
+            QString osc = QString("sinew(integrate(%1 + 500*sinew(t*%2)))").arg(pitch).arg(fm);
+            return QString("((%1 < 0.3) * %2 * %3)").arg(rhythm).arg(osc).arg(env);
+        };
+
+        code = QString("(%1 + %2 + %3) * %4")
+               .arg(birdStr(0.0)).arg(birdStr(1.3)).arg(birdStr(2.7)).arg(p5);
+    }
+    else if (type == 1) { // CRICKETS
+        double rate = 5.0 + p2 * 15.0;
+        double pitch = 3000 + p1 * 4000;
+
+        // Carrier * LFO * Pulse texture
+        QString carrier = QString("sinew(integrate(%1))").arg(pitch);
+        QString lfo = QString("(sinew(t*%1) > 0)").arg(rate); // On/Off rhythm
+        QString pulse = QString("sinew(t*150)"); // The "trill" texture inside the chirp
+
+        code = QString("%1 * %2 * %3 * %4").arg(carrier).arg(lfo).arg(pulse).arg(p5);
+    }
+    else if (type == 2) { // GUINEA PIGS
+        double speed = 0.5 + p2;
+        double pitch = 400 + p1 * 400;
+
+        // Rising pitch sweep logic
+        QString sweep = QString("mod(t*%1, 2.0)").arg(speed);
+        QString osc = QString("saww(integrate(%1 + (%2 * 400)))").arg(pitch).arg(sweep);
+
+        code = QString("((%1 < 0.8) * %2 * sinew(%1 * 3.14)) * %3").arg(sweep).arg(osc).arg(p5);
+    }
+    else if (type == 3) { // RUSHING STREAM
+        // Sum of low frequency noise/sines + Random bubbles
+        QString flow = QString("randv(t*%1)").arg(100 + p1 * 500);
+        // Bubble: High pitch sine triggered randomly
+        QString bubbleTrig = QString("(randv(t*100) > %1)").arg(0.95 - p3*0.2);
+        QString bubble = QString("sinew(integrate(800)) * %1").arg(bubbleTrig);
+
+        code = QString("(%1 * 0.4 + %2) * %3").arg(flow).arg(bubble).arg(p5);
+    }
+    else if (type == 4) { // RAINSTORM
+        // Wind (Low filtered noise) + Rain (High freq noise)
+        QString wind = QString("randv(t*%1)").arg(50 + p4*100); // Low rate noise
+        QString rain = QString("(randv(t*10000) > %1 ? randv(t*20000) : 0)").arg(0.95 - p1*0.1);
+
+        code = QString("(%1 * 0.2 + %2) * %3").arg(wind).arg(rain).arg(p5);
+    }
+    else if (type == 5) { // THUNDER
+        // Explosion logic: Noise burst with decay
+        double rate = 0.1 + p2 * 0.2;
+        QString cycle = QString("mod(t*%1, 1.0)").arg(rate);
+        QString boom = QString("((%1 < 0.1) * randv(t) * (1.0 - (%1/0.1)))").arg(cycle);
+        QString rumble = QString("sinew(integrate(50)) * %1").arg(boom); // Low freq add
+
+        code = QString("(%1 + %2) * %3").arg(boom).arg(rumble).arg(p4);
+    }
+    else if (type == 6) { // SWAMP FROGS
+        // Low pitch saw with envelope
+        double rate = 1.0 + p2 * 2.0;
+        QString croak = QString("saww(integrate(100 + %1*50))").arg(p1);
+        QString rhythm = QString("sinew(t*%1)").arg(rate);
+
+        code = QString("(%1 * (%2 > 0.5 ? 1 : 0)) * %3").arg(croak).arg(rhythm).arg(p5);
+    }
+
+    // Final Clamp
+    QString finalResult = QString("clamp(-1, %1, 1)").arg(code);
+
+    // Update UI String Box & Clipboard
+    if(statusBox) statusBox->setText(finalResult);
+    QApplication::clipboard()->setText(finalResult);
+
+    // Update Visuals
+    if(natureScope) natureScope->updateScope(natureAlgo, 1.0, 1.0);
+
+    // Handle Audio Engine
+    if (btnPlayNature->isChecked()) {
+        m_ghostSynth->setAudioSource(natureAlgo);
+    }
+}
