@@ -4,8 +4,6 @@
 #include <QMutexLocker> // <--- ADD THIS
 
 SynthEngine::SynthEngine(QObject *parent) : QIODevice(parent) {
-    // ... (Keep constructor code same as before) ...
-    // Just ensure m_format stuff is here
     m_format.setSampleRate(44100);
     m_format.setChannelCount(2);
     m_format.setSampleFormat(QAudioFormat::Float);
@@ -40,25 +38,21 @@ void SynthEngine::stop() {
     close();
 }
 
-// --- FIX 1: LOCK WHEN WRITING ---
 void SynthEngine::setAudioSource(std::function<double(double)> func) {
     QMutexLocker locker(&m_mutex); // Locks here
     m_oscillator = func;
-} // Unlocks here automatically
+}
 
-// --- FIX 2: LOCK WHEN READING ---
+
 qint64 SynthEngine::readData(char *data, qint64 maxlen) {
-    QMutexLocker locker(&m_mutex); // Locks here so we don't read garbage
+    QMutexLocker locker(&m_mutex);
 
     int channels = m_format.channelCount();
-    // (Your existing readData logic, wrapped in the lock)
     if (m_format.sampleFormat() == QAudioFormat::Float) {
         float *buffer = reinterpret_cast<float*>(data);
         int frames = maxlen / (sizeof(float) * channels);
         for (int i = 0; i < frames; ++i) {
             double t = (double)m_totalSamples / m_format.sampleRate();
-
-            // Check if m_oscillator is valid (Extra safety)
             float sample = 0.0f;
             if(m_oscillator) sample = (float)m_oscillator(t) * 0.5f;
 
@@ -67,7 +61,6 @@ qint64 SynthEngine::readData(char *data, qint64 maxlen) {
         }
         return frames * sizeof(float) * channels;
     }
-    // ... (Keep the Int16 fallback if you want, but Float is standard now) ...
     return 0;
 }
 
