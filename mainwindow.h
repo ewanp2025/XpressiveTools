@@ -206,6 +206,7 @@ public:
         m_sampleRate = sampleRate;
         update();
     }
+
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter painter(this);
@@ -280,6 +281,10 @@ class MainWindow : public QMainWindow {
 public:
     MainWindow(QWidget *parent = nullptr);
 
+signals:
+    void expressionGenerated(QString code);
+
+
     // --- SLOTS (Actions) ---
 private slots:
     // General IO
@@ -305,7 +310,6 @@ private slots:
     void generateXPFPackager();
     void generateLeadStack();
     void generateRandomPatch();
-    void generateFilterForge();
     void generateDrumXpf();
     void generatePhoneticFormula();
     void generateStepGate();
@@ -479,22 +483,17 @@ private:
     // ------------------------------------
     // TAB 13: FILTER FORGE
     // ------------------------------------
-    UniversalScope *filterScope;
-    UniversalSpectrum *filterSpectrum;
-    QPushButton *btnPlayFilter;
-    QComboBox *filterSourceWave;
+    QWidget *filterForgeTab;
+    QComboBox *filterTypeCombo;
+    QComboBox *filterWaveformCombo;
     QSlider *filterCutoffSlider;
-    QSlider *filterAtt, *filterDec, *filterSus, *filterRel;
-    EnvelopeDisplay *filterAdsrVisualizer;
-    QComboBox *buildModeFilter;
-    QComboBox *filterType;
-    QDoubleSpinBox *filterTaps;
-    QLabel *filterDisclaimer;
-    QComboBox *filterWaveform;
-    QDoubleSpinBox *filterFreqPreview;
-    QSlider *filterTapsSlider;
-    QLabel *filterCutoffLabel;
+    QLabel *filterCutoffValueLabel;
+    QSlider *filterResSlider;
+    QTextEdit *filterCodeOutput;
+    QLabel *lblNightlyWarning;
 
+    void initFilterForgeTab();
+    void generateFilterCode();
     // ------------------------------------
     // TAB 14: LEAD STACKER
     // ------------------------------------
@@ -504,8 +503,8 @@ private:
     QSlider *leadDetuneSlider;
     QSlider *leadSubSlider;
     QSlider *leadNoiseSlider;
-    QSlider *leadVibeSlider;  // Pitch Drift
-    QSlider *leadWidthSlider; // Stereo Spread simulation
+    QSlider *leadVibeSlider;
+    QSlider *leadWidthSlider;
     QPushButton *btnPlayLead;
 
     // ------------------------------------
@@ -662,7 +661,7 @@ private:
     void updateSpectralPreview();
 
     // -------------------------------------
-    // --- TAB 28: SUBTRACTIVE LAB ---
+    // TAB 28: SUBTRACTIVE LAB
     // -------------------------------------
     QComboBox *subOsc1Wave, *subOsc2Wave;
     QSlider *subDetuneSlider, *subMixSlider;
@@ -697,8 +696,9 @@ private:
 
     void generatePixelSynth();
 
-
-    // --- TAB 30: SCRATCH GENERATOR ---
+    // -------------------------------------
+    // TAB 30: SCRATCH GENERATOR
+    // -------------------------------------
     QComboBox *scratchBuildMode;
     QComboBox *scratchPatternCombo;
     QSlider *scratchVinylPitch;
@@ -709,7 +709,9 @@ private:
     void generateScratchLogic();
     void updateScratchPreview();
 
-    // --- TAB 31: NATURE LAB---
+    // -------------------------------------
+    // TAB 31: NATURE LAB
+    // -------------------------------------
     QComboBox *natureTypeCombo;
     QComboBox *natureBuildMode;
     QSlider *natureParam1;
@@ -727,7 +729,54 @@ private:
     QPushButton *btnPlayNature;
     QPushButton *btnGenNature;
 
+    // -------------------------------------
+    // TAB 32: VECTOR MORPH
+    // -------------------------------------
+    QWidget *vectorTab;
+    QSlider *morphX;
+    QSlider *morphY;
+    QPushButton *btnGenVector;
+    void initVectorTab();
+\
+    // -------------------------------------
+    // TAB 33: PLUCK LAB
+    // -------------------------------------
+    QWidget *pluckTab;
+    QSlider *pluckDamping;
+    QSlider *pluckDecay;
+    QPushButton *btnGenPluck;
+    void initPluckTab();
+
+    // -------------------------------------
+    // TAB 34: HOUSE MUSIC ORGAN
+    // -------------------------------------
+    QWidget *houseOrganTab;
+    UniversalScope *houseOrganScope;
+    QSlider *organDrawbar1, *organDrawbar2, *organDrawbar3;
+    QSlider *organClickSlider, *organDecaySlider;
+    QPushButton *btnPlayOrgan;
+    QPushButton *btnGenOrgan;
+
+    void initHouseOrganTab();
+    void updateHouseOrgan();
+    void generateHouseOrgan();
+
+    // -------------------------------------
+    // TAB 35: X-TRANSPILER (Zyn to Xpressive)
+    // -------------------------------------
+    QWidget *transpilerTab;
+    QPushButton *btnLoadZyn;
+    QTextEdit *transpilerLog;
+    QTextEdit *transpilerOutput;
+    QLabel *lblTranspilerWarning;
+
+    void initTranspilerTab();
+    void processZynFile(const QString &filePath);
+    QString translateZynOscillator(int type);
+
 
 };
+
+
 
 #endif // MAINWINDOW_H
