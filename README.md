@@ -33,7 +33,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  XPF Packager – Wraps your raw expressions into a fully-formed LMMS instrument file for instant loading. Placeholder.
 
-•  Filter Forge – An experimental lab for generating mathematical approximations of FIR filters using $last(n)$ logic. Placeholder. Limited success so far with FIR results.
+•  Filter Forge – Updated. For the LPF, it uses a single line recursive formula where the current output is a weighted average of the new input and the last(1) sample. For the HPF, the system performs phase cancellation by playing the original dry signal in O1 and an    inverted low pass version in O2.
 
 •  Lead Stacker – A unison engine that generates supersaw stacks with adjustable detune, sub oscillators, and drift. 
 
@@ -63,6 +63,19 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  Spectral Resynthesiser – Analyses external WAV stabs to reconstruct sounds through windowed harmonic additive synthesis (another way to bring external recordings into Xpressive as an expression). 
 
+•  Subtractive Lab - Interface to look like a subtractive synth minus the filter.
+
+•  Pixel Synth - Load an image and generate sound.
+
+•  Scratch Lab - Simulate DJ scratching.
+
+•  Nature Lab - Natural sounds. WIP.
+
+•  Vector Morph - WIP
+
+•  Pluck Lab - Generate plucks.
+
+•  House Organ - Generate house music bass organ patches.
 
 **Technical**
 
