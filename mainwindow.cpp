@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <QRegularExpression>
 #include <QProgressDialog>
+#include <QtXml/QDomDocument>
 
 // =========================================================
 // MAIN CONSTRUCTOR
@@ -1391,115 +1392,8 @@ void MainWindow::setupUI() {
     // ------------------------------------
     // TAB 13: FILTER FORGE
     // ------------------------------------
-    QWidget *filterTab = new QWidget();
-    QVBoxLayout *filterMainLayout = new QVBoxLayout(filterTab);
-
-    // TOP SECTION: THE ANALYZERS
-    QHBoxLayout *vizLay = new QHBoxLayout();
-    filterScope = new UniversalScope();
-    filterSpectrum = new UniversalSpectrum();
-    vizLay->addWidget(filterScope);
-    vizLay->addWidget(filterSpectrum);
-    filterMainLayout->addLayout(vizLay);
-
-    // CONTROLS GROUP
-    QGroupBox *fCtrlGroup = new QGroupBox("Weighted Filter Designer");
-    QFormLayout *fForm = new QFormLayout(fCtrlGroup);
-
-    filterType = new QComboBox();
-    filterType->addItems({"Low-Pass (Weighted)", "High-Pass (Differential)"});
-
-    filterWaveform = new QComboBox();
-    filterWaveform->addItems({"Sine", "Sawtooth", "Square"});
-
-    // The New Cutoff Slider
-    filterCutoffSlider = new QSlider(Qt::Horizontal);
-    filterCutoffSlider->setRange(1, 99);
-    filterCutoffSlider->setValue(50);
-    filterCutoffLabel = new QLabel("Cutoff: 0.50");
-
-    filterFreqPreview = new QDoubleSpinBox();
-    filterFreqPreview->setRange(20, 15000);
-    filterFreqPreview->setValue(990); // Default to your B5 test pitch
-    filterFreqPreview->setSuffix(" Hz");
-
-    fForm->addRow("Filter Mode:", filterType);
-    fForm->addRow("Waveform:", filterWaveform);
-    fForm->addRow(filterCutoffLabel, filterCutoffSlider);
-    fForm->addRow("Preview Pitch:", filterFreqPreview);
-    filterMainLayout->addWidget(fCtrlGroup);
-
-    // PLAY & GENERATE BUTTONS
-    btnPlayFilter = new QPushButton("▶ Play Filter Test");
-    btnPlayFilter->setCheckable(true);
-    btnPlayFilter->setStyleSheet("height: 40px; background-color: #335533; color: white;");
-
-    QPushButton *btnGenFilter = new QPushButton("GENERATE XPRESSIVE CODE");
-    btnGenFilter->setStyleSheet("height: 40px; font-weight: bold;");
-
-    filterMainLayout->addWidget(btnPlayFilter);
-    filterMainLayout->addWidget(btnGenFilter);
-    modeTabs->addTab(filterTab, "Filter Forge");
-
-    // LIVE UPDATE LAMBDA
-    auto updateFilter = [=]() {
-        double f = filterFreqPreview->value();
-        double coeff = filterCutoffSlider->value() / 100.0;
-        bool isHP = (filterType->currentIndex() == 1);
-        int waveType = filterWaveform->currentIndex();
-
-        auto dspAlgo = [=](double t) {
-            auto getRaw = [&](double time) {
-                double ph = time * f * 6.2831;
-                if (waveType == 0) return std::sin(ph);
-                if (waveType == 1) return 2.0 * std::fmod(time * f, 1.0) - 1.0;
-                return (std::sin(ph) > 0 ? 1.0 : -1.0);
-            };
-
-            double current = getRaw(t);
-            static double lastOut = 0; // Simple state for preview
-
-            if (isHP) {
-                // High Pass logic for preview
-                double hp = current - lastOut;
-                lastOut = (hp * coeff) + (lastOut * 0.1);
-                return lastOut;
-            } else {
-                // Low Pass logic for preview
-                lastOut = (current * (1.0 - coeff)) + (lastOut * coeff);
-                return lastOut;
-            }
-        };
-
-        filterScope->updateScope(dspAlgo, 0.05, 1.0);
-        filterSpectrum->updateSpectrum(dspAlgo, 44100.0);
-        if (btnPlayFilter->isChecked()) m_ghostSynth->setAudioSource(dspAlgo);
-    };
-
-    // FINAL CONNECTIONS
-    connect(filterCutoffSlider, &QSlider::valueChanged, [=](int val){
-        filterCutoffLabel->setText(QString("Cutoff: %1").arg(val/100.0, 0, 'f', 2));
-        updateFilter();
-    });
-
-    connect(filterType, QOverload<int>::of(&QComboBox::currentIndexChanged), updateFilter);
-    connect(filterFreqPreview, QOverload<double>::of(&QDoubleSpinBox::valueChanged), updateFilter);
-    connect(btnPlayFilter, &QPushButton::toggled, [=](bool checked){
-        if (checked) { m_ghostSynth->start(); updateFilter(); }
-        else m_ghostSynth->stop();
-    });
-
-    connect(btnGenFilter, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
-
-    filterDisclaimer = new QLabel("⚠️ EXPERIMENTAL: NOT FULLY WORKING\n"
-                                  "TYPE: First-Order Recursive (IIR-Style) Weighted Filter\n"
-                                  "REQUIREMENT: Use Xpressive Nightly Build Only.\n"
-                                  "NOTE: Must fix, variable definition must be outside of clamp.");
-    filterDisclaimer->setStyleSheet("QLabel { color: #FF5555; font-weight: bold; border: 2px solid #FF5555; "
-                                    "padding: 10px; background-color: #221111; }");
-    filterDisclaimer->setAlignment(Qt::AlignCenter);
-    filterMainLayout->addWidget(filterDisclaimer);
-
+    initFilterForgeTab();
+    modeTabs->addTab(filterForgeTab, "Filter Forge");
     // ------------------------------------
     // TAB 14: LEAD STACKER
     // ------------------------------------
@@ -3200,17 +3094,17 @@ void MainWindow::setupUI() {
         });
 
         // ---------------------------------------------------------
-            // TAB 31: NATURE MEGA LAB
-            // ---------------------------------------------------------
-            QWidget *natureTab = new QWidget();
-            QVBoxLayout *natureLayout = new QVBoxLayout(natureTab);
+        // TAB 31: NATURE MEGA LAB
+        // ---------------------------------------------------------
+        QWidget *natureTab = new QWidget();
+        QVBoxLayout *natureLayout = new QVBoxLayout(natureTab);
 
-            // 1. TOP BAR: Mode & Build Type
-            QGroupBox *natureModeBox = new QGroupBox("Environment Settings");
-            QHBoxLayout *natureModeLayout = new QHBoxLayout(natureModeBox);
+        // TOP BAR: Mode & Build Type
+        QGroupBox *natureModeBox = new QGroupBox("Environment Settings");
+        QHBoxLayout *natureModeLayout = new QHBoxLayout(natureModeBox);
 
-            natureTypeCombo = new QComboBox();
-            natureTypeCombo->addItems({
+        natureTypeCombo = new QComboBox();
+        natureTypeCombo->addItems({
                 "Forest Birds (FM)",
                 "Night Crickets (Pulse)",
                 "Guinea Pig Herd (Harmonic)",
@@ -3218,24 +3112,24 @@ void MainWindow::setupUI() {
                 "Rainstorm (Stochastic)",
                 "Thunder & Rumble (Explosive)",
                 "Swamp Frogs (Resonant)"
-            });
+        });
 
-            natureBuildMode = new QComboBox();
-            natureBuildMode->addItems({"Nightly (Variables)", "Legacy (Additive)"});
+        natureBuildMode = new QComboBox();
+        natureBuildMode->addItems({"Nightly (Variables)", "Legacy (Additive)"});
 
-            natureModeLayout->addWidget(new QLabel("Model:"));
-            natureModeLayout->addWidget(natureTypeCombo, 1);
-            natureModeLayout->addWidget(new QLabel("Build:"));
-            natureModeLayout->addWidget(natureBuildMode, 1);
-            natureLayout->addWidget(natureModeBox);
+        natureModeLayout->addWidget(new QLabel("Model:"));
+        natureModeLayout->addWidget(natureTypeCombo, 1);
+        natureModeLayout->addWidget(new QLabel("Build:"));
+        natureModeLayout->addWidget(natureBuildMode, 1);
+        natureLayout->addWidget(natureModeBox);
 
-            // 2. The Mega Slider Bank
-            QGroupBox *paramBox = new QGroupBox("Physics Parameters");
-            QGridLayout *paramGrid = new QGridLayout(paramBox);
+        // The Mega Slider Bank
+        QGroupBox *paramBox = new QGroupBox("Physics Parameters");
+        QGridLayout *paramGrid = new QGridLayout(paramBox);
 
-            for(int i=0; i<8; i++) {
-                natureLabels[i] = new QLabel(QString("Param %1").arg(i+1));
-                natureLabels[i]->setAlignment(Qt::AlignCenter);
+        for(int i=0; i<8; i++) {
+            natureLabels[i] = new QLabel(QString("Param %1").arg(i+1));
+            natureLabels[i]->setAlignment(Qt::AlignCenter);
                 natureLabels[i]->setStyleSheet("font-size: 10px; color: #555;");
 
                 // Dynamic pointers to our class members
@@ -3267,7 +3161,7 @@ void MainWindow::setupUI() {
             }
             natureLayout->addWidget(paramBox);
 
-            // 3. Visuals & Controls
+            // Visuals & Controls
             natureScope = new UniversalScope();
             natureScope->setMinimumHeight(120);
             natureLayout->addWidget(natureScope);
@@ -3313,6 +3207,239 @@ void MainWindow::setupUI() {
 
             // Initialize labels
             updateNatureLabels(0);
+
+        // ---------------------------------------------------------
+        // TAB 32: VECTOR MORPH (XY SYNTHESIS)
+        // ---------------------------------------------------------
+                vectorTab = new QWidget();
+                QVBoxLayout *vectorLayout = new QVBoxLayout(vectorTab);
+
+                // 1. VISUALIZER
+                UniversalScope *vectorScope = new UniversalScope();
+                vectorScope->setMinimumHeight(150);
+                vectorLayout->addWidget(vectorScope);
+
+                // 2. CONTROLS
+                QGroupBox *vecCtrlGroup = new QGroupBox("4-Point Vector Plane (A/B/C/D)");
+                QGridLayout *vecGrid = new QGridLayout(vecCtrlGroup);
+
+                // Re-using header pointers for X/Y
+                morphX = new QSlider(Qt::Horizontal); morphX->setRange(0, 100); morphX->setValue(50);
+                morphY = new QSlider(Qt::Horizontal); morphY->setRange(0, 100); morphY->setValue(50);
+
+                // Additional "Cool" Sliders for animation
+                QSlider *vecLfoRate = new QSlider(Qt::Horizontal); vecLfoRate->setRange(0, 100); vecLfoRate->setValue(20);
+                QSlider *vecLfoDepth = new QSlider(Qt::Horizontal); vecLfoDepth->setRange(0, 100); vecLfoDepth->setValue(0);
+                QSlider *vecDetune = new QSlider(Qt::Horizontal); vecDetune->setRange(0, 100); vecDetune->setValue(10);
+
+                vecGrid->addWidget(new QLabel("<b>X-AXIS (Saw <-> Sqr):</b>"), 0, 0);
+                vecGrid->addWidget(morphX, 0, 1);
+                vecGrid->addWidget(new QLabel("<b>Y-AXIS (Tri <-> FM):</b>"), 1, 0);
+                vecGrid->addWidget(morphY, 1, 1);
+
+                vecGrid->addWidget(new QLabel("Orbit Speed (LFO):"), 2, 0);
+                vecGrid->addWidget(vecLfoRate, 2, 1);
+                vecGrid->addWidget(new QLabel("Orbit Depth:"), 3, 0);
+                vecGrid->addWidget(vecLfoDepth, 3, 1);
+                vecGrid->addWidget(new QLabel("Stereo Spread:"), 4, 0);
+                vecGrid->addWidget(vecDetune, 4, 1);
+
+                vectorLayout->addWidget(vecCtrlGroup);
+
+                // 3. BUTTONS
+                QHBoxLayout *vecBtnLay = new QHBoxLayout();
+                QPushButton *btnPlayVector = new QPushButton("▶ Play Vector Field");
+                btnPlayVector->setCheckable(true);
+                btnPlayVector->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 45px;");
+
+                btnGenVector = new QPushButton("GENERATE VECTOR STRING");
+                btnGenVector->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 45px;");
+
+                vecBtnLay->addWidget(btnPlayVector);
+                vecBtnLay->addWidget(btnGenVector);
+                vectorLayout->addLayout(vecBtnLay);
+
+                // 4. LOGIC
+                auto updateVector = [=]() {
+                    double xVal = morphX->value() / 100.0;
+                    double yVal = morphY->value() / 100.0;
+                    double lfoSpd = vecLfoRate->value() / 5.0;
+                    double lfoDep = vecLfoDepth->value() / 200.0; // +/- 0.5 max
+                    double detune = vecDetune->value() / 500.0;
+
+                    std::function<double(double)> vecAlgo = [=](double t) {
+                        // LFO Orbit Logic
+                        double orbit = std::sin(t * lfoSpd);
+                        double modX = std::clamp(xVal + (orbit * lfoDep), 0.0, 1.0);
+                        double modY = std::clamp(yVal + (orbit * lfoDep * 0.5), 0.0, 1.0); // Elliptical orbit
+
+                        double f = 110.0;
+                        // 4 Corners
+                        // A (0,0): Sawtooth
+                        double oscA = 2.0 * std::fmod(t * f, 1.0) - 1.0;
+                        // B (1,0): Square
+                        double oscB = (std::sin(t * f * 6.28) > 0) ? 1.0 : -1.0;
+                        // C (0,1): Triangle
+                        double oscC = (2.0/3.14) * std::asin(std::sin(t * f * 6.28));
+                        // D (1,1): FM Noise/Bell
+                        double oscD = std::sin(t * f * 6.28 + 3.0 * std::sin(t * f * 2.5 * 6.28));
+
+                        // Bilinear Interpolation
+                        double top = (oscA * (1.0 - modX)) + (oscB * modX);
+                        double bot = (oscC * (1.0 - modX)) + (oscD * modX);
+                        double signal = (top * (1.0 - modY)) + (bot * modY);
+
+                        return signal;
+                    };
+
+                    vectorScope->updateScope(vecAlgo, 0.05, 1.0);
+                    if(btnPlayVector->isChecked()) m_ghostSynth->setAudioSource(vecAlgo);
+                };
+
+                // 5. GENERATOR
+                connect(btnGenVector, &QPushButton::clicked, [=]() {
+                    // Generates an Xpressive formula using variables for X/Y
+                    QString code = QString(
+                        "var vx := %1; var vy := %2;\n"
+                        "var A := saww(integrate(f));\n"
+                        "var B := squarew(integrate(f));\n"
+                        "var C := trianglew(integrate(f));\n"
+                        "var D := sinew(integrate(f) + 3*sinew(integrate(f*2.5)));\n"
+                        "clamp(-1, ((A*(1-vx) + B*vx)*(1-vy) + (C*(1-vx) + D*vx)*vy), 1)"
+                    ).arg(morphX->value()/100.0).arg(morphY->value()/100.0);
+                    statusBox->setText(code);
+                    QApplication::clipboard()->setText(code);
+                });
+
+                // Connections
+                connect(morphX, &QSlider::valueChanged, updateVector);
+                connect(morphY, &QSlider::valueChanged, updateVector);
+                connect(vecLfoRate, &QSlider::valueChanged, updateVector);
+                connect(vecLfoDepth, &QSlider::valueChanged, updateVector);
+                connect(vecDetune, &QSlider::valueChanged, updateVector);
+
+                connect(btnPlayVector, &QPushButton::toggled, [=](bool c){
+                    if(c) { m_ghostSynth->start(); updateVector(); btnPlayVector->setText("⏹ Stop"); }
+                    else { m_ghostSynth->stop(); btnPlayVector->setText("▶ Play Vector Field"); }
+                });
+
+                modeTabs->addTab(vectorTab, "Vector Morph");
+                QTimer::singleShot(200, updateVector);
+    // ---------------------------------------------------------
+    // TAB 33: PLUCK LAB
+    // ---------------------------------------------------------
+    pluckTab = new QWidget();
+    QVBoxLayout *pluckLayout = new QVBoxLayout(pluckTab);
+
+    // VISUALISER
+    UniversalScope *pluckScope = new UniversalScope();
+    pluckScope->setMinimumHeight(150);
+    pluckLayout->addWidget(pluckScope);
+
+    //CONTROLS
+    QGroupBox *pluckCtrlGroup = new QGroupBox("Physical String Modeling");
+    QFormLayout *pluckForm = new QFormLayout(pluckCtrlGroup);
+
+    // Header pointers
+    pluckDamping = new QSlider(Qt::Horizontal); pluckDamping->setRange(0, 100); pluckDamping->setValue(50);
+    pluckDecay = new QSlider(Qt::Horizontal); pluckDecay->setRange(80, 100); pluckDecay->setValue(99);
+
+    QSlider *pluckColor = new QSlider(Qt::Horizontal); pluckColor->setRange(0, 100); pluckColor->setValue(80);
+    QSlider *pluckTension = new QSlider(Qt::Horizontal); pluckTension->setRange(0, 100); pluckTension->setValue(0);
+    QSlider *pluckDrive = new QSlider(Qt::Horizontal); pluckDrive->setRange(100, 200); pluckDrive->setValue(100);
+
+    pluckForm->addRow("String Damping (LPF):", pluckDamping);
+    pluckForm->addRow("Sustain / Feedback:", pluckDecay);
+    pluckForm->addRow("Exciter Brightness:", pluckColor);
+    pluckForm->addRow("String Tension (Bend):", pluckTension);
+    pluckForm->addRow("Overdrive:", pluckDrive);
+
+    pluckLayout->addWidget(pluckCtrlGroup);
+
+    // BUTTONS
+    QHBoxLayout *pluckBtnLay = new QHBoxLayout();
+    QPushButton *btnPlayPluck = new QPushButton("▶ Pluck String");
+    btnPlayPluck->setCheckable(true);
+    btnPlayPluck->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 45px;");
+
+    btnGenPluck = new QPushButton("GENERATE PLUCK STRING");
+    btnGenPluck->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 45px;");
+
+    pluckBtnLay->addWidget(btnPlayPluck);
+    pluckBtnLay->addWidget(btnGenPluck);
+    pluckLayout->addLayout(pluckBtnLay);
+
+    // LOGIC
+                    auto updatePluck = [=]() {
+                        double damp = pluckDamping->value() / 100.0; // 0.0 to 1.0
+                        double fbk = pluckDecay->value() / 100.0;    // 0.8 to 1.0
+                        double color = pluckColor->value() / 100.0;
+                        double bend = pluckTension->value();
+                        double drive = pluckDrive->value() / 100.0;
+
+                        std::function<double(double)> pluckAlgo = [=](double t) {
+                            // Simulate the burst
+                            double burstLen = 0.01;
+                            double burst = (t < burstLen) ? ((double)rand()/RAND_MAX * 2.0 - 1.0) : 0.0;
+
+                            // Apply Exciter Color (Simple Lowpass on burst)
+                            if (t > 0.005 && color < 0.5) burst *= 0.2;
+
+                            // Karplus-Strong Simulation (Approximation for Scope)
+                            // Decay envelope simulates the feedback loop loss
+                            double freq = 110.0 + (bend * std::exp(-t*10)); // Pitch bend on attack
+                            double decayRate = (1.0 - fbk) * 200.0 + (damp * 50.0);
+                            double env = std::exp(-t * decayRate);
+
+                            // Sine summation to look like a string on the scope
+                            double stringBody = std::sin(t * freq * 6.28)
+                                              + 0.5 * std::sin(t * freq * 2 * 6.28) * (1.0-damp)
+                                              + 0.2 * std::sin(t * freq * 3 * 6.28) * (1.0-damp);
+
+                            double out = (burst * 0.5) + (stringBody * env * drive);
+                            return std::clamp(out, -1.0, 1.0);
+                        };
+
+                        // Zoom in to see the attack
+                        pluckScope->updateScope(pluckAlgo, 0.2, 1.0);
+                        if(btnPlayPluck->isChecked()) m_ghostSynth->setAudioSource(pluckAlgo);
+                    };
+
+    // GENERATOR
+    connect(btnGenPluck, &QPushButton::clicked, [=]() {
+                        // Actual Karplus-Strong Math for Xpressive
+                        // O1 = Burst + Feedback
+                        double fb = pluckDecay->value() / 100.0;
+                        double lp = pluckDamping->value() / 100.0;
+                        QString code = QString(
+                            "var burst := (t < 0.005 ? randv(t) : 0);\n"
+                            "var delay := last(sr/f);\n" // Delay line of 1 wavelength
+                            "var filter := delay * %1 + last(sr/f + 1) * %2;\n" // Simple averaging filter
+                            "clamp(-1, burst + (filter * %3), 1)"
+                        ).arg(1.0 - lp).arg(lp).arg(fb);
+
+                        statusBox->setText(code);
+                        QApplication::clipboard()->setText(code);
+    });
+
+    connect(pluckDamping, &QSlider::valueChanged, updatePluck);
+    connect(pluckDecay, &QSlider::valueChanged, updatePluck);
+    connect(pluckColor, &QSlider::valueChanged, updatePluck);
+            connect(pluckTension, &QSlider::valueChanged, updatePluck);
+                    connect(pluckDrive, &QSlider::valueChanged, updatePluck);
+
+                    connect(btnPlayPluck, &QPushButton::toggled, [=](bool c){
+                        if(c) { m_ghostSynth->start(); updatePluck(); btnPlayPluck->setText("⏹ Stop"); }
+                        else { m_ghostSynth->stop(); btnPlayPluck->setText("▶ Pluck String"); }
+                    });
+
+    modeTabs->addTab(pluckTab, "Pluck Lab");
+    QTimer::singleShot(300, updatePluck);
+    // ------------------------------------
+    //TAB 34
+    // ------------------------------------
+    initHouseOrganTab();  // Different way to keep code at bottom now
+
 
     // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
@@ -3362,7 +3489,6 @@ void MainWindow::setupUI() {
     connect(btnGenVel, &QPushButton::clicked, this, &MainWindow::generateVelocilogic);
     connect(btnNoise, &QPushButton::clicked, this, &MainWindow::generateNoiseForge);
     connect(btnSaveXpf, &QPushButton::clicked, this, &MainWindow::saveXpfInstrument);
-    connect(btnGenFilter, &QPushButton::clicked, this, &MainWindow::generateFilterForge);
     connect(btnRand, &QPushButton::clicked, this, &MainWindow::generateRandomPatch);
 }
 
@@ -4321,32 +4447,148 @@ void MainWindow::saveXpfInstrument() {
 
 
 // TAB 13: FILTER FORGE
-void MainWindow::generateFilterForge() {
-    double cutoff = filterCutoffSlider->value() / 100.0;
-    bool isHP = (filterType->currentIndex() == 1);
-    int waveIdx = filterWaveform->currentIndex();
+void MainWindow::initFilterForgeTab() {
+    filterForgeTab = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(filterForgeTab);
 
-    QString source = "sinew(integrate(f))";
-    if (waveIdx == 1) source = "saww(integrate(f))";
-    if (waveIdx == 2) source = "squarew(integrate(f))";
+    // --- 1. WARNING ---
+    lblNightlyWarning = new QLabel("⚠️ STRICTLY FOR NIGHTLY BUILD (ExprTk) ⚠️\n"
+                                   "Uses 'last(1)' memory. Requires 'saww', 'sqr' etc.");
+    lblNightlyWarning->setStyleSheet("QLabel { background-color: #440000; color: #ffcccc; font-weight: bold; padding: 10px; border-radius: 5px; }");
+    lblNightlyWarning->setAlignment(Qt::AlignCenter);
+    layout->addWidget(lblNightlyWarning);
 
-    QString result;
-    if (isHP) {
-        // High Pass: var out := (source - last(1)) * cutoff + last(1) * 0.9;
-        // This calculates the difference (Highs) and smooths it.
-        result = QString("var hp := (%1 - last(1));\n"
-                         "var out := (hp * %2) + (last(1) * 0.1);\n"
-                         "out").arg(source).arg(cutoff);
-    } else {
-        // Low Pass: var out := (source * (1 - cutoff)) + (last(1) * cutoff);
-        // Standard One-Pole smoothing logic.
-        result = QString("var lp := (%1 * %2) + (last(1) * %3);\n"
-                         "lp").arg(source).arg(1.0 - cutoff).arg(cutoff);
+    // --- 2. CONTROLS ---
+    QFormLayout *form = new QFormLayout();
+
+    // Waveform Selector
+    filterWaveformCombo = new QComboBox();
+    filterWaveformCombo->addItems({"Sawtooth (saww)", "Square (sqr)", "Sine (sinew)", "Triangle (tri)", "Noise (noise)"});
+    form->addRow("Waveform:", filterWaveformCombo);
+
+    // Filter Type
+    filterTypeCombo = new QComboBox();
+    filterTypeCombo->addItems({"Lowpass (Standard)", "Highpass (Subtraction)", "Bandpass (Diff-of-Lowpass)"});
+    form->addRow("Filter Type:", filterTypeCombo);
+
+    // Cutoff Slider & Label
+    QWidget *cutoffContainer = new QWidget();
+    QHBoxLayout *cutoffLay = new QHBoxLayout(cutoffContainer);
+    cutoffLay->setContentsMargins(0,0,0,0);
+
+    filterCutoffSlider = new QSlider(Qt::Horizontal);
+    filterCutoffSlider->setRange(50, 8000);
+    filterCutoffSlider->setValue(2000);
+
+    filterCutoffValueLabel = new QLabel("2000 Hz");
+    filterCutoffValueLabel->setFixedWidth(60); // Keep it steady
+
+    cutoffLay->addWidget(filterCutoffSlider);
+    cutoffLay->addWidget(filterCutoffValueLabel);
+
+    form->addRow("Cutoff Freq:", cutoffContainer);
+
+    // Width / Q Slider
+    filterResSlider = new QSlider(Qt::Horizontal);
+    filterResSlider->setRange(10, 2000);
+    filterResSlider->setValue(500);
+    form->addRow("Width / Q:", filterResSlider);
+
+    layout->addLayout(form);
+
+    // --- 3. CODE OUTPUT ---
+    layout->addWidget(new QLabel("Generated Xpressive Code:"));
+    filterCodeOutput = new QTextEdit();
+    filterCodeOutput->setReadOnly(true);
+    filterCodeOutput->setStyleSheet("font-family: Consolas, Monospace; color: #aaddff; background: #222;");
+    layout->addWidget(filterCodeOutput);
+
+    // --- CONNECTIONS ---
+
+    // Update the Hz Label and Generate Code when slider moves
+    connect(filterCutoffSlider, &QSlider::valueChanged, this, [=](int val){
+        filterCutoffValueLabel->setText(QString::number(val) + " Hz");
+        generateFilterCode();
+    });
+
+    // Update Code for other changes
+    connect(filterWaveformCombo, &QComboBox::currentIndexChanged, this, &MainWindow::generateFilterCode);
+    connect(filterTypeCombo, &QComboBox::currentIndexChanged, this, &MainWindow::generateFilterCode);
+    connect(filterResSlider, &QSlider::valueChanged, this, &MainWindow::generateFilterCode);
+
+    // Initial Generate
+    generateFilterCode();
+}
+
+void MainWindow::generateFilterCode() {
+    QString type = filterTypeCombo->currentText();
+    QString waveSel = filterWaveformCombo->currentText();
+
+    double cutoff = filterCutoffSlider->value();
+    double width = filterResSlider->value();
+    double pi = 3.14159;
+
+    // 1. Determine Input Oscillator
+    // Using your verified waveform names
+    QString input;
+    if (waveSel.contains("Saw")) input = "saww(integrate(f))";
+    else if (waveSel.contains("Square")) input = "squarew(integrate(f))";
+    else if (waveSel.contains("Sine")) input = "sinew(integrate(f))";
+    else if (waveSel.contains("Triangle")) input = "trianglew(integrate(f))";
+    else if (waveSel.contains("Noise")) input = "noise()";
+
+    QString code;
+
+    if (type.contains("Lowpass")) {
+        // --- LOWPASS (Standard) ---
+        // Just O1 is needed.
+        QString alpha = QString::number(2 * pi * cutoff);
+
+        code = QString("// --- LOWPASS SETUP ---\n"
+                       "// 1. Paste into Slot O1\n"
+                       "// 2. Set O2 Volume to 0\n\n"
+                       "// SLOT O1 (%1 Hz)\n"
+                       "(last(1) + (%2 / srate) * (%3 - last(1)))")
+                       .arg(QString::number(cutoff), alpha, input);
+    }
+    else if (type.contains("Highpass")) {
+        // --- HIGHPASS (Phase Cancellation) ---
+        // O1 (Dry) + O2 (Inverted Lowpass) = Highpass
+        QString alpha = QString::number(2 * pi * cutoff);
+
+        code = QString("// --- HIGHPASS SETUP ---\n"
+                       "// 1. Paste Block 1 into O1\n"
+                       "// 2. Paste Block 2 into O2\n"
+                       "// 3. Set O1 and O2 Volumes to EQUAL\n\n"
+                       "// SLOT O1 (Dry Signal)\n"
+                       "%3\n\n"
+                       "// SLOT O2 (Inverted Lowpass @ %1 Hz)\n"
+                       "-1 * (last(1) + (%2 / srate) * (%3 - last(1)))")
+                       .arg(QString::number(cutoff), alpha, input);
+    }
+    else if (type.contains("Bandpass")) {
+        // --- BANDPASS (Double Lowpass Difference) ---
+        // O1 (Wide LP) - O2 (Narrow LP) = Bandpass
+        double upperFreq = cutoff + (width * 0.5);
+        double lowerFreq = cutoff - (width * 0.5);
+        if (lowerFreq < 50) lowerFreq = 50;
+
+        QString alphaFast = QString::number(2 * pi * upperFreq);
+        QString alphaSlow = QString::number(2 * pi * lowerFreq);
+
+        code = QString("// --- BANDPASS SETUP ---\n"
+                       "// 1. Paste Block 1 into O1\n"
+                       "// 2. Paste Block 2 into O2\n"
+                       "// 3. Set O1 and O2 Volumes to EQUAL\n\n"
+                       "// SLOT O1 (Upper Cutoff: %4 Hz)\n"
+                       "(last(1) + (%1 / srate) * (%3 - last(1)))\n\n"
+                       "// SLOT O2 (Lower Cutoff Inverted: %5 Hz)\n"
+                       "-1 * (last(1) + (%2 / srate) * (%3 - last(1)))")
+                       .arg(alphaFast, alphaSlow, input,
+                            QString::number(upperFreq), QString::number(lowerFreq));
     }
 
-    QString finalCode = QString("clamp(-1, %1, 1)").arg(result);
-    statusBox->setText(finalCode);
-    QApplication::clipboard()->setText(finalCode);
+    filterCodeOutput->setText(code);
 }
 
 // TAB 14: LEAD STACKER
@@ -5420,7 +5662,7 @@ void MainWindow::loadHardwarePreset(int idx) {
         hwNoiseMix->setValue(p.n);
         hwPeakBoost->setChecked(p.peak);
 
-        // Update the visualizer
+
         adsrVisualizer->updateEnvelope(p.a/100.0, p.d/100.0, p.s/100.0, p.r/100.0);
     }
 }
@@ -5462,26 +5704,26 @@ void MainWindow::generateHardwareXpf() {
 }
 
 void MainWindow::generateRandomHardware() {
-    // Randomize Waveform
+
     hwBaseWave->setCurrentIndex(std::rand() % 4);
 
-    // Randomize ADSR for aggressive or soft tones
+
     hwAttack->setValue(std::rand() % 40);
     hwDecay->setValue(20 + (std::rand() % 60));
     hwSustain->setValue(std::rand() % 80);
     hwRelease->setValue(10 + (std::rand() % 50));
 
-    // Randomise Filter
+
     hwCutoff->setValue(500 + (std::rand() % 8000));
     hwResonance->setValue(std::rand() % 90);
 
-    // Randomise Movement
+
     hwPwmSpeed->setValue(std::rand() % 100);
     hwPwmDepth->setValue(std::rand() % 70);
     hwVibSpeed->setValue(std::rand() % 50);
     hwVibDepth->setValue(std::rand() % 30);
 
-    // Randomise Noise Mix
+
     hwNoiseMix->setValue(std::rand() % 40);
 
     statusBox->setText("Hardware Parameters Randomised!");
@@ -5496,43 +5738,40 @@ void MainWindow::generateWestCoast() {
     double modIndex = westModIndexSlider->value() / 10.0;
     int stages = westFoldStages->value();
 
-    // MODULATION ENGINE (FM)
-    // The modulator frequency is relative to the fundamental 'f' [cite: 177]
+
     QString modulator = QString("(%1 * sinew(integrate(f * %2)))").arg(modIndex).arg(modRatio);
 
-    // CORE OSCILLATOR (Principal)
-    // FM is applied by adding the modulator to the frequency inside the integrator [cite: 220]
+
     QString core = (model == 1) ? "trianglew(integrate(f + " + modulator + "))"
                                 : "sinew(integrate(f + " + modulator + "))";
 
-    // INPUT PRE-CONDITIONING
+
     QString input = QString("(%1 * %2 + %3)").arg(core).arg(gain).arg(bias);
 
-    // ADVANCED CIRCUIT EMULATION
+
     QString folder;
     if (model == 2) { // Serge Middle VCM (Series Diode String)
-        // Series topology: output iterates through multiple folds based on 'stages' [cite: 124, 129]
+
         folder = input;
         for(int i = 0; i < stages; ++i) {
             double thresh = 0.2 + (i * 0.1);
             folder = QString("(%1 - 2*clamp(-%2, %1, %2))").arg(folder).arg(thresh);
         }
     } else if (model == 0) { // Model 259 (Parallel Deadband)
-        // Parallel topology: staggering 5 non-identical cells [cite: 55, 57]
+
         folder = QString("(%1 - 2*clamp(-0.2, %1, 0.2) + 2*clamp(-0.4, %1, 0.4) - 2*clamp(-0.6, %1, 0.6))").arg(input);
     } else { // Default / 208 logic
         folder = QString("((1-%1)*%2 + %1*(2*abs(%2)-1))").arg(westOrderSlider->value()/100.0).arg(input);
     }
 
-    // HALF-WAVE MODIFICATION
-    // Emulates clipping or folding only the positive excursion
+
     if (westHalfWaveFold->isChecked()) {
         folder = QString("max(0, %1)").arg(folder);
     }
 
-    // VACTROL LPG SIMULATION
+
     if (westVactrolSim->isChecked()) {
-        // High spectral brightness at attack, rapid darkening via exponential decay [cite: 180, 181]
+
         folder = QString("(%1 * exp(-t * 15))").arg(folder);
     }
 
@@ -5554,7 +5793,7 @@ void MainWindow::updateSpectralPreview() {
     bool isNightly = (specBuildMode->currentIndex() == 0);
     double decayVal = specDecaySlider->value() / 5.0; // Decay constant
 
-    // Determine fundamental frequency
+
     double fundamental = 440.0;
     QString pText = specPitchCombo->currentText();
     if(pText.contains("C-3")) fundamental = 130.81;
@@ -5562,7 +5801,7 @@ void MainWindow::updateSpectralPreview() {
     else if(pText.contains("C-4")) fundamental = 261.63;
     else if(pText.contains("C-5")) fundamental = 523.25;
 
-    // AUDIO ENGINE (Looping & Analysis) ---
+
     std::function<double(double)> resynthAlgo = [=](double t) {
         double loopTime = std::fmod(t, totalDur + 0.1);
         if (loopTime >= totalDur) return 0.0;
@@ -5582,7 +5821,7 @@ void MainWindow::updateSpectralPreview() {
         return signal * 0.3;
     };
 
-    // GENERATE WINDOWED XPRESSIVE FORMULA ---
+
     QString finalFormula;
     if (isNightly) {
         finalFormula = QString("var w := floor(t * (%1 / %2));\n").arg(numWindows).arg(totalDur);
@@ -5613,7 +5852,7 @@ void MainWindow::updateSpectralPreview() {
         finalFormula = "clamp(-1, " + parts.join(" + ") + ", 1)";
     }
 
-    // --- 3. UPDATE UI ---
+
     specExpressionBox->setText(finalFormula);
     specScope->updateScope(resynthAlgo, totalDur, 1.0);
 
@@ -5628,7 +5867,7 @@ void MainWindow::updateSubtractivePreview() {
     QString w1 = waves[subOsc1Dial->value()];
     QString w2 = waves[subOsc2Dial->value()];
 
-    // Normalize ADSR values
+
     double a = (subAttSlider->value() / 100.0) * 0.5 + 0.01;
     double d = (subDecSlider->value() / 100.0) * 1.0 + 0.01;
     double s = subSusSlider->value() / 100.0;
@@ -5680,7 +5919,7 @@ void MainWindow::generatePixelSynth() {
         return;
     }
 
-    // SETUP PARAMETERS
+
     int steps = pixelTimeSteps->value();       // X-Axis Resolution
     int bands = pixelFreqBands->value();       // Y-Axis Resolution
     int maxPartials = pixelMaxPartials->value();
@@ -5690,11 +5929,10 @@ void MainWindow::generatePixelSynth() {
     bool logScale = pixelLogScale->isChecked();
     bool nightly = (pixelBuildMode->currentIndex() == 0);
 
-    // RESIZE IMAGE (Downsample for analysis)
-    // We resize to (steps x bands) to make pixel access O(1)
+
     QImage scanImg = pixelLoadedImage.scaled(steps, bands, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
-    // SHOW PROCESSING POPUP (Important!)
+
     QProgressDialog progress("Scanning Pixels & Calculating Harmonics...", "Cancel", 0, steps, this);
     progress.setWindowModality(Qt::WindowModal);
     progress.setMinimumDuration(0); // Show immediately
@@ -5702,33 +5940,30 @@ void MainWindow::generatePixelSynth() {
     QStringList timeSlices;
     double timePerStep = dur / steps;
 
-    // MAIN LOOP (X-AXIS / TIME)
+
     for (int x = 0; x < steps; ++x) {
         if (progress.wasCanceled()) break;
         progress.setValue(x);
 
-        // A. Collect Pixels in this column
+
         struct PixelData { double freq; double amp; };
         std::vector<PixelData> columnPixels;
 
         for (int y = 0; y < bands; ++y) {
-            // Get pixel brightness (0-255)
-            // Y is usually top-down in images, but low freq is bottom in audio.
-            // So we read (bands - 1 - y) to flip it.
+
             QRgb pixel = scanImg.pixel(x, bands - 1 - y);
             double brightness = qGray(pixel) / 255.0;
 
             if (brightness > 0.05) { // Noise floor gate
-                // Map Y to Frequency
+
                 double normalizedY = (double)y / (bands - 1);
                 double freq;
 
                 if (logScale) {
-                    // Logarithmic (Musical) mapping
-                    // f = min * (max/min)^y
+
                     freq = minF * std::pow(maxF / minF, normalizedY);
                 } else {
-                    // Linear (Coagula/Scientific) mapping
+
                     freq = minF + (maxF - minF) * normalizedY;
                 }
 
@@ -5736,19 +5971,17 @@ void MainWindow::generatePixelSynth() {
             }
         }
 
-        // Sort by Loudness (Optimization)
-        // We only want the loudest sine waves to save CPU
+
         std::sort(columnPixels.begin(), columnPixels.end(), [](const PixelData &a, const PixelData &b){
             return a.amp > b.amp;
         });
 
-        // Build Formula for this slice
+
         QStringList oscillatorSum;
         int count = 0;
         for (const auto& p : columnPixels) {
             if (count >= maxPartials) break;
-            // Formula: amp * sin(f * t * 2pi) -> sinew(integrate(freq))
-            // We use simple frequency multiplication for static partials
+
             oscillatorSum << QString("%1*sinew(integrate(%2))").arg(p.amp, 0, 'f', 3).arg(p.freq, 0, 'f', 1);
             count++;
         }
@@ -5759,11 +5992,11 @@ void MainWindow::generatePixelSynth() {
     }
     progress.setValue(steps);
 
-    // ASSEMBLE FINAL FORMULA
+
     QString finalCode;
 
     if (nightly) {
-        // Nested Ternary: var step := floor(t * rate); ...
+
         QString nested = "0";
         for (int i = steps - 1; i >= 0; --i) {
             nested = QString("(s == %1 ? (%2) : %3)").arg(i).arg(timeSlices[i]).arg(nested);
@@ -5772,7 +6005,7 @@ void MainWindow::generatePixelSynth() {
         finalCode = QString("var s := floor(t * %1);\n%2").arg(rate).arg(nested);
 
     } else {
-        // Legacy Additive: ((t > start & t < end) * val) + ...
+
         QStringList adds;
         for (int i = 0; i < steps; ++i) {
             double tStart = i * timePerStep;
@@ -5783,7 +6016,7 @@ void MainWindow::generatePixelSynth() {
         finalCode = adds.join(" + ");
     }
 
-    // FINALISE
+
     finalCode = QString("clamp(-1, %1, 1)").arg(finalCode);
     statusBox->setText(finalCode);
     QApplication::clipboard()->setText(finalCode);
@@ -5798,18 +6031,18 @@ void MainWindow::updateScratchPreview() {
     int pattern = scratchPatternCombo->currentIndex();
 
     auto scratchAlgo = [=](double t) {
-        // Hand Motion: Oscillates the playback speed
+
         double motion = 1.0 + std::sin(t * handHz * 6.2831);
 
-        // Fader Logic
+
         double fader = 1.0;
         if (pattern == 1) fader = (std::sin(t * handHz * 12.56) > 0) ? 1.0 : 0.0; // Transformer
         if (pattern == 2) fader = (std::sin(t * handHz * 6.28) > 0.6) ? 1.0 : 0.0; // Chirp
 
-        // Audio Signal
+
         double signal = std::sin(t * baseF * motion * 6.2831);
 
-        // Add Grit (Noise modulated by hand movement)
+
         if (grit > 0) {
             double noise = ((double)rand()/RAND_MAX * 2.0 - 1.0) * grit * 0.2;
             signal += noise * std::abs(motion);
@@ -5829,14 +6062,14 @@ void MainWindow::generateScratchLogic() {
 
     QString formula;
     if (isNightly) {
-        // Variable-based version for Nightly build
+
         QString faderLogic = (pattern == 1) ? QString("squarew(t * %1) > 0 ? 1 : 0").arg(handHz*2) : "1";
         formula = QString("var hand := sinew(t * %1);\n"
                           "var fader := %2;\n"
                           "clamp(-1, saww(integrate(f * (1 + hand))) * fader, 1)")
                   .arg(handHz).arg(faderLogic);
     } else {
-        // Inline version for Legacy build
+
         QString fader = (pattern == 1) ? QString("(squarew(t * %1) > 0)").arg(handHz*2) : "1";
         formula = QString("clamp(-1, saww(integrate(f * (1 + sinew(t * %1)))) * %2, 1)")
                   .arg(handHz).arg(fader);
@@ -5870,7 +6103,7 @@ void MainWindow::generateNatureLogic() {
     int type = natureTypeCombo->currentIndex();
     bool isNightly = (natureBuildMode->currentIndex() == 0);
 
-    // Normalize sliders 0.0 to 1.0
+
     double p1 = natureParam1->value() / 100.0;
     double p2 = natureParam2->value() / 100.0;
     double p3 = natureParam3->value() / 100.0;
@@ -5917,21 +6150,21 @@ void MainWindow::generateNatureLogic() {
             return (flow * 0.4 * p5) + (bubbles * p3);
         };
     }
-    // ... (Other audio modes remain similar to previous code, using C++ math) ...
+
     else {
-        // Fallback for types not fully implemented in C++ preview yet
+
          natureAlgo = [=](double t) { return (noise(t*5000) * p5 * 0.5); };
     }
 
     QString code;
 
     if (type == 0) { // FOREST BIRDS
-        // Logic: 3 sine oscillators with different speeds summed together
+
         double speed = 0.5 + p2 * 2.0;
         double pitch = 1000 + p1 * 2000;
         double fm = 20 + p3 * 50;
 
-        // Helper to make a single bird string
+
         auto birdStr = [&](double offset) {
             QString rhythm = QString("mod(t*%1 + %2, 2.0)").arg(speed).arg(offset);
             QString env = QString("exp(-%1 * 5.0)").arg(rhythm); // Decay
@@ -5942,29 +6175,28 @@ void MainWindow::generateNatureLogic() {
         code = QString("(%1 + %2 + %3) * %4")
                .arg(birdStr(0.0)).arg(birdStr(1.3)).arg(birdStr(2.7)).arg(p5);
     }
-    else if (type == 1) { // CRICKETS
+    else if (type == 1) {
         double rate = 5.0 + p2 * 15.0;
         double pitch = 3000 + p1 * 4000;
 
-        // Carrier * LFO * Pulse texture
+
         QString carrier = QString("sinew(integrate(%1))").arg(pitch);
         QString lfo = QString("(sinew(t*%1) > 0)").arg(rate); // On/Off rhythm
         QString pulse = QString("sinew(t*150)"); // The "trill" texture inside the chirp
 
         code = QString("%1 * %2 * %3 * %4").arg(carrier).arg(lfo).arg(pulse).arg(p5);
     }
-    else if (type == 2) { // GUINEA PIGS
+    else if (type == 2) {
         double speed = 0.5 + p2;
         double pitch = 400 + p1 * 400;
 
-        // Rising pitch sweep logic
+
         QString sweep = QString("mod(t*%1, 2.0)").arg(speed);
         QString osc = QString("saww(integrate(%1 + (%2 * 400)))").arg(pitch).arg(sweep);
 
         code = QString("((%1 < 0.8) * %2 * sinew(%1 * 3.14)) * %3").arg(sweep).arg(osc).arg(p5);
     }
     else if (type == 3) { // RUSHING STREAM
-        // Sum of low frequency noise/sines + Random bubbles
         QString flow = QString("randv(t*%1)").arg(100 + p1 * 500);
         // Bubble: High pitch sine triggered randomly
         QString bubbleTrig = QString("(randv(t*100) > %1)").arg(0.95 - p3*0.2);
@@ -5973,14 +6205,14 @@ void MainWindow::generateNatureLogic() {
         code = QString("(%1 * 0.4 + %2) * %3").arg(flow).arg(bubble).arg(p5);
     }
     else if (type == 4) { // RAINSTORM
-        // Wind (Low filtered noise) + Rain (High freq noise)
+
         QString wind = QString("randv(t*%1)").arg(50 + p4*100); // Low rate noise
         QString rain = QString("(randv(t*10000) > %1 ? randv(t*20000) : 0)").arg(0.95 - p1*0.1);
 
         code = QString("(%1 * 0.2 + %2) * %3").arg(wind).arg(rain).arg(p5);
     }
     else if (type == 5) { // THUNDER
-        // Explosion logic: Noise burst with decay
+
         double rate = 0.1 + p2 * 0.2;
         QString cycle = QString("mod(t*%1, 1.0)").arg(rate);
         QString boom = QString("((%1 < 0.1) * randv(t) * (1.0 - (%1/0.1)))").arg(cycle);
@@ -5997,18 +6229,277 @@ void MainWindow::generateNatureLogic() {
         code = QString("(%1 * (%2 > 0.5 ? 1 : 0)) * %3").arg(croak).arg(rhythm).arg(p5);
     }
 
-    // Final Clamp
+
     QString finalResult = QString("clamp(-1, %1, 1)").arg(code);
 
-    // Update UI String Box & Clipboard
+
     if(statusBox) statusBox->setText(finalResult);
     QApplication::clipboard()->setText(finalResult);
 
-    // Update Visuals
+
     if(natureScope) natureScope->updateScope(natureAlgo, 1.0, 1.0);
 
-    // Handle Audio Engine
+
     if (btnPlayNature->isChecked()) {
         m_ghostSynth->setAudioSource(natureAlgo);
+    }
+}
+// TAB 32: VECTOR MORPH
+void MainWindow::initVectorTab() {
+    vectorTab = new QWidget();
+    QFormLayout *vectorLayout = new QFormLayout(vectorTab);
+
+    morphX = new QSlider(Qt::Horizontal);
+    morphY = new QSlider(Qt::Horizontal);
+    btnGenVector = new QPushButton("Generate Vector Code");
+
+    vectorLayout->addRow("X Morph (A1):", morphX);
+    vectorLayout->addRow("Y Morph (A2):", morphY);
+    vectorLayout->addWidget(btnGenVector);
+
+    connect(btnGenVector, &QPushButton::clicked, [=]() {
+        QString code = "( (1-A1)*(1-A2)*squarew(integrate(f)) "
+                       "+ (A1)*(1-A2)*sinew(integrate(f)) "
+                       "+ (1-A1)*(A2)*randv(t) "
+                       "+ (A1)*(A2)*sinew(integrate(f*4) * sinew(integrate(f))) "
+                       ")";
+        emit expressionGenerated(code);
+    });
+
+}
+// TAB: 33 PLUCK
+void MainWindow::initPluckTab() {
+    pluckTab = new QWidget();
+    QVBoxLayout *pluckLayout = new QVBoxLayout(pluckTab);
+
+    pluckDamping = new QSlider(Qt::Horizontal);
+    pluckDecay = new QSlider(Qt::Horizontal);
+    btnGenPluck = new QPushButton("Generate Pluck Code");
+
+    pluckLayout->addWidget(new QLabel("Damping (A1):"));
+    pluckLayout->addWidget(pluckDamping);
+    pluckLayout->addWidget(new QLabel("Sustain/Decay (A2):"));
+    pluckLayout->addWidget(pluckDecay);
+    pluckLayout->addWidget(btnGenPluck);
+
+    connect(btnGenPluck, &QPushButton::clicked, [=]() {
+        QString code = "O1 = (t < 0.01 ? randv(t) : 0) + "
+                       "(last(sr/f) * 0.5 + last(sr/f + 1) * 0.5) * (0.99 - (A1*0.05))";
+        emit expressionGenerated(code);
+    });
+
+}
+ // TAB 34: HOUSE MUSIC ORGAN ---
+void MainWindow::initHouseOrganTab() {
+    houseOrganTab = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(houseOrganTab);
+
+
+    houseOrganScope = new UniversalScope();
+    houseOrganScope->setMinimumHeight(150);
+    layout->addWidget(houseOrganScope);
+
+
+    QGroupBox *ctrlGroup = new QGroupBox("90s Organ Drawbars & Percussion");
+    QFormLayout *fLayout = new QFormLayout(ctrlGroup);
+
+    organDrawbar1 = new QSlider(Qt::Horizontal); organDrawbar1->setRange(0, 100); organDrawbar1->setValue(100);
+    organDrawbar2 = new QSlider(Qt::Horizontal); organDrawbar2->setRange(0, 100); organDrawbar2->setValue(60);
+    organDrawbar3 = new QSlider(Qt::Horizontal); organDrawbar3->setRange(0, 100); organDrawbar3->setValue(40);
+    organClickSlider = new QSlider(Qt::Horizontal); organClickSlider->setRange(0, 100); organClickSlider->setValue(60);
+    organDecaySlider = new QSlider(Qt::Horizontal); organDecaySlider->setRange(1, 20); organDecaySlider->setValue(7);
+
+    fLayout->addRow("Fundamental (1.0x):", organDrawbar1);
+    fLayout->addRow("Octave (2.0x):", organDrawbar2);
+    fLayout->addRow("Twelfth (3.0x):", organDrawbar3);
+    fLayout->addRow("Percussion Click (12x):", organClickSlider);
+    fLayout->addRow("Bounciness (Decay):", organDecaySlider);
+
+    layout->addWidget(ctrlGroup);
+
+
+    btnGenOrgan = new QPushButton("GENERATE HOUSE ORGAN FORMULA");
+    btnGenOrgan->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 45px;");
+    layout->addWidget(btnGenOrgan);
+
+    btnPlayOrgan = new QPushButton("▶ Play A-2 Preview (110Hz)");
+    btnPlayOrgan->setCheckable(true);
+    btnPlayOrgan->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 45px;");
+    layout->addWidget(btnPlayOrgan);
+
+    modeTabs->addTab(houseOrganTab, "House Organ");
+
+
+    auto sliders = {organDrawbar1, organDrawbar2, organDrawbar3, organClickSlider, organDecaySlider};
+    for(auto *s : sliders) connect(s, &QSlider::valueChanged, this, &MainWindow::updateHouseOrgan);
+
+    connect(btnGenOrgan, &QPushButton::clicked, this, &MainWindow::generateHouseOrgan); // Generator Connection
+
+    connect(btnPlayOrgan, &QPushButton::toggled, [=](bool checked){
+        if(checked) {
+            btnPlayOrgan->setText("⏹ Stop");
+            btnPlayOrgan->setStyleSheet("background-color: #338833; color: white;");
+            m_ghostSynth->start();
+            updateHouseOrgan();
+        } else {
+            btnPlayOrgan->setText("▶ Play A-2 Preview (110Hz)");
+            btnPlayOrgan->setStyleSheet("background-color: #335533; color: white;");
+            m_ghostSynth->stop();
+        }
+    });
+
+    QTimer::singleShot(500, this, &MainWindow::updateHouseOrgan);
+}
+
+void MainWindow::updateHouseOrgan() {
+    double amp1 = organDrawbar1->value() / 100.0;
+    double amp2 = organDrawbar2->value() / 100.0;
+    double amp3 = organDrawbar3->value() / 100.0;
+    double clickAmp = organClickSlider->value() / 100.0;
+    double decay = organDecaySlider->value();
+
+    std::function<double(double)> organAlgo = [=](double t) {
+        double f = 110.0; // A2 Bass Note for preview
+        double pi = 3.14159265;
+
+        double body = (amp1 * std::sin(2 * pi * f * 1.0 * t) +
+                       amp2 * std::sin(2 * pi * f * 2.0 * t) +
+                       amp3 * std::sin(2 * pi * f * 3.0 * t));
+
+
+        double env = std::exp(-t * decay);
+
+        double click = clickAmp * std::sin(2 * pi * f * 12.0 * t) * std::exp(-t * 80.0);
+
+        return (body * env) + click;
+    };
+
+    houseOrganScope->updateScope(organAlgo, 0.4, 1.0);
+    if(btnPlayOrgan->isChecked()) {
+        m_ghostSynth->setAudioSource(organAlgo);
+    }
+}
+
+void MainWindow::generateHouseOrgan() {
+    double amp1 = organDrawbar1->value() / 100.0;
+    double amp2 = organDrawbar2->value() / 100.0;
+    double amp3 = organDrawbar3->value() / 100.0;
+    double clickAmp = organClickSlider->value() / 100.0;
+    double decay = organDecaySlider->value();
+
+    QString body = QString("(%1*sinew(integrate(f)) + %2*sinew(integrate(f*2)) + %3*sinew(integrate(f*3)))")
+                   .arg(amp1, 0, 'f', 2).arg(amp2, 0, 'f', 2).arg(amp3, 0, 'f', 2);
+
+
+    QString bodyWithEnv = QString("(%1 * exp(-t * %2))").arg(body).arg(decay, 0, 'f', 1);
+
+    QString click = QString("(%1 * sinew(integrate(f*12)) * exp(-t*80))").arg(clickAmp, 0, 'f', 2);
+
+    QString finalExpr = QString("clamp(-1, %1 + %2, 1)").arg(bodyWithEnv).arg(click);
+
+    statusBox->setText(finalExpr);
+    QApplication::clipboard()->setText(finalExpr);
+}
+
+// TAB 35: XTRANSPILER
+void MainWindow::initTranspilerTab() {
+    transpilerTab = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(transpilerTab);
+
+
+    lblTranspilerWarning = new QLabel("⚠️ WORK IN PROGRESS / EXPERIMENTAL ⚠️\n"
+                                      "This engine maps ZynAddSubFX XML parameters to Xpressive math.\n"
+                                      "Status: Implementing ADSR & Oscillator mapping.");
+    lblTranspilerWarning->setStyleSheet("QLabel { background-color: #332200; color: #ffcc00; "
+                                        "font-weight: bold; padding: 15px; border: 2px solid #ffcc00; border-radius: 5px; }");
+    lblTranspilerWarning->setAlignment(Qt::AlignCenter);
+    layout->addWidget(lblTranspilerWarning);
+
+
+    btnLoadZyn = new QPushButton("📂 LOAD ZYNADDSUBFX PRESET (.xiz / .xpf)");
+    btnLoadZyn->setStyleSheet("height: 50px; font-weight: bold; background-color: #444466; color: white;");
+    layout->addWidget(btnLoadZyn);
+
+    QHBoxLayout *textLayout = new QHBoxLayout();
+
+
+    QVBoxLayout *logCol = new QVBoxLayout();
+    logCol->addWidget(new QLabel("Parsing Log:"));
+    transpilerLog = new QTextEdit();
+    transpilerLog->setReadOnly(true);
+    transpilerLog->setStyleSheet("background: #111; color: #88ff88; font-family: 'Consolas';");
+    logCol->addWidget(transpilerLog);
+
+
+    QVBoxLayout *outCol = new QVBoxLayout();
+    outCol->addWidget(new QLabel("Generated Xpressive.xpf Code:"));
+    transpilerOutput = new QTextEdit();
+    transpilerOutput->setReadOnly(true);
+    transpilerOutput->setStyleSheet("background: #111; color: #88ccff; font-family: 'Consolas';");
+    outCol->addWidget(transpilerOutput);
+
+    textLayout->addLayout(logCol, 1);
+    textLayout->addLayout(outCol, 2);
+    layout->addLayout(textLayout);
+
+
+    connect(btnLoadZyn, &QPushButton::clicked, [=]() {
+        QString path = QFileDialog::getOpenFileName(this, "Select Zyn Preset", "", "Zyn Files (*.xiz *.xpf *.xmz)");
+        if (!path.isEmpty()) processZynFile(path);
+    });
+
+    modeTabs->addTab(transpilerTab, "X-Transpiler");
+}
+
+void MainWindow::processZynFile(const QString &filePath) {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) return;
+
+    QDomDocument doc;
+    if (!doc.setContent(&file)) {
+        transpilerLog->append("❌ Error: Could not parse XML.");
+        return;
+    }
+    file.close();
+
+    transpilerLog->append("✅ Successfully loaded: " + filePath);
+
+
+    QDomElement root = doc.documentElement();
+
+
+    int oscType = root.firstChildElement("INSTRUMENT").firstChildElement("ADD_SYNTH")
+                      .firstChildElement("OSC").attribute("type").toInt();
+
+    QString xpressOsc = translateZynOscillator(oscType);
+    transpilerLog->append("Detected Zyn Osc Type: " + QString::number(oscType));
+
+
+    int zynCutoff = root.firstChildElement("INSTRUMENT").firstChildElement("ADD_SYNTH")
+                        .firstChildElement("FILTER").attribute("cutoff").toInt();
+
+
+    double mappedHz = 20.0 + (zynCutoff / 127.0) * 7980.0;
+    double alpha = 2 * 3.14159 * mappedHz;
+
+
+    QString finalExpr = QString("// Transpiled from ZynAddSubFX\n"
+                                "// Original Cutoff: %1\n"
+                                "(last(1) + (%2 / srate) * (%3(integrate(f)) - last(1)))")
+                                .arg(QString::number(zynCutoff),
+                                     QString::number(alpha),
+                                     xpressOsc);
+
+    transpilerOutput->setText(finalExpr);
+    transpilerLog->append("🚀 Transpilation Complete!");
+}
+
+QString MainWindow::translateZynOscillator(int type) {
+    switch(type) {
+        case 0: return "sinew";
+        case 1: return "trianglew";
+        case 2: return "squarew";
+        case 3: return "saww";
+        default: return "saww";
     }
 }
