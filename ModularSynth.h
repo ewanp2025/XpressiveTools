@@ -14,14 +14,12 @@
 #include <QMenu>
 #include <functional>
 
-// Forward declarations
+
 class SynthNode;
 class ConnectionPath;
 class UniversalScope;
 
-// =========================================================
-// CONNECTION PATH
-// =========================================================
+
 class ConnectionPath : public QGraphicsPathItem {
 public:
     ConnectionPath(QPointF start, QPointF end, QGraphicsItem* parent = nullptr);
@@ -37,9 +35,8 @@ protected:
     void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
 };
 
-// =========================================================
-// SYNTH NODE
-// =========================================================
+
+
 class SynthNode : public QGraphicsRectItem {
 public:
     SynthNode(QString title, int inputs, int outputs, QGraphicsItem* parent = nullptr);
@@ -48,14 +45,17 @@ public:
     enum { Type = UserType + 1 };
     int type() const override { return Type; }
 
-    // Logic: Now takes a 'nightly' flag
+
     virtual QString getExpression(bool nightly) = 0;
     virtual double evaluate(double t, double freq) = 0;
 
     QPointF getInputPos(int index);
     QPointF getOutputPos(int index);
+    QMap<int, ConnectionPath*> inputConnections;
     void addInputConnection(int index, ConnectionPath* conn);
     void removeInputConnection(int index);
+    QString getInputExpression(int index, bool nightly);
+    double getInputVal(int index, double t, double freq);
 
     ConnectionPath* inputs[8];
 
@@ -64,7 +64,7 @@ protected:
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
 
-    // Base Interaction
+
     virtual void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
     virtual void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
     virtual void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
@@ -77,9 +77,20 @@ protected:
     QPointF m_lastMousePos;
 };
 
-// =========================================================
-// MODULES
-// =========================================================
+
+class FilterNode : public SynthNode {
+public:
+    FilterNode();
+    QString getExpression(bool nightly) override;
+    double evaluate(double t, double freq) override;
+
+
+    double m_last1 = 0.0;
+    double m_last2 = 0.0;
+    double m_cutoff = 0.5;
+
+};
+
 
 class OutputNode : public SynthNode {
 public:
@@ -192,9 +203,6 @@ public:
     double evaluate(double t, double freq) override;
 };
 
-// =========================================================
-// SCENE & TAB
-// =========================================================
 
 class ModularScene : public QGraphicsScene {
     Q_OBJECT
