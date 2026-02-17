@@ -59,7 +59,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  West Coast Lab – Emulates Buchla-style nonlinear waveshaping using parallel and series wavefolding topologies.
 
-•  Modular Grid – A visual, modular synethesiser emulator / node based environment for connecting oscillators and logic modules to "draw" your synth.
+•  Modular Grid – A visual, modular synethesiser emulator / node based environment for connecting oscillators and logic modules to "draw" your synth. Now has a basic LPF that works in either parsing method.
 
 •  Spectral Resynthesiser – Analyses external WAV stabs to reconstruct sounds through windowed harmonic additive synthesis (another way to bring external recordings into Xpressive as an expression). 
 
