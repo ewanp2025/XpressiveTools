@@ -4,10 +4,11 @@
 #include <QDebug>
 #include <QtMath>
 #include <QGraphicsSceneContextMenuEvent>
+#include <QGraphicsProxyWidget>
+#include <QSlider>
+#include <QLabel>
+#include <QVBoxLayout>
 
-// =========================================================
-// CONNECTION LOGIC
-// =========================================================
 
 ConnectionPath::ConnectionPath(QPointF start, QPointF end, QGraphicsItem* parent)
     : QGraphicsPathItem(parent) {
@@ -48,9 +49,6 @@ void ConnectionPath::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     }
 }
 
-// =========================================================
-// NODE BASE LOGIC
-// =========================================================
 
 SynthNode::SynthNode(QString title, int in, int out, QGraphicsItem* parent)
     : QGraphicsRectItem(0, 0, 100, 50 + (std::max(in, out) * 20)),
@@ -123,7 +121,86 @@ void SynthNode::contextMenuEvent(QGraphicsSceneContextMenuEvent *event) {
     }
 }
 
-// --- BASE INTERACTION ---
+#include <QComboBox>
+
+FilterNode::FilterNode() : SynthNode("Low Pass Filter", 1, 1) {
+
+    QSlider* cutoffSlider = new QSlider(Qt::Horizontal);
+    cutoffSlider->setRange(1, 99); // 1% to 99%
+    cutoffSlider->setValue(50);
+    cutoffSlider->setFixedWidth(80);
+
+    QLabel* lbl = new QLabel("Cutoff");
+    lbl->setStyleSheet("color: white; font-size: 10px;");
+
+    QVBoxLayout* layout = new QVBoxLayout();
+    layout->addWidget(lbl);
+    layout->addWidget(cutoffSlider);
+    layout->setContentsMargins(2, 2, 2, 2);
+
+    QWidget* container = new QWidget();
+    container->setLayout(layout);
+    container->setStyleSheet("background: transparent;");
+    container->setAttribute(Qt::WA_NoSystemBackground);
+
+    QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
+    proxy->setWidget(container);
+    proxy->setPos(10, 30);
+
+
+
+    QObject::connect(cutoffSlider, &QSlider::valueChanged, [=](int val){
+        m_cutoff = val / 100.0;
+
+        if (scene()) {
+            ModularScene* sc = dynamic_cast<ModularScene*>(scene());
+            if(sc) emit sc->graphChanged();
+        }
+    });
+}
+
+QString FilterNode::getExpression(bool nightly) {
+
+    QString inputCode = getInputExpression(0, nightly);
+
+
+    if (inputCode.isEmpty()) inputCode = "0";
+
+
+    double cutoffVal = m_cutoff;
+
+
+    if (cutoffVal < 0.001) cutoffVal = 0.001;
+    if (cutoffVal > 0.999) cutoffVal = 0.999;
+
+
+    double invCutoffVal = 1.0 - cutoffVal;
+
+
+    QString K = QString::number(cutoffVal, 'f', 4);      // e.g. "0.2500"
+    QString invK = QString::number(invCutoffVal, 'f', 4); // e.g. "0.7500"
+
+
+    return QString("((%1 * (%2)) + (%3 * last(1)))")
+        .arg(K)          // %1 -> Cutoff
+        .arg(inputCode)  // %2 -> The Sine Wave Code
+        .arg(invK);      // %3 -> Inverse Cutoff
+}
+
+double FilterNode::evaluate(double t, double freq) {
+
+    double input = getInputVal(0, t, freq);
+
+
+    double term1 = (m_cutoff * input) + ((1.0 - m_cutoff) * m_last1);
+    double output = (m_cutoff * term1) + ((1.0 - m_cutoff) * m_last2);
+
+
+    m_last2 = m_last1;
+    m_last1 = output;
+    return output;
+}
+
 void SynthNode::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     m_lastMousePos = event->scenePos();
 
@@ -147,14 +224,14 @@ void SynthNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     painter->setPen(pen());
     painter->drawRoundedRect(rect(), 5, 5);
 
-    // Header
+
     painter->setBrush(QColor(30, 30, 35));
     painter->drawRoundedRect(0, 0, rect().width(), 25, 5, 5); // Width matches node
     painter->setPen(Qt::white);
     painter->setFont(QFont("Arial", 8, QFont::Bold));
     painter->drawText(QRectF(0,0, rect().width(), 25), Qt::AlignCenter, m_title);
 
-    // Ports
+
     for(int i=0; i<m_numInputs; i++) {
         painter->setBrush(inputs[i] ? Qt::yellow : QColor(80, 80, 80));
         painter->setPen(Qt::black);
@@ -172,16 +249,13 @@ void SynthNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
         painter->drawEllipse(QPointF(rect().width(), 30 + i*20), 5, 5);
 }
 
-// =========================================================
-// MODULE IMPLEMENTATIONS
-// =========================================================
 
-// --- OUTPUT ---
+
 OutputNode::OutputNode() : SynthNode("MASTER OUT", 1, 0) { setBrush(QColor(100, 30, 30)); }
 QString OutputNode::getExpression(bool nightly) { return inputs[0] ? inputs[0]->startNode->getExpression(nightly) : "0"; }
 double OutputNode::evaluate(double t, double freq) { return inputs[0] ? inputs[0]->startNode->evaluate(t, freq) : 0.0; }
 
-// --- OSCILLATOR ---
+
 OscillatorNode::OscillatorNode() : SynthNode("VCO", 3, 1) {
     setBrush(QColor(40, 80, 100));
     m_title = "VCO: Sine";
@@ -229,7 +303,7 @@ double OscillatorNode::evaluate(double t, double freq) {
     return (std::sin(phase) > 0 ? 1.0 : -1.0) * am;
 }
 
-// --- LFO ---
+
 LFONode::LFONode() : SynthNode("LFO", 0, 1) {
     setBrush(QColor(30, 80, 30));
     m_freq = 1.0;
@@ -249,11 +323,11 @@ void LFONode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
 void LFONode::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     if (event->pos().y() < 25) {
-        // Clicked header -> Move
+
         SynthNode::mousePressEvent(event);
         return;
     }
-    // Clicked body -> Drag Knob
+
     m_isKnobDrag = true;
     m_lastMousePos = event->scenePos();
     event->accept();
@@ -278,7 +352,7 @@ void LFONode::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
 QString LFONode::getExpression(bool nightly) { Q_UNUSED(nightly); return QString("sinew(t * %1)").arg(m_freq); }
 double LFONode::evaluate(double t, double freq) { return std::sin(t * m_freq * 6.28); }
 
-// --- SEQUENCER ---
+
 SequencerNode::SequencerNode() : SynthNode("SEQ-8", 1, 1) {
     setBrush(QColor(80, 40, 80));
     setRect(0, 0, 160, 100);
@@ -337,7 +411,7 @@ QString SequencerNode::getExpression(bool nightly) {
         }
         return QString("var step := floor(mod(%1, 8));\n%2").arg(clock).arg(body);
     } else {
-        // LEGACY: Additive Logic
+
         for(int i=7; i>=0; --i) {
             body = QString("(floor(mod(%1,8))==%2 ? %3 : %4)").arg(clock).arg(i).arg(steps[i]).arg(body);
         }
@@ -351,7 +425,7 @@ double SequencerNode::evaluate(double t, double freq) {
     return steps[step];
 }
 
-// --- QUANTIZER ---
+
 QuantizerNode::QuantizerNode() : SynthNode("QUANTIZER", 1, 1) { setBrush(QColor(100, 80, 40)); }
 QString QuantizerNode::getExpression(bool nightly) {
     QString in = inputs[0] ? inputs[0]->startNode->getExpression(nightly) : "0";
@@ -362,7 +436,7 @@ double QuantizerNode::evaluate(double t, double freq) {
     return std::floor(in * 12.0) / 12.0;
 }
 
-// --- S&H ---
+
 SampleHoldNode::SampleHoldNode() : SynthNode("S&H", 2, 1) { setBrush(QColor(50, 50, 50)); }
 QString SampleHoldNode::getExpression(bool nightly) {
     QString sig = inputs[0] ? inputs[0]->startNode->getExpression(nightly) : "randv(t)";
@@ -376,7 +450,7 @@ double SampleHoldNode::evaluate(double t, double freq) {
     return ((int)(sampleTime * 1000) % 100) / 50.0 - 1.0;
 }
 
-// --- LOGIC ---
+
 LogicNode::LogicNode() : SynthNode("LOGIC: AND", 2, 1) { setBrush(QColor(100, 40, 100)); }
 void LogicNode::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     if (event->button() == Qt::LeftButton && event->pos().y() < 25) {
@@ -407,7 +481,7 @@ double LogicNode::evaluate(double t, double freq) {
     return (ba != bb) ? 1.0 : 0.0;
 }
 
-// --- CLOCK DIVIDER ---
+
 ClockDivNode::ClockDivNode() : SynthNode("CLK DIV", 1, 3) { setBrush(QColor(40, 40, 80)); }
 QString ClockDivNode::getExpression(bool nightly) {
     QString clk = inputs[0] ? inputs[0]->startNode->getExpression(nightly) : "t";
@@ -418,7 +492,7 @@ double ClockDivNode::evaluate(double t, double freq) {
     return ((int)clk % 2 == 0) ? 1.0 : 0.0;
 }
 
-// --- OTHERS ---
+
 NoiseNode::NoiseNode() : SynthNode("NOISE", 1, 1) { setBrush(QColor(80, 80, 80)); }
 QString NoiseNode::getExpression(bool nightly) {
     Q_UNUSED(nightly);
@@ -475,9 +549,6 @@ QString DelayNode::getExpression(bool nightly) {
 double DelayNode::evaluate(double t, double freq) { return inputs[0] ? inputs[0]->startNode->evaluate(t, freq) : 0.0; }
 
 
-// =========================================================
-// SCENE
-// =========================================================
 
 ModularScene::ModularScene(QObject* parent) : QGraphicsScene(parent) {
     outputNode = new OutputNode();
@@ -563,6 +634,7 @@ void ModularScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *event) {
     QAction* addLogic = menu.addAction("Add Logic (AND/OR/XOR)");
     QAction* addDiv = menu.addAction("Add Clock Divider");
     menu.addSeparator();
+    QAction* addFilter = menu.addAction("Add Low Pass Filter"); // <--- Added Here
     QAction* addMix = menu.addAction("Add Mixer / RingMod");
     QAction* addFold = menu.addAction("Add Wavefolder");
     QAction* addCrush = menu.addAction("Add Bitcrusher");
@@ -570,11 +642,16 @@ void ModularScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *event) {
 
     QAction* selected = menu.exec(event->screenPos());
 
+    if (views().isEmpty()) return; // Safety check to prevent crashing
+
     ModularSynthTab* tab = qobject_cast<ModularSynthTab*>(views().first()->parentWidget());
     if(tab) {
         if(selected == addVCO) tab->createNode("VCO", event->scenePos());
         if(selected == addLFO) tab->createNode("LFO", event->scenePos());
         if(selected == addNoise) tab->createNode("NOISE", event->scenePos());
+
+        if(selected == addFilter) tab->createNode("FILTER", event->scenePos()); // <--- Connected Here
+
         if(selected == addMix) tab->createNode("MIX", event->scenePos());
         if(selected == addFold) tab->createNode("FOLD", event->scenePos());
         if(selected == addCrush) tab->createNode("CRUSH", event->scenePos());
@@ -587,9 +664,6 @@ void ModularScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *event) {
     }
 }
 
-// =========================================================
-// TAB WIDGET
-// =========================================================
 
 ModularSynthTab::ModularSynthTab(QWidget *parent) : QWidget(parent) {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
@@ -600,7 +674,7 @@ ModularSynthTab::ModularSynthTab(QWidget *parent) : QWidget(parent) {
 
     QHBoxLayout* tools = new QHBoxLayout();
 
-    // NEW: Build Mode Selector
+
     m_buildMode = new QComboBox();
     m_buildMode->addItems({"Nightly (Variables)", "Legacy (Inline)"});
     m_buildMode->setFixedWidth(150);
@@ -629,7 +703,7 @@ ModularSynthTab::ModularSynthTab(QWidget *parent) : QWidget(parent) {
     connect(m_scene, &ModularScene::graphChanged, this, &ModularSynthTab::generateCode);
     connect(m_scene, &ModularScene::graphChanged, this, &ModularSynthTab::updateVisuals);
 
-    // Re-generate if mode changes
+
     connect(m_buildMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ModularSynthTab::generateCode);
 }
 
@@ -647,6 +721,7 @@ void ModularSynthTab::createNode(QString type, QPointF pos) {
     else if (type == "S&H") node = new SampleHoldNode();
     else if (type == "LOGIC") node = new LogicNode();
     else if (type == "DIV") node = new ClockDivNode();
+    else if (type == "FILTER") node = new FilterNode();
 
     if (node) {
         m_scene->addItem(node);
@@ -685,4 +760,22 @@ void ModularSynthTab::togglePlay(bool checked) {
         m_btnPlay->setStyleSheet("background-color: #335533; color: white;");
         emit stopPreview();
     }
+}
+
+QString SynthNode::getInputExpression(int index, bool nightly) {
+
+    if (index >= 0 && index < 8 && inputs[index] && inputs[index]->startNode) {
+
+        return inputs[index]->startNode->getExpression(nightly);
+    }
+    return "0";
+}
+
+double SynthNode::getInputVal(int index, double t, double freq) {
+
+    if (index >= 0 && index < 8 && inputs[index] && inputs[index]->startNode) {
+
+        return inputs[index]->startNode->evaluate(t, freq);
+    }
+    return 0.0;
 }
