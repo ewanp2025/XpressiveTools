@@ -85,7 +85,7 @@ struct WavetableStep {
 // CUSTOM SUB WIDGETS
 // ==============================================================================
 
-// --- ENVELOPE VISUALIZER ---
+// --- ENVELOPE VISUALISER ---
 class EnvelopeDisplay : public QWidget {
     Q_OBJECT
 public:
@@ -104,7 +104,7 @@ protected:
         painter.setRenderHint(QPainter::Antialiasing);
         int w = width(), h = height();
 
-        // Background Grid
+
         painter.setPen(QColor(45, 45, 45));
         painter.drawLine(w/4, 0, w/4, h);
         painter.drawLine(w/2, 0, w/2, h);
@@ -148,6 +148,13 @@ public:
         m_zoom = zoom;
         update();
     }
+
+    void setHighlight(double start, double end) {
+        m_hlStart = start;
+        m_hlEnd = end;
+        update();
+    }
+
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter painter(this);
@@ -165,6 +172,18 @@ protected:
 
         double windowSize = 0.02 + (m_duration - 0.02) * m_zoom;
         if(windowSize <= 0) windowSize = 0.01;
+
+        // NEW: Draw the Highlight Zone (Behind the waveform)
+        if (m_hlStart >= 0.0 && m_hlEnd > m_hlStart) {
+            double x1 = (m_hlStart / windowSize) * w;
+            double x2 = (m_hlEnd / windowSize) * w;
+            // Draw a semi-transparent green box
+            painter.fillRect(QRectF(x1, 0, x2 - x1, h), QColor(0, 255, 120, 40));
+            // Draw bright boundary lines
+            painter.setPen(QPen(QColor(0, 255, 120, 200), 2, Qt::DotLine));
+            painter.drawLine(x1, 0, x1, h);
+            painter.drawLine(x2, 0, x2, h);
+        }
 
         QPainterPath path;
         bool started = false;
@@ -189,6 +208,9 @@ private:
     std::function<double(double)> m_generator;
     double m_duration = 1.0;
     double m_zoom = 0.0;
+
+    double m_hlStart = -1.0;
+    double m_hlEnd = -1.0;
 };
 
 // --- UNIVERSAL SPECTRUM ANALYZER (FFT) ---
@@ -331,6 +353,7 @@ private slots:
     void loadHardwarePreset(int idx);
 
     void updateSubtractivePreview();
+
 
 private:
     // --- CORE & HELPERS ---
@@ -762,7 +785,42 @@ private:
     void generateHouseOrgan();
 
     // -------------------------------------
-    // TAB 35: X-TRANSPILER (Zyn to Xpressive)
+    // TAB35 : PCM EDITOR
+    // -------------------------------------
+    QWidget *nightlyTab;
+    UniversalScope *nightlySourceScope;
+    UniversalScope *nightlyMutatedScope;
+
+    QTextEdit *nightlyPcmInput;
+    QTextEdit *nightlyPcmOutput;
+
+    // Sliders
+    QSlider *ntTrimStart;
+    QSlider *ntTrimLength;
+    QSlider *ntSpeedStretch;
+    QSlider *ntBitcrush;
+    QSlider *ntWavefold;
+    QSlider *ntFormantShift;
+
+    // Slicer UI
+    QSpinBox *ntSliceCount;
+    QTableWidget *ntSliceTable;
+
+    QPushButton *btnCopyNightly;
+    QPushButton *btnPlayNightly;
+    QCheckBox *ntLegacyExport;
+
+    void initNightlyTimbreTab();
+
+    std::vector<double> m_nightlyBuffer;
+    double m_nightlySampleRate = 8000.0;
+    void parseNightlyInput();
+    void updateNightlyPreview();
+    void generateNightlyExpression();
+    void togglePlayNightly();
+
+    // -------------------------------------
+    // TAB 36: X-TRANSPILER (Zyn to Xpressive)
     // -------------------------------------
     QWidget *transpilerTab;
     QPushButton *btnLoadZyn;
@@ -774,9 +832,6 @@ private:
     void processZynFile(const QString &filePath);
     QString translateZynOscillator(int type);
 
-
 };
-
-
 
 #endif // MAINWINDOW_H
