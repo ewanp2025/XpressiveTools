@@ -67,7 +67,7 @@ void WaveformDisplay::paintEvent(QPaintEvent *) {
     }
 }
 // =========================================================
-// UI INITIALIZATION & SETUP
+// UI INITIALISATION & SETUP
 // =========================================================
 void MainWindow::setupUI() {
     auto *centralWidget = new QWidget(this);
@@ -184,7 +184,7 @@ void MainWindow::setupUI() {
     QWidget *pcmTab = new QWidget();
     auto *pcmLayout = new QVBoxLayout(pcmTab);
 
-    // VISUALIZER
+    // VISUALISER
     pcmScope = new UniversalScope();
     pcmLayout->addWidget(pcmScope);
 
@@ -499,7 +499,7 @@ void MainWindow::setupUI() {
     QWidget *arpTab = new QWidget();
     auto *arpLayout = new QVBoxLayout(arpTab);
 
-    // VISUALIZER
+    // VISUALISER
     arpScope = new UniversalScope();
     arpScope->setMinimumHeight(150);
     arpLayout->addWidget(arpScope);
@@ -528,7 +528,6 @@ void MainWindow::setupUI() {
     auto *seqGroup = new QGroupBox("Chord Sequence (0 -> Step 2 -> Step 3)");
     auto *seqForm = new QFormLayout(seqGroup);
 
-    // Populating with Semitones
     QStringList intervals = {
             "0 (Root)", "+3 (Minor 3rd)", "+4 (Major 3rd)", "+5 (4th)",
             "+7 (Perfect 5th)", "+12 (Octave)", "-12 (Sub Octave)",
@@ -964,7 +963,7 @@ void MainWindow::setupUI() {
     QWidget *harTab = new QWidget();
     auto *harLayout = new QVBoxLayout(harTab);
 
-    // ADD THE SPECTRUM ANALYSER
+
     harmonicSpectrum = new UniversalSpectrum();
     harLayout->addWidget(harmonicSpectrum);
 
@@ -975,13 +974,10 @@ void MainWindow::setupUI() {
 
     auto *harGrid = new QGridLayout();
 
-    // DEFINE THE "ROUTINE" (Audio Math) ---
-    // This function calculates Additive Synthesis: Summing sine waves
+
     auto updateHarmonicVisual = [=]() {
         if (!harmonicSpectrum) return;
 
-        // Define the Math
-        // Use lambda inside a lambda so the Spectrum class can call it repeatedly
         std::function<double(double)> additiveAlgo = [=](double t) {
             double signal = 0.0;
             double f = 220.0; // Base frequency (A3) for visualization
@@ -1103,56 +1099,56 @@ void MainWindow::setupUI() {
 
     // AUDIO & VISUAL LOGIC (The Math)
     auto updateDrum = [=]() {
-        // Gather Values from UI
-        int waveIdx = drumWaveCombo->currentIndex(); // 0=Sin, 1=Tri, 2=Sqr, 3=Saw
-        double baseFreq = drumPitchSlider->value();
-        double decayFactor = drumDecaySlider->value();
-        double pitchDrop = drumPitchDropSlider->value();
-        double noiseMix = drumNoiseSlider->value() / 100.0;
-        double expCurve = drumExpSlider->value();
+    // Gather Values from UI
+    int waveIdx = drumWaveCombo->currentIndex(); // 0=Sin, 1=Tri, 2=Sqr, 3=Saw
+    double baseFreq = drumPitchSlider->value();
+    double decayFactor = drumDecaySlider->value();
+    double pitchDrop = drumPitchDropSlider->value();
+    double noiseMix = drumNoiseSlider->value() / 100.0;
+    double expCurve = drumExpSlider->value();
 
-        // Calculate a loop length that fits the decay so it doesn't click
-        double loopLen = 0.5 + (200.0 / (decayFactor > 0 ? decayFactor : 1.0));
+    // Calculate a loop length that fits the decay so it doesn't click
+    double loopLen = 0.5 + (200.0 / (decayFactor > 0 ? decayFactor : 1.0));
 
-        // The Audio Generation Lambda
-        std::function<double(double)> drumAlgo = [=](double t) {
-            // Loop logic (retrigger)
-            double localT = std::fmod(t, loopLen);
-            if(localT < 0) return 0.0;
+    // The Audio Generation Lambda
+    std::function<double(double)> drumAlgo = [=](double t) {
+        // Loop logic (retrigger)
+        double localT = std::fmod(t, loopLen);
+        if(localT < 0) return 0.0;
 
-            //Pitch Envelope (Exponential Drop)
-            // f(t) = Base + Drop * exp(-t * decay/2)
-            double instFreq = baseFreq + (pitchDrop * std::exp(-localT * (decayFactor / 2.0)));
+        //Pitch Envelope (Exponential Drop)
+        // f(t) = Base + Drop * exp(-t * decay/2)
+        double instFreq = baseFreq + (pitchDrop * std::exp(-localT * (decayFactor / 2.0)));
 
-            //Oscillator Generation
-            double phase = localT * instFreq * 6.283185; // 2*PI
-            double osc = 0.0;
+        //Oscillator Generation
+        double phase = localT * instFreq * 6.283185; // 2*PI
+        double osc = 0.0;
 
-            if (waveIdx == 0) osc = std::sin(phase);
-            else if (waveIdx == 1) osc = (2.0/3.14159) * std::asin(std::sin(phase)); // Triangle
-            else if (waveIdx == 2) osc = (std::sin(phase) > 0 ? 1.0 : -1.0); // Square
-            else osc = 2.0 * (std::fmod(localT * instFreq, 1.0)) - 1.0; // Saw
+        if (waveIdx == 0) osc = std::sin(phase);
+        else if (waveIdx == 1) osc = (2.0/3.14159) * std::asin(std::sin(phase)); // Triangle
+        else if (waveIdx == 2) osc = (std::sin(phase) > 0 ? 1.0 : -1.0); // Square
+        else osc = 2.0 * (std::fmod(localT * instFreq, 1.0)) - 1.0; // Saw
 
-            //Noise Generation
-            double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
+        //Noise Generation
+        double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
 
-            //Mix Osc and Noise
-            double signal = (osc * (1.0 - noiseMix)) + (noise * noiseMix);
+        //Mix Osc and Noise
+        double signal = (osc * (1.0 - noiseMix)) + (noise * noiseMix);
 
-            //Volume Envelope (Exponential Decay)
-            double env = std::exp(-localT * decayFactor * expCurve);
+        //Volume Envelope (Exponential Decay)
+        double env = std::exp(-localT * decayFactor * expCurve);
 
-            return signal * env;
-        };
-
-        // Update Visualizer (Zoomed in to 0.2s to see the hit clearly)
-        drumScope->updateScope(drumAlgo, 0.2, 1.0);
-
-        // Update Audio Engine if Playing
-        if (btnPlayDrum->isChecked()) {
-            m_ghostSynth->setAudioSource(drumAlgo);
-        }
+        return signal * env;
     };
+
+    // Update Visualizer (Zoomed in to 0.2s to see the hit clearly)
+    drumScope->updateScope(drumAlgo, 0.2, 1.0);
+
+    // Update Audio Engine if Playing
+    if (btnPlayDrum->isChecked()) {
+        m_ghostSynth->setAudioSource(drumAlgo);
+    }
+};
 
     // CONNECTIONS
 
@@ -1166,17 +1162,16 @@ void MainWindow::setupUI() {
 
     // PRESET LOGIC: Sets sliders when you choose a drum type
     connect(drumTypeCombo, &QComboBox::currentIndexChanged, [=](int idx){
-        // Stop audio briefly to prevent glitches while setting sliders
-        bool wasPlaying = btnPlayDrum->isChecked();
-        if(wasPlaying) m_ghostSynth->stop();
+    // Stop audio briefly to prevent glitches while setting sliders
+    bool wasPlaying = btnPlayDrum->isChecked();
+    if(wasPlaying) m_ghostSynth->stop();
 
-        // Block signals so we don't trigger 10 updates in a row
-        drumPitchSlider->blockSignals(true);
-        drumDecaySlider->blockSignals(true);
-        // ... (blocking others is optional but good practice)
+    // Block signals so we don't trigger 10 updates in a row
+    drumPitchSlider->blockSignals(true);
+    drumDecaySlider->blockSignals(true);
 
-        switch(idx) {
-        case 0: // Kick
+    switch(idx) {
+    case 0: // Kick
             drumWaveCombo->setCurrentText("Sine");
             drumPitchSlider->setValue(40);
             drumPitchDropSlider->setValue(350);
@@ -1186,7 +1181,7 @@ void MainWindow::setupUI() {
             drumSnapSlider->setValue(50);
             drumNoiseSlider->setValue(0);
             break;
-        case 1: // Snare
+    case 1: // Snare
             drumWaveCombo->setCurrentText("Triangle");
             drumPitchSlider->setValue(60);
             drumPitchDropSlider->setValue(200);
@@ -1195,7 +1190,7 @@ void MainWindow::setupUI() {
             drumDecaySlider->setValue(80);
             drumExpSlider->setValue(4);
             break;
-        case 2: // Hi-Hat
+    case 2: // Hi-Hat
             drumWaveCombo->setCurrentText("Square");
             drumPitchSlider->setValue(80);
             drumPitchDropSlider->setValue(50);
@@ -1204,7 +1199,7 @@ void MainWindow::setupUI() {
             drumToneSlider->setValue(8000);
             drumExpSlider->setValue(8);
             break;
-        case 3: // Tom
+    case 3: // Tom
             drumWaveCombo->setCurrentText("Sine");
             drumPitchSlider->setValue(50);
             drumPitchDropSlider->setValue(150);
@@ -1213,7 +1208,7 @@ void MainWindow::setupUI() {
             drumToneSlider->setValue(800);
             drumExpSlider->setValue(3);
             break;
-        case 4: // Cowbell
+    case 4: // Cowbell
             drumWaveCombo->setCurrentText("Square");
             drumPitchSlider->setValue(80);
             drumPitchDropSlider->setValue(0);
@@ -1222,7 +1217,7 @@ void MainWindow::setupUI() {
             drumDecaySlider->setValue(100);
             drumNoiseSlider->setValue(0);
             break;
-        case 5: // Rimshot
+    case 5: // Rimshot
             drumWaveCombo->setCurrentText("Square");
             drumPitchSlider->setValue(95);
             drumPitchDropSlider->setValue(20);
@@ -1231,7 +1226,7 @@ void MainWindow::setupUI() {
             drumExpSlider->setValue(8);
             drumDecaySlider->setValue(30);
             break;
-        case 6: // Clap
+    case 6: // Clap
             drumWaveCombo->setCurrentText("Sawtooth");
             drumPitchSlider->setValue(70);
             drumPitchDropSlider->setValue(50);
@@ -1242,13 +1237,13 @@ void MainWindow::setupUI() {
             break;
         }
 
-        // Unblock signals
-        drumPitchSlider->blockSignals(false);
-        drumDecaySlider->blockSignals(false);
+    // Unblock signals
+    drumPitchSlider->blockSignals(false);
+    drumDecaySlider->blockSignals(false);
 
-        updateDrum(); // Force one update with new values
+    updateDrum(); // Force one update with new values
 
-        if(wasPlaying) m_ghostSynth->start();
+    if(wasPlaying) m_ghostSynth->start();
     });
 
     // Play Button Logic
@@ -3439,6 +3434,11 @@ void MainWindow::setupUI() {
     //TAB 34
     // ------------------------------------
     initHouseOrganTab();  // Different way to keep code at bottom now
+
+    // ------------------------------------
+    //TAB 35
+    // ------------------------------------
+    initNightlyTimbreTab();// Different way to keep code at bottom now
 
 
     // ------------------------------------
@@ -5782,7 +5782,7 @@ void MainWindow::generateWestCoast() {
 // TAB 26. SYNTH ENGINE
     // IN SEPERATE .CPP
 
-// TAB 27: SPECTRAL RESYNTHESISER!!!!!!!!!
+// TAB 27: SPECTRAL RESYNTHESISER
 void MainWindow::updateSpectralPreview() {
     if (specSampleData.empty()) return;
 
@@ -6287,13 +6287,12 @@ void MainWindow::initPluckTab() {
                        "(last(sr/f) * 0.5 + last(sr/f + 1) * 0.5) * (0.99 - (A1*0.05))";
         emit expressionGenerated(code);
     });
-
 }
- // TAB 34: HOUSE MUSIC ORGAN ---
+
+// TAB 34: HOUSE MUSIC ORGAN ---
 void MainWindow::initHouseOrganTab() {
     houseOrganTab = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(houseOrganTab);
-
 
     houseOrganScope = new UniversalScope();
     houseOrganScope->setMinimumHeight(150);
@@ -6316,7 +6315,6 @@ void MainWindow::initHouseOrganTab() {
     fLayout->addRow("Bounciness (Decay):", organDecaySlider);
 
     layout->addWidget(ctrlGroup);
-
 
     btnGenOrgan = new QPushButton("GENERATE HOUSE ORGAN FORMULA");
     btnGenOrgan->setStyleSheet("font-weight: bold; background-color: #444; color: white; height: 45px;");
@@ -6401,105 +6399,513 @@ void MainWindow::generateHouseOrgan() {
     QApplication::clipboard()->setText(finalExpr);
 }
 
-// TAB 35: XTRANSPILER
-void MainWindow::initTranspilerTab() {
-    transpilerTab = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(transpilerTab);
+
+// TAB 35: PCM EDITOR
+void MainWindow::initNightlyTimbreTab() {
+    nightlyTab = new QWidget();
+    QVBoxLayout *mainLayout = new QVBoxLayout(nightlyTab);
+
+    // --- INPUT TEXT AREA ---
+    nightlyPcmInput = new QTextEdit();
+    nightlyPcmInput->setPlaceholderText("Paste original var s := floor(t * 8000)... expression here");
+    nightlyPcmInput->setMaximumHeight(60);
+    mainLayout->addWidget(new QLabel("<b>1. Source PCM Expression: (Must be nightly format)</b>"));
+    mainLayout->addWidget(nightlyPcmInput);
+
+    // --- DUAL SCOPES ---
+    nightlySourceScope = new UniversalScope(this);
+    nightlySourceScope->setMinimumHeight(60);
+    nightlyMutatedScope = new UniversalScope(this);
+    nightlyMutatedScope->setMinimumHeight(100);
+
+    mainLayout->addWidget(new QLabel("Raw Audio (Showing Trim Area):"));
+    mainLayout->addWidget(nightlySourceScope);
+    mainLayout->addWidget(new QLabel("Mutated Output:"));
+    mainLayout->addWidget(nightlyMutatedScope);
+
+    // --- CONTROLS SECTION--
+    QHBoxLayout *midLayout = new QHBoxLayout();
+
+    QFormLayout *slidersLayout = new QFormLayout();
+    ntTrimStart = new QSlider(Qt::Horizontal);    ntTrimStart->setRange(0, 10000);   ntTrimStart->setValue(0);
+    ntTrimLength = new QSlider(Qt::Horizontal);   ntTrimLength->setRange(100, 10000); ntTrimLength->setValue(10000);
+    ntSpeedStretch = new QSlider(Qt::Horizontal); ntSpeedStretch->setRange(10, 300); ntSpeedStretch->setValue(100);
+    ntBitcrush = new QSlider(Qt::Horizontal);     ntBitcrush->setRange(1, 64);       ntBitcrush->setValue(64);
+    ntWavefold = new QSlider(Qt::Horizontal);     ntWavefold->setRange(10, 200);     ntWavefold->setValue(10);
+    ntFormantShift = new QSlider(Qt::Horizontal); ntFormantShift->setRange(0, 2000); ntFormantShift->setValue(0);
+
+    slidersLayout->addRow("Trim Start:", ntTrimStart);
+    slidersLayout->addRow("Trim Length (Loop):", ntTrimLength);
+    slidersLayout->addRow("Sequence BPM %:", ntSpeedStretch);
+    slidersLayout->addRow("Bit Depth (Crush):", ntBitcrush);
+    slidersLayout->addRow("Wavefold Drive:", ntWavefold);
+    slidersLayout->addRow("Formant RM (Hz):", ntFormantShift);
+
+    QVBoxLayout *slicerLayout = new QVBoxLayout();
+    QHBoxLayout *sliceHeader = new QHBoxLayout();
+    sliceHeader->addWidget(new QLabel("<b>Tracker Sequence:</b>"));
+    ntSliceCount = new QSpinBox();
+    ntSliceCount->setRange(1, 32);
+    ntSliceCount->setValue(1);
+    sliceHeader->addWidget(new QLabel("Steps:"));
+    sliceHeader->addWidget(ntSliceCount);
+    slicerLayout->addLayout(sliceHeader);
+
+    ntSliceTable = new QTableWidget();
+    ntSliceTable->setColumnCount(3);
+    ntSliceTable->setHorizontalHeaderLabels({"Beats", "Pitch (st)", "Glide"});
+    ntSliceTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    ntSliceTable->setRowCount(1);
+
+    ntSliceTable->setItem(0, 0, new QTableWidgetItem("1.0"));
+    ntSliceTable->setItem(0, 1, new QTableWidgetItem("0"));
+    QTableWidgetItem *cb0 = new QTableWidgetItem();
+    cb0->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
+    cb0->setCheckState(Qt::Unchecked);
+    ntSliceTable->setItem(0, 2, cb0);
+
+    slicerLayout->addWidget(ntSliceTable);
+
+    midLayout->addLayout(slidersLayout, 2);
+    midLayout->addLayout(slicerLayout, 1);
+    mainLayout->addLayout(midLayout);
+
+    nightlyPcmOutput = new QTextEdit();
+    nightlyPcmOutput->setReadOnly(true);
+    nightlyPcmOutput->setStyleSheet("background-color: #1a1a1a; color: #55ff55; font-family: monospace;");
+    nightlyPcmOutput->setMaximumHeight(100);
+    mainLayout->addWidget(new QLabel("<b>2. Edited Output Expression:</b>"));
+    mainLayout->addWidget(nightlyPcmOutput);
+
+    // --- BUTTONS ---
+    QHBoxLayout *btnLayout = new QHBoxLayout();
 
 
-    lblTranspilerWarning = new QLabel("⚠️ WORK IN PROGRESS / EXPERIMENTAL ⚠️\n"
-                                      "This engine maps ZynAddSubFX XML parameters to Xpressive math.\n"
-                                      "Status: Implementing ADSR & Oscillator mapping.");
-    lblTranspilerWarning->setStyleSheet("QLabel { background-color: #332200; color: #ffcc00; "
-                                        "font-weight: bold; padding: 15px; border: 2px solid #ffcc00; border-radius: 5px; }");
-    lblTranspilerWarning->setAlignment(Qt::AlignCenter);
-    layout->addWidget(lblTranspilerWarning);
+    ntLegacyExport = new QCheckBox("Export Legacy Format (Crashes to be fixed, dont tick)");
+    ntLegacyExport->setStyleSheet("color: #aaaaaa; font-weight: bold; padding-right: 10px;");
+    ntLegacyExport->setChecked(false);
 
+    btnPlayNightly = new QPushButton("▶ Play Mutilated PCM");
+    btnPlayNightly->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 35px;");
+    btnPlayNightly->setCheckable(true);
 
-    btnLoadZyn = new QPushButton("📂 LOAD ZYNADDSUBFX PRESET (.xiz / .xpf)");
-    btnLoadZyn->setStyleSheet("height: 50px; font-weight: bold; background-color: #444466; color: white;");
-    layout->addWidget(btnLoadZyn);
+    btnCopyNightly = new QPushButton("📋 Copy Generated Expression");
+    btnCopyNightly->setStyleSheet("height: 35px;");
 
-    QHBoxLayout *textLayout = new QHBoxLayout();
+    btnLayout->addWidget(ntLegacyExport);
+    btnLayout->addWidget(btnPlayNightly);
+    btnLayout->addWidget(btnCopyNightly);
+    mainLayout->addLayout(btnLayout);
+    modeTabs->addTab(nightlyTab, "PCM Editor");
 
+    // --- CONNECTIONS ---
+    auto triggerUpdate = [=](){
+    parseNightlyInput();
+    generateNightlyExpression();
+    updateNightlyPreview();
+    };
 
-    QVBoxLayout *logCol = new QVBoxLayout();
-    logCol->addWidget(new QLabel("Parsing Log:"));
-    transpilerLog = new QTextEdit();
-    transpilerLog->setReadOnly(true);
-    transpilerLog->setStyleSheet("background: #111; color: #88ff88; font-family: 'Consolas';");
-    logCol->addWidget(transpilerLog);
+    connect(ntLegacyExport, &QCheckBox::toggled, this, triggerUpdate);
+    connect(ntTrimStart, &QSlider::valueChanged, this, triggerUpdate);
+    connect(ntTrimLength, &QSlider::valueChanged, this, triggerUpdate);
+    connect(ntSpeedStretch, &QSlider::valueChanged, this, triggerUpdate);
+    connect(ntBitcrush, &QSlider::valueChanged, this, triggerUpdate);
+    connect(ntWavefold, &QSlider::valueChanged, this, triggerUpdate);
+    connect(ntFormantShift, &QSlider::valueChanged, this, triggerUpdate);
+    connect(nightlyPcmInput, &QTextEdit::textChanged, this, triggerUpdate);
+    connect(ntSliceTable, &QTableWidget::cellChanged, this, triggerUpdate);
 
-
-    QVBoxLayout *outCol = new QVBoxLayout();
-    outCol->addWidget(new QLabel("Generated Xpressive.xpf Code:"));
-    transpilerOutput = new QTextEdit();
-    transpilerOutput->setReadOnly(true);
-    transpilerOutput->setStyleSheet("background: #111; color: #88ccff; font-family: 'Consolas';");
-    outCol->addWidget(transpilerOutput);
-
-    textLayout->addLayout(logCol, 1);
-    textLayout->addLayout(outCol, 2);
-    layout->addLayout(textLayout);
-
-
-    connect(btnLoadZyn, &QPushButton::clicked, [=]() {
-        QString path = QFileDialog::getOpenFileName(this, "Select Zyn Preset", "", "Zyn Files (*.xiz *.xpf *.xmz)");
-        if (!path.isEmpty()) processZynFile(path);
+    connect(ntSliceCount, QOverload<int>::of(&QSpinBox::valueChanged), [=](int rows){
+        int current = ntSliceTable->rowCount();
+        ntSliceTable->setRowCount(rows);
+        for(int i = current; i < rows; ++i) {
+            ntSliceTable->setItem(i, 0, new QTableWidgetItem("1.0"));
+            ntSliceTable->setItem(i, 1, new QTableWidgetItem("0"));
+            QTableWidgetItem *cb = new QTableWidgetItem();
+            cb->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
+            cb->setCheckState(Qt::Unchecked);
+            ntSliceTable->setItem(i, 2, cb);
+        }
+        triggerUpdate();
     });
 
-    modeTabs->addTab(transpilerTab, "X-Transpiler");
-}
+    connect(btnPlayNightly, &QPushButton::clicked, this, &MainWindow::togglePlayNightly);
+    connect(btnCopyNightly, &QPushButton::clicked, this, [=](){
+            QApplication::clipboard()->setText(nightlyPcmOutput->toPlainText());
+        });
+    }
 
-void MainWindow::processZynFile(const QString &filePath) {
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) return;
-
-    QDomDocument doc;
-    if (!doc.setContent(&file)) {
-        transpilerLog->append("❌ Error: Could not parse XML.");
+void MainWindow::parseNightlyInput() {
+    QString rawCode = nightlyPcmInput->toPlainText();
+    if (rawCode.isEmpty()) {
+        m_nightlyBuffer.clear();
         return;
     }
-    file.close();
 
-    transpilerLog->append("✅ Successfully loaded: " + filePath);
+    QRegularExpression srRegex("floor\\(\\s*t\\s*\\*\\s*([0-9]+(?:\\.[0-9]+)?)\\s*\\)");
+    QRegularExpressionMatch srMatch = srRegex.match(rawCode);
+    m_nightlySampleRate = srMatch.hasMatch() ? srMatch.captured(1).toDouble() : 8000.0;
 
+    m_nightlyBuffer.clear();
+    QRegularExpression valRegex("(-?[0-9]+\\.[0-9]{1,6})");
+    QRegularExpressionMatchIterator it = valRegex.globalMatch(rawCode);
 
-    QDomElement root = doc.documentElement();
-
-
-    int oscType = root.firstChildElement("INSTRUMENT").firstChildElement("ADD_SYNTH")
-                      .firstChildElement("OSC").attribute("type").toInt();
-
-    QString xpressOsc = translateZynOscillator(oscType);
-    transpilerLog->append("Detected Zyn Osc Type: " + QString::number(oscType));
-
-
-    int zynCutoff = root.firstChildElement("INSTRUMENT").firstChildElement("ADD_SYNTH")
-                        .firstChildElement("FILTER").attribute("cutoff").toInt();
-
-
-    double mappedHz = 20.0 + (zynCutoff / 127.0) * 7980.0;
-    double alpha = 2 * 3.14159 * mappedHz;
-
-
-    QString finalExpr = QString("// Transpiled from ZynAddSubFX\n"
-                                "// Original Cutoff: %1\n"
-                                "(last(1) + (%2 / srate) * (%3(integrate(f)) - last(1)))")
-                                .arg(QString::number(zynCutoff),
-                                     QString::number(alpha),
-                                     xpressOsc);
-
-    transpilerOutput->setText(finalExpr);
-    transpilerLog->append("🚀 Transpilation Complete!");
+    while (it.hasNext()) {
+        m_nightlyBuffer.push_back(it.next().captured(1).toDouble());
+    }
+    if (m_nightlyBuffer.empty()) m_nightlyBuffer.push_back(0.0);
 }
 
-QString MainWindow::translateZynOscillator(int type) {
-    switch(type) {
-        case 0: return "sinew";
-        case 1: return "trianglew";
-        case 2: return "squarew";
-        case 3: return "saww";
-        default: return "saww";
+void MainWindow::updateNightlyPreview() {
+    if (m_nightlyBuffer.empty()) return;
+
+    double maxDur = m_nightlyBuffer.size() / m_nightlySampleRate;
+    if (maxDur <= 0) maxDur = 1.0;
+
+    double trimStart = (ntTrimStart->value() / 10000.0) * maxDur;
+    double trimLen = (ntTrimLength->value() / 10000.0) * maxDur;
+    if (trimLen < 0.001) trimLen = 0.001;
+
+    nightlySourceScope->updateScope([=](double t){
+        int s = (int)(t * m_nightlySampleRate);
+        if (s >= 0 && s < m_nightlyBuffer.size()) return m_nightlyBuffer[s];
+        return 0.0;
+    }, maxDur, 1.0);
+    nightlySourceScope->setHighlight(trimStart, trimStart + trimLen);
+
+    double seq_speed = ntSpeedStretch->value() / 100.0;
+    int bits = ntBitcrush->value();
+    double foldDrive = ntWavefold->value() / 10.0;
+    double formant = ntFormantShift->value();
+
+    struct Step { double startT; double endT; double dur; double pitch; bool glide; };
+    int slices = ntSliceCount->value();
+    std::vector<Step> seq(slices);
+
+    double totalBeats = 0.0;
+    for(int i = 0; i < slices; ++i) {
+        double beats = ntSliceTable->item(i, 0) ? ntSliceTable->item(i, 0)->text().toDouble() : 1.0;
+        if (beats < 0.001) beats = 0.001; // Prevent Divide by Zero
+        double st = ntSliceTable->item(i, 1) ? ntSliceTable->item(i, 1)->text().toDouble() : 0.0;
+        bool gl = ntSliceTable->item(i, 2) ? (ntSliceTable->item(i, 2)->checkState() == Qt::Checked) : false;
+
+        seq[i].dur = beats;
+        seq[i].startT = totalBeats;
+        seq[i].pitch = std::pow(2.0, st / 12.0);
+        seq[i].glide = gl;
+        totalBeats += beats;
+        seq[i].endT = totalBeats;
+    }
+    if (totalBeats <= 0.0) totalBeats = 1.0;
+
+    double sr = m_nightlySampleRate;
+    std::vector<double> buf = m_nightlyBuffer;
+
+    auto createAlgo = [=]() {
+        return [=, phase = 0.0, last_t = -1.0](double t) mutable {
+            // FIX: Safer Delta Time calculation
+            double dt = (last_t < 0.0) ? 0.0000226 : (t - last_t);
+            last_t = t;
+            if (dt < 0.0 || dt > 0.1) dt = 0.0000226;
+
+            double seq_t = std::fmod(t * seq_speed * 4.0, totalBeats);
+
+            Step curr = seq[0], next = seq[0];
+            for(int i = 0; i < slices; ++i) {
+                if(seq_t >= seq[i].startT && seq_t < seq[i].endT) {
+                    curr = seq[i];
+                    next = seq[(i + 1) % slices];
+                    break;
+                }
+            }
+
+            double activePitch = curr.pitch;
+            if (curr.glide) {
+                double localPhase = (seq_t - curr.startT) / curr.dur;
+                activePitch = curr.pitch + (next.pitch - curr.pitch) * localPhase;
+            }
+
+            phase += activePitch * dt;
+            double t_mod = trimStart + std::fmod(phase, trimLen);
+
+            int s = (int)(t_mod * sr);
+            if (s < 0) s = 0;
+            if (s >= (int)buf.size()) s = buf.size() - 1;
+
+            double raw_pcm = buf[s];
+            if (bits < 64) raw_pcm = std::floor(raw_pcm * bits) / bits;
+            if (formant > 0) raw_pcm *= std::sin(t * formant * 2.0 * 3.14159265);
+            if (foldDrive > 1.0) raw_pcm = std::sin(raw_pcm * foldDrive);
+
+            return raw_pcm;
+        };
+    };
+
+    double mutatedViewDur = (totalBeats / (seq_speed * 4.0));
+    nightlyMutatedScope->updateScope(createAlgo(), mutatedViewDur, 1.0);
+
+    if (btnPlayNightly->isChecked()) m_ghostSynth->setAudioSource(createAlgo());
+}
+
+void MainWindow::generateNightlyExpression() {
+    QString rawCode = nightlyPcmInput->toPlainText().trimmed();
+    if (rawCode.isEmpty()) return;
+
+    double maxDur = m_nightlyBuffer.size() / m_nightlySampleRate;
+    if (maxDur <= 0) maxDur = 1.0;
+
+    double trimStart = (ntTrimStart->value() / 10000.0) * maxDur;
+    double trimLen = (ntTrimLength->value() / 10000.0) * maxDur;
+    if (trimLen < 0.001) trimLen = 0.001;
+
+    double speed = ntSpeedStretch->value() / 100.0;
+    int bits = ntBitcrush->value();
+    double foldDrive = ntWavefold->value() / 10.0;
+    double formant = ntFormantShift->value();
+
+    int splitIndex = rawCode.indexOf(';');
+    if (splitIndex == -1) return;
+    QString treeExpression = rawCode.mid(splitIndex + 1).trimmed();
+
+    int slices = ntSliceCount->value();
+    bool isLegacy = ntLegacyExport->isChecked();
+
+    QString seq_t_val, p_val = "1.0", nextP_val = "1.0", start_val = "0.0", dur_val = "1.0", glide_val = "0";
+    QString active_pitch_val = "1.0";
+
+    if (slices > 1) {
+        std::vector<double> endT(slices);
+        double tb = 0.0;
+        for(int i=0; i<slices; ++i) {
+            double b = std::max(0.001, ntSliceTable->item(i, 0) ? ntSliceTable->item(i, 0)->text().toDouble() : 1.0);
+            tb += b;
+            endT[i] = tb;
+        }
+        double totalBeats = tb;
+
+        seq_t_val = QString("mod(t * %1 * 4.0, %2)").arg(speed, 0, 'f', 4).arg(totalBeats, 0, 'f', 4);
+
+        for (int i = slices - 1; i >= 0; --i) {
+            double eTime = endT[i];
+            double sTime = (i == 0) ? 0.0 : endT[i-1];
+            double beats = eTime - sTime;
+
+            double st = ntSliceTable->item(i, 1) ? ntSliceTable->item(i, 1)->text().toDouble() : 0.0;
+            double nextSt = ntSliceTable->item((i+1)%slices, 1) ? ntSliceTable->item((i+1)%slices, 1)->text().toDouble() : 0.0;
+            bool glide = ntSliceTable->item(i, 2) ? (ntSliceTable->item(i, 2)->checkState() == Qt::Checked) : false;
+
+            double pMult = std::pow(2.0, st / 12.0);
+            double nextPMult = std::pow(2.0, nextSt / 12.0);
+
+            QString thresh = isLegacy ? QString("(%1 < %2)").arg(seq_t_val).arg(eTime, 0, 'f', 4)
+                                      : QString("(seq_t < %1)").arg(eTime, 0, 'f', 4);
+
+            p_val = QString("(%1 ? %2 : %3)").arg(thresh).arg(pMult, 0, 'f', 4).arg(p_val);
+            nextP_val = QString("(%1 ? %2 : %3)").arg(thresh).arg(nextPMult, 0, 'f', 4).arg(nextP_val);
+            start_val = QString("(%1 ? %2 : %3)").arg(thresh).arg(sTime, 0, 'f', 4).arg(start_val);
+            dur_val = QString("(%1 ? %2 : %3)").arg(thresh).arg(beats, 0, 'f', 4).arg(dur_val);
+            glide_val = QString("(%1 ? %2 : %3)").arg(thresh).arg(glide ? "1" : "0").arg(glide_val);
+        }
+
+        if (isLegacy) {
+            QString local_phase = QString("((%1 - %2) / %3)").arg(seq_t_val, start_val, dur_val);
+            active_pitch_val = QString("((%1 > 0.5) ? (%2 + (%3 - %2) * %4) : %2)").arg(glide_val, p_val, nextP_val, local_phase);
+        } else {
+            active_pitch_val = "(glide > 0.5) ? (p + (p_next - p) * local_phase) : p";
+        }
+    }
+
+    QString t_mod_val = QString("(%1 + mod(integrate(%2), %3))").arg(trimStart, 0, 'f', 4).arg(active_pitch_val).arg(trimLen, 0, 'f', 4);
+    QString s_val = QString("floor(%1 * %2)").arg(isLegacy ? t_mod_val : "t_mod").arg(m_nightlySampleRate);
+
+    QString raw_pcm_val = treeExpression;
+    if (isLegacy) {
+        // Find literal 's' and 't' variables and inject formulas directly
+        raw_pcm_val.replace(QRegularExpression("\\bs\\b"), s_val);
+        raw_pcm_val.replace(QRegularExpression("\\bt\\b"), t_mod_val);
+    }
+
+    QString crushed_val = raw_pcm_val;
+    if (bits < 64) {
+        crushed_val = QString("(floor(%1 * %2) / %2)").arg(isLegacy ? raw_pcm_val : "raw_pcm").arg(bits);
+    }
+
+    QString shifted_val = crushed_val;
+    if (formant > 0) {
+        shifted_val = QString("(%1 * sinew(t * %2))").arg(isLegacy ? crushed_val : (bits < 64 ? "crushed" : "raw_pcm")).arg(formant, 0, 'f', 2);
+    }
+
+    QString folded_val = shifted_val;
+    if (foldDrive > 1.0) {
+        folded_val = QString("sin(%1 * %2)").arg(isLegacy ? shifted_val : (formant > 0 ? "shifted" : (bits < 64 ? "crushed" : "raw_pcm"))).arg(foldDrive, 0, 'f', 2);
+    }
+
+    QString final_val = QString("clamp(-1, %1, 1)").arg(isLegacy ? folded_val : (foldDrive > 1.0 ? "folded" : (formant > 0 ? "shifted" : (bits < 64 ? "crushed" : "raw_pcm"))));
+
+
+    QString mutatedCode;
+
+    if (isLegacy) {
+
+        mutatedCode = final_val + ";";
+    } else {
+
+        if (slices > 1) {
+            mutatedCode += QString("var seq_t := %1;\n").arg(seq_t_val);
+            mutatedCode += QString("var p := %1;\n").arg(p_val);
+            mutatedCode += QString("var p_next := %1;\n").arg(nextP_val);
+            mutatedCode += QString("var s_start := %1;\n").arg(start_val);
+            mutatedCode += QString("var s_dur := %1;\n").arg(dur_val);
+            mutatedCode += QString("var glide := %1;\n\n").arg(glide_val);
+            mutatedCode += "var local_phase := (seq_t - s_start) / s_dur;\n";
+            mutatedCode += QString("var active_pitch := %1;\n\n").arg(active_pitch_val);
+        } else {
+            mutatedCode += "var active_pitch := 1.0;\n\n";
+        }
+
+        mutatedCode += QString("var t_mod := %1;\n").arg(t_mod_val);
+        mutatedCode += QString("var s := %1;\n").arg(s_val);
+        mutatedCode += QString("var raw_pcm := %1;\n\n").arg(raw_pcm_val);
+
+        QString activeSignal = "raw_pcm";
+        if (bits < 64) {
+            mutatedCode += QString("var crushed := floor(raw_pcm * %1) / %1;\n").arg(bits);
+            activeSignal = "crushed";
+        }
+        if (formant > 0) {
+            mutatedCode += QString("var shifted := %1 * sinew(t * %2);\n").arg(activeSignal).arg(formant, 0, 'f', 2);
+            activeSignal = "shifted";
+        }
+        if (foldDrive > 1.0) {
+            mutatedCode += QString("var folded := sin(%1 * %2);\n").arg(activeSignal).arg(foldDrive, 0, 'f', 2);
+            activeSignal = "folded";
+        }
+        mutatedCode += QString("clamp(-1, %1, 1);").arg(activeSignal);
+    }
+
+    nightlyPcmOutput->setText(mutatedCode);
+}
+
+void MainWindow::togglePlayNightly() {
+    if (btnPlayNightly->isChecked()) {
+        btnPlayNightly->setText("⏹ Stop Edited");
+        btnPlayNightly->setStyleSheet("background-color: #883333; color: white; font-weight: bold; height: 35px;");
+
+        parseNightlyInput();
+        generateNightlyExpression();
+        updateNightlyPreview();
+
+        // FIX: Force stop before starting to prevent Qt Audio overlapping buffers
+        m_ghostSynth->stop();
+        m_ghostSynth->start();
+    } else {
+        btnPlayNightly->setText("▶ Play Edited PCM");
+        btnPlayNightly->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 35px;");
+        m_ghostSynth->setAudioSource([](double){ return 0.0; });
+        m_ghostSynth->stop();
     }
 }
+
+ // NOT IN USE
+
+ void MainWindow::initTranspilerTab() {
+     transpilerTab = new QWidget();
+     QVBoxLayout *layout = new QVBoxLayout(transpilerTab);
+
+
+     lblTranspilerWarning = new QLabel("⚠️ WORK IN PROGRESS / EXPERIMENTAL ⚠️\n"
+                                       "This engine maps ZynAddSubFX XML parameters to Xpressive math.\n"
+                                       "Status: Implementing ADSR & Oscillator mapping.");
+     lblTranspilerWarning->setStyleSheet("QLabel { background-color: #332200; color: #ffcc00; "
+                                         "font-weight: bold; padding: 15px; border: 2px solid #ffcc00; border-radius: 5px; }");
+     lblTranspilerWarning->setAlignment(Qt::AlignCenter);
+     layout->addWidget(lblTranspilerWarning);
+
+
+     btnLoadZyn = new QPushButton("📂 LOAD ZYNADDSUBFX PRESET (.xiz / .xpf)");
+     btnLoadZyn->setStyleSheet("height: 50px; font-weight: bold; background-color: #444466; color: white;");
+     layout->addWidget(btnLoadZyn);
+
+     QHBoxLayout *textLayout = new QHBoxLayout();
+
+
+     QVBoxLayout *logCol = new QVBoxLayout();
+     logCol->addWidget(new QLabel("Parsing Log:"));
+     transpilerLog = new QTextEdit();
+     transpilerLog->setReadOnly(true);
+     transpilerLog->setStyleSheet("background: #111; color: #88ff88; font-family: 'Consolas';");
+     logCol->addWidget(transpilerLog);
+
+
+     QVBoxLayout *outCol = new QVBoxLayout();
+     outCol->addWidget(new QLabel("Generated Xpressive.xpf Code:"));
+     transpilerOutput = new QTextEdit();
+     transpilerOutput->setReadOnly(true);
+     transpilerOutput->setStyleSheet("background: #111; color: #88ccff; font-family: 'Consolas';");
+     outCol->addWidget(transpilerOutput);
+
+     textLayout->addLayout(logCol, 1);
+     textLayout->addLayout(outCol, 2);
+     layout->addLayout(textLayout);
+
+
+     connect(btnLoadZyn, &QPushButton::clicked, [=]() {
+         QString path = QFileDialog::getOpenFileName(this, "Select Zyn Preset", "", "Zyn Files (*.xiz *.xpf *.xmz)");
+         if (!path.isEmpty()) processZynFile(path);
+     });
+
+     modeTabs->addTab(transpilerTab, "X-Transpiler");
+ }
+
+ void MainWindow::processZynFile(const QString &filePath) {
+     QFile file(filePath);
+     if (!file.open(QIODevice::ReadOnly)) return;
+
+     QDomDocument doc;
+     if (!doc.setContent(&file)) {
+         transpilerLog->append("❌ Error: Could not parse XML.");
+         return;
+     }
+     file.close();
+
+     transpilerLog->append("✅ Successfully loaded: " + filePath);
+
+
+     QDomElement root = doc.documentElement();
+
+
+     int oscType = root.firstChildElement("INSTRUMENT").firstChildElement("ADD_SYNTH")
+                       .firstChildElement("OSC").attribute("type").toInt();
+
+     QString xpressOsc = translateZynOscillator(oscType);
+     transpilerLog->append("Detected Zyn Osc Type: " + QString::number(oscType));
+
+
+     int zynCutoff = root.firstChildElement("INSTRUMENT").firstChildElement("ADD_SYNTH")
+                         .firstChildElement("FILTER").attribute("cutoff").toInt();
+
+
+     double mappedHz = 20.0 + (zynCutoff / 127.0) * 7980.0;
+     double alpha = 2 * 3.14159 * mappedHz;
+
+
+     QString finalExpr = QString("// Transpiled from ZynAddSubFX\n"
+                                 "// Original Cutoff: %1\n"
+                                 "(last(1) + (%2 / srate) * (%3(integrate(f)) - last(1)))")
+                                 .arg(QString::number(zynCutoff),
+                                      QString::number(alpha),
+                                      xpressOsc);
+
+     transpilerOutput->setText(finalExpr);
+     transpilerLog->append("🚀 Transpilation Complete!");
+ }
+
+ QString MainWindow::translateZynOscillator(int type) {
+     switch(type) {
+         case 0: return "sinew";
+         case 1: return "trianglew";
+         case 2: return "squarew";
+         case 3: return "saww";
+         default: return "saww";
+     }
+ }
