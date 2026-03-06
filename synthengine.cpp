@@ -1,7 +1,7 @@
 #include "synthengine.h"
 #include <QDebug>
 #include <QtEndian>
-#include <QMutexLocker> // <--- ADD THIS
+#include <QMutexLocker>
 
 SynthEngine::SynthEngine(QObject *parent) : QIODevice(parent) {
     m_format.setSampleRate(44100);
@@ -14,10 +14,14 @@ SynthEngine::SynthEngine(QObject *parent) : QIODevice(parent) {
     }
     m_audioSink = new QAudioSink(device, m_format, this);
     m_audioSink->setBufferSize(16384);
+
+    open(QIODevice::ReadOnly);
+    m_audioSink->start(this);
 }
 
 SynthEngine::~SynthEngine() {
-    stop();
+    m_audioSink->stop();
+    close();
     delete m_audioSink;
 }
 
@@ -29,20 +33,23 @@ qint64 SynthEngine::bytesAvailable() const {
 }
 
 void SynthEngine::start() {
-    if (!isOpen()) open(QIODevice::ReadOnly);
-    m_audioSink->start(this);
+    QMutexLocker locker(&m_mutex);
+    m_totalSamples = 0;
+    m_isPlaying = true;
 }
-
 void SynthEngine::stop() {
-    m_audioSink->stop();
-    close();
+    QMutexLocker locker(&m_mutex);
+    m_isPlaying = false;
 }
 
 void SynthEngine::setAudioSource(std::function<double(double)> func) {
-    QMutexLocker locker(&m_mutex); // Locks here
+    QMutexLocker locker(&m_mutex);
     m_oscillator = func;
 }
 
+void SynthEngine::setExpression(QString code) {
+    m_currentCode = code;
+}
 
 qint64 SynthEngine::readData(char *data, qint64 maxlen) {
     QMutexLocker locker(&m_mutex);
@@ -51,13 +58,21 @@ qint64 SynthEngine::readData(char *data, qint64 maxlen) {
     if (m_format.sampleFormat() == QAudioFormat::Float) {
         float *buffer = reinterpret_cast<float*>(data);
         int frames = maxlen / (sizeof(float) * channels);
+
         for (int i = 0; i < frames; ++i) {
-            double t = (double)m_totalSamples / m_format.sampleRate();
             float sample = 0.0f;
-            if(m_oscillator) sample = (float)m_oscillator(t) * 0.5f;
+
+
+            if (m_isPlaying) {
+                double t = (double)m_totalSamples / m_format.sampleRate();
+                if (m_oscillator) {
+                    sample = (float)m_oscillator(t) * 0.5f;
+                }
+                m_totalSamples++;
+            }
+
 
             for (int c = 0; c < channels; ++c) *buffer++ = sample;
-            m_totalSamples++;
         }
         return frames * sizeof(float) * channels;
     }
@@ -65,5 +80,6 @@ qint64 SynthEngine::readData(char *data, qint64 maxlen) {
 }
 
 qint64 SynthEngine::writeData(const char *data, qint64 len) {
-    Q_UNUSED(data); Q_UNUSED(len); return 0;
+    Q_UNUSED(data);
+    return len;
 }
