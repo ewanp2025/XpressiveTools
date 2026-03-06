@@ -8,6 +8,7 @@
 #include <QMutex>
 #include <cmath>
 #include <functional>
+#include <QString>
 
 class SynthEngine : public QIODevice {
     Q_OBJECT
@@ -23,6 +24,9 @@ public:
     bool isSequential() const override;
     qint64 bytesAvailable() const override;
 
+public slots:                     // <--- Added this block
+    void setExpression(QString code);
+
 protected:
     qint64 readData(char *data, qint64 maxlen) override;
     qint64 writeData(const char *data, qint64 len) override;
@@ -35,6 +39,8 @@ private:
     QMutex m_mutex;
     double m_sampleRate = 44100.0;
     qint64 m_totalSamples = 0;
+    QString m_currentCode;
+    bool m_isPlaying = false;
 };
 
 #endif // SYNTHENGINE_H
