@@ -1655,9 +1655,9 @@ void MainWindow::setupUI() {
     auto *mainConvLayout = new QVBoxLayout(convTab);
 
     // NEW: The Red Disclaimer Label
-    convDisclaimer = new QLabel("⚠ DISCLAIMER: CURRENTLY EXPERIMENTAL.\n"
-                                "Only works with SHORT PCM samples (approx < 0.1s).\n"
-                                "Long files or complex expressions may cause crashes.");
+    convDisclaimer = new QLabel(""
+                                ""
+                                "");
     convDisclaimer->setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; border: 2px solid red; padding: 10px; background-color: #ffeeee; }");
     convDisclaimer->setAlignment(Qt::AlignCenter);
     convDisclaimer->setFixedHeight(80); // Fixed height to ensure it's visible
@@ -4929,162 +4929,193 @@ int findScopeAwareChar(const QString &str, char target) {
     return -1;
 }
 
-QString MainWindow::convertLegacyToNightly(QString input) {
-    // 1. Clean formatting
-    input = input.replace("\n", "").replace(" ", "").trimmed();
-
-    // Remove "clamp" wrapper if present (User requested raw output)
-    if (input.startsWith("clamp(")) {
-        int c = input.indexOf(','), p = input.lastIndexOf(')');
-        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
-    }
-    if (input.startsWith("0.000+")) input = input.mid(6);
-
-    // 2. AUTO-DETECT SAMPLE RATE
-    // We scan the text for the smallest non-zero number.
-    // Example: If we see "0.000500", we know Rate = 1 / 0.0005 = 2000.
-    double sampleRate = 8000.0; // Default fallback
-
-    QRegularExpression floatReg("0\\.00[0-9]+"); // Look for small decimals
-    auto matches = floatReg.globalMatch(input);
-    double minVal = 1.0;
-    bool foundAny = false;
-
-    while (matches.hasNext()) {
-        double val = matches.next().captured(0).toDouble();
-        if (val > 0.000001 && val < minVal) {
-            minVal = val;
-            foundAny = true;
-        }
-    }
-    if (foundAny) {
-        // Round to nearest hundred to avoid precision errors (e.g., 1999.99 -> 2000)
-        sampleRate = std::round(1.0 / minVal);
-    }
-
-    if (input.contains("?")) {
-
-        static QRegularExpression tReg("t<([0-9\\.]+)");
-        QString result;
-        int lastPos = 0;
-
-        auto it = tReg.globalMatch(input);
-        while (it.hasNext()) {
-            QRegularExpressionMatch match = it.next();
-
-            // Keep the text structure exactly as is
-            result.append(input.mid(lastPos, match.capturedStart() - lastPos));
-
-            // MATH: Convert Time -> Sample
-            // Formula: s <= floor(t * rate) - 1
-            double tVal = match.captured(1).toDouble();
-            int sVal = std::floor(tVal * sampleRate) - 1;
-            if (sVal < 0) sVal = 0;
-
-            // Swap "t < 0.005" with "s <= 9"
-            result.append(QString("s<=%1").arg(sVal));
-
-            lastPos = match.capturedEnd();
-        }
-        result.append(input.mid(lastPos));
-
-        // Output correct header, NO CLAMP
-        return QString("var s:=floor(t*%1);\n%2")
-            .arg(int(sampleRate))
-            .arg(result);
-    }
-
-    return "Error: Input format not recognized (Try standard Legacy PCM).";
-}
-
-// ---------------------------------------------------------
-// FUNCTION 2: Nightly (Samples s) --> Legacy (Time t)
-// * Converts "s <= 799" to "t < 0.1" *
-// ---------------------------------------------------------
-QString MainWindow::convertNightlyToLegacy(QString input) {
-    input = input.replace("\n", "").replace(" ", "").trimmed();
-    if (input.startsWith("clamp(")) {
-        int c = input.indexOf(','), p = input.lastIndexOf(')');
-        if (c != -1 && p != -1) input = input.mid(c + 1, p - c - 1);
-    }
-
-    // --- MODE A: PCM Tree Detected ("var s") ---
-    // This is the main one used for PCM files
-    static QRegularExpression pcmVar("var\\s*s\\s*:=\\s*floor\\(t\\s*\\*\\s*([0-9]+)\\);");
-    auto pcmMatch = pcmVar.match(input);
-
-    if (pcmMatch.hasMatch()) {
-        double sr = pcmMatch.captured(1).toDouble();
-        if (sr == 0) sr = 8000;
-        input.remove(pcmMatch.captured(0)); // Remove var declaration
-
-        // Replace all "s <= 123" with "t < 0.015"
-        static QRegularExpression sReg("s\\s*<=\\s*([0-9]+)");
-        QString result;
-        int lastPos = 0;
-        auto it = sReg.globalMatch(input);
-        while (it.hasNext()) {
-            QRegularExpressionMatch m = it.next();
-            result.append(input.mid(lastPos, m.capturedStart() - lastPos));
-
-            // MATH: Convert Sample Index -> Time
-            // (Sample + 1) / Rate is the start time of the NEXT sample
-            double tVal = (m.captured(1).toDouble() + 1.0) / sr;
-            result.append(QString("t < %1").arg(QString::number(tVal, 'f', 6)));
-            lastPos = m.capturedEnd();
-        }
-        result.append(input.mid(lastPos));
-
-        // Return wrapped (The tree structure ? : is valid in Legacy too!)
-        return QString("clamp(-1, %1, 1)").arg(result);
-    }
-
-    // --- MODE B: Standard Chain Fallback ---
-    // If the input isn't PCM (doesn't have var s), we treat it as a SID chain
-    if (input.startsWith("0.000+")) input = input.mid(6);
-
-    QStringList additiveParts;
-    double lastStartTime = 0.0;
-    QString currentLayer = input;
-
-    while (true) {
-        int questIdx = currentLayer.indexOf('?');
-        if (questIdx == -1) break;
-
-        QString postQuest = currentLayer.mid(questIdx + 1);
-        int localColon = findScopeAwareChar(postQuest, ':');
-        if (localColon == -1) break;
-        int colonIdx = questIdx + 1 + localColon;
-
-        int timeEnd = questIdx - 1;
-        int timeStart = currentLayer.lastIndexOf("t<", timeEnd);
-        QString timeStr = (timeStart != -1) ? currentLayer.mid(timeStart + 2, timeEnd - timeStart - 1) : "0";
-
-        QString content = currentLayer.mid(questIdx + 1, colonIdx - questIdx - 1);
-
-        QString remainder = currentLayer.mid(colonIdx + 1);
-        while (remainder.startsWith("(") && remainder.endsWith(")") &&
-               findScopeAwareChar(remainder.mid(1, remainder.length()-2), ':') != -1) {
-            remainder = remainder.mid(1, remainder.length() - 2);
-        }
-
-        additiveParts << QString("((t >= %1 & t < %2) * %3)")
-                             .arg(QString::number(lastStartTime, 'f', 6))
-                             .arg(timeStr).arg(content);
-
-        lastStartTime = timeStr.toDouble();
-        currentLayer = remainder;
-    }
-
-    if (additiveParts.isEmpty()) return "Error: Logic mismatch.";
-    return QString("clamp(-1, %1, 1)").arg(additiveParts.join(" + "));
-}
-
-
 // TAB 17: LOGIC CONVERTER
 
-    // Need to move right code in here
 
+QString MainWindow::convertLegacyToNightly(QString input) {
+    input = input.trimmed();
+    if (input.isEmpty()) return "";
+
+
+    QString prefix = "";
+    QString suffix = "";
+    if (input.startsWith("clamp(")) {
+        int c = input.indexOf(',');
+        int p = input.lastIndexOf(')');
+        if (c != -1 && p != -1) {
+            prefix = input.left(c + 1) + " ";
+            suffix = input.mid(p);
+            input = input.mid(c + 1, p - c - 1).trimmed();
+        }
+    }
+
+
+    QString compactInput = input;
+    compactInput.remove(' ');
+    compactInput.remove('\n');
+
+
+    int tCount = compactInput.count("t<");
+    bool isPcm = (tCount > 50) || (tCount > 0 && compactInput.contains("?") && !compactInput.contains("&t<"));
+
+    if (isPcm) {
+
+        double sampleRate = 8000.0;
+        QRegularExpression floatReg("0\\.00[0-9]+");
+        auto matchIt = floatReg.globalMatch(compactInput);
+        double minVal = 1.0;
+        int checkCount = 0;
+
+        while (matchIt.hasNext() && checkCount < 100) {
+            double val = matchIt.next().captured(0).toDouble();
+            if (val > 0.000001 && val < minVal) minVal = val;
+            checkCount++;
+        }
+        if (minVal < 1.0) sampleRate = std::round(1.0 / minVal);
+
+        QString result;
+        result.reserve(compactInput.size() + 2048); // Pre-allocate memory!
+
+        int lastPos = 0;
+        int processCounter = 0;
+
+        for (int i = 0; i < compactInput.length() - 2; ++i) {
+            if (compactInput[i] == 't' && compactInput[i+1] == '<') {
+                result.append(QStringView{compactInput}.mid(lastPos, i - lastPos));
+                i += 2;
+                int numStart = i;
+                while (i < compactInput.length() && (compactInput[i].isDigit() || compactInput[i] == '.')) {
+                    i++;
+                }
+                double tVal = QStringView{compactInput}.mid(numStart, i - numStart).toDouble();
+                int sVal = std::floor(tVal * sampleRate) - 1;
+                if (sVal < 0) sVal = 0;
+
+                result.append("s<=");
+                result.append(QString::number(sVal));
+                lastPos = i;
+                i--; // Adjust index
+
+
+                if (++processCounter % 15000 == 0) QApplication::processEvents();
+            }
+        }
+        result.append(QStringView{compactInput}.mid(lastPos));
+
+        return QString("var s:=floor(t*%1);\n").arg(int(sampleRate)) + prefix + result + suffix;
+    }
+    else {
+
+        return prefix + input + suffix;
+    }
+}
+
+QString MainWindow::convertNightlyToLegacy(QString input) {
+    input = input.trimmed();
+    if (input.isEmpty()) return "";
+
+    QString prefix = "";
+    QString suffix = "";
+    if (input.startsWith("clamp(")) {
+        int c = input.indexOf(',');
+        int p = input.lastIndexOf(')');
+        if (c != -1 && p != -1) {
+            prefix = input.left(c + 1) + " ";
+            suffix = input.mid(p);
+            input = input.mid(c + 1, p - c - 1).trimmed();
+        }
+    }
+
+    QString compactInput = input;
+    compactInput.remove(' ');
+    compactInput.remove('\n');
+
+    // Mode A: PCM Tree
+    int varIdx = compactInput.indexOf("vars:=floor(t*");
+    if (varIdx != -1) {
+        int endVar = compactInput.indexOf(");", varIdx);
+        if (endVar != -1) {
+            int rateStart = varIdx + 14;
+            double sr = QStringView{compactInput}.mid(rateStart, endVar - rateStart).toDouble();
+            if (sr <= 0) sr = 8000.0;
+
+            QString coreInput = compactInput.mid(endVar + 2);
+
+            QString result;
+            result.reserve(coreInput.size() + 2048);
+            int lastPos = 0;
+            int processCounter = 0;
+
+            for (int i = 0; i < coreInput.length() - 3; ++i) {
+                if (coreInput[i] == 's' && coreInput[i+1] == '<' && coreInput[i+2] == '=') {
+                    result.append(QStringView{coreInput}.mid(lastPos, i - lastPos));
+                    i += 3;
+                    int numStart = i;
+                    while (i < coreInput.length() && coreInput[i].isDigit()) {
+                        i++;
+                    }
+                    double sVal = QStringView{coreInput}.mid(numStart, i - numStart).toDouble();
+                    double tVal = (sVal + 1.0) / sr;
+
+                    result.append("t<");
+                    result.append(QString::number(tVal, 'f', 6));
+                    lastPos = i;
+                    i--;
+
+                    if (++processCounter % 15000 == 0) QApplication::processEvents();
+                }
+            }
+            result.append(QStringView{coreInput}.mid(lastPos));
+            return prefix + result + suffix;
+        }
+    }
+
+    // Mode B: Nightly Logic
+    if (compactInput.contains("?") && !compactInput.contains("&t<")) {
+        QStringList additiveParts;
+        double lastStartTime = 0.0;
+        QString currentLayer = compactInput;
+        int processCounter = 0;
+
+        while (true) {
+            int questIdx = currentLayer.indexOf('?');
+            if (questIdx == -1) break;
+
+            QString postQuest = currentLayer.mid(questIdx + 1);
+            int localColon = findScopeAwareChar(postQuest, ':');
+            if (localColon == -1) break;
+            int colonIdx = questIdx + 1 + localColon;
+
+            int timeEnd = questIdx - 1;
+            int timeStart = currentLayer.lastIndexOf("t<", timeEnd);
+            QString timeStr = (timeStart != -1) ? currentLayer.mid(timeStart + 2, timeEnd - timeStart - 1) : "0";
+
+            QString content = currentLayer.mid(questIdx + 1, colonIdx - questIdx - 1);
+            QString remainder = currentLayer.mid(colonIdx + 1);
+
+            while (remainder.startsWith("(") && remainder.endsWith(")") &&
+                   findScopeAwareChar(remainder.mid(1, remainder.length()-2), ':') != -1) {
+                remainder = remainder.mid(1, remainder.length() - 2);
+            }
+
+            additiveParts << QString("((t >= %1 & t < %2) * %3)")
+                                 .arg(QString::number(lastStartTime, 'f', 6))
+                                 .arg(timeStr).arg(content);
+
+            lastStartTime = timeStr.toDouble();
+            currentLayer = remainder;
+
+            if (++processCounter % 1000 == 0) QApplication::processEvents();
+        }
+
+        if (!additiveParts.isEmpty()) {
+            return prefix + additiveParts.join(" + ") + suffix;
+        }
+    }
+
+    // Mode C: Fallback
+    return prefix + input + suffix;
+}
 
 
 // TAB 18: KEY MAPPER
