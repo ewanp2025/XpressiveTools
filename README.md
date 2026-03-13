@@ -77,7 +77,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  House Organ - Generate house music bass organ patches.
 
-•  PCM Editor - Trim nightly build PCM "samples", add segments and tune each segment / pitch bend each segment.
+•  PCM Editor - Trim PCM "samples", add segments and tune each segment / pitch bend each segment, time stretch, reverse etc. (reverse not working yet with Legacy).
 
 **Technical**
 
