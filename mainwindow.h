@@ -784,40 +784,6 @@ private:
     void updateHouseOrgan();
     void generateHouseOrgan();
 
-    // -------------------------------------
-    // TAB35 : PCM EDITOR
-    // -------------------------------------
-    QWidget *nightlyTab;
-    UniversalScope *nightlySourceScope;
-    UniversalScope *nightlyMutatedScope;
-
-    QTextEdit *nightlyPcmInput;
-    QTextEdit *nightlyPcmOutput;
-
-    // Sliders
-    QSlider *ntTrimStart;
-    QSlider *ntTrimLength;
-    QSlider *ntSpeedStretch;
-    QSlider *ntBitcrush;
-    QSlider *ntWavefold;
-    QSlider *ntFormantShift;
-
-    // Slicer UI
-    QSpinBox *ntSliceCount;
-    QTableWidget *ntSliceTable;
-
-    QPushButton *btnCopyNightly;
-    QPushButton *btnPlayNightly;
-    QCheckBox *ntLegacyExport;
-
-    void initNightlyTimbreTab();
-
-    std::vector<double> m_nightlyBuffer;
-    double m_nightlySampleRate = 8000.0;
-    void parseNightlyInput();
-    void updateNightlyPreview();
-    void generateNightlyExpression();
-    void togglePlayNightly();
 
     // -------------------------------------
     // TAB 36: X-TRANSPILER (Zyn to Xpressive)
