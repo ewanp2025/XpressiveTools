@@ -2,6 +2,7 @@
 #include <QDebug>
 #include <QtEndian>
 #include <QMutexLocker>
+#include <QDebug>
 
 SynthEngine::SynthEngine(QObject *parent) : QIODevice(parent) {
     m_format.setSampleRate(44100);
@@ -54,7 +55,12 @@ void SynthEngine::setExpression(QString code) {
 qint64 SynthEngine::readData(char *data, qint64 maxlen) {
     QMutexLocker locker(&m_mutex);
 
+
+    memset(data, 0, maxlen);
+
     int channels = m_format.channelCount();
+    if (channels == 0) return maxlen;
+
     if (m_format.sampleFormat() == QAudioFormat::Float) {
         float *buffer = reinterpret_cast<float*>(data);
         int frames = maxlen / (sizeof(float) * channels);
@@ -62,21 +68,28 @@ qint64 SynthEngine::readData(char *data, qint64 maxlen) {
         for (int i = 0; i < frames; ++i) {
             float sample = 0.0f;
 
-
-            if (m_isPlaying) {
+            if (m_isPlaying && m_oscillator) {
                 double t = (double)m_totalSamples / m_format.sampleRate();
-                if (m_oscillator) {
-                    sample = (float)m_oscillator(t) * 0.5f;
+
+
+                if (m_totalSamples < 5) {
+                    qDebug() << "[AUDIO] Fetching sample for time:" << t;
                 }
+
+                sample = (float)m_oscillator(t) * 0.5f;
+
+                if (std::isnan(sample) || std::isinf(sample)) sample = 0.0f;
                 m_totalSamples++;
             }
 
-
-            for (int c = 0; c < channels; ++c) *buffer++ = sample;
+            for (int c = 0; c < channels; ++c) {
+                *buffer++ = sample;
+            }
         }
-        return frames * sizeof(float) * channels;
     }
-    return 0;
+
+
+    return maxlen;
 }
 
 qint64 SynthEngine::writeData(const char *data, qint64 len) {
