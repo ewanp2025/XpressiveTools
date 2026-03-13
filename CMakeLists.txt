@@ -20,6 +20,8 @@ add_executable(WaveConv
     synthengine.h
     ModularSynth.cpp
     ModularSynth.h
+    pcmeditortab.cpp
+    pcmeditortab.h
 )
 
 target_link_libraries(WaveConv PRIVATE
