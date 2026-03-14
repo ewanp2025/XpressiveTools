@@ -79,6 +79,8 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  PCM Editor - Trim PCM "samples", add segments and tune each segment / pitch bend each segment, time stretch, reverse etc. (there is a bug to be solved in PCM editor where if you press play on the GUI it returns the "sample" to the inital state before editing).
 
+•  Oscilloscope - Create timbres which animate on an X-Y oscilloscope.
+
 **Technical**
 
 Framework: Qt 6.x (Widgets) 
