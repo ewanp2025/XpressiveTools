@@ -31,6 +31,7 @@
 #include "synthengine.h"
 #include <QRandomGenerator>
 #include <QClipboard>
+#include "oscilloscopetab.h"
 
 // ==============================================================================
 // DATA STRUCTURES & STRUCTS
@@ -786,7 +787,16 @@ private:
 
 
     // -------------------------------------
-    // TAB 36: X-TRANSPILER (Zyn to Xpressive)
+    // TAB 35
+    // -------------------------------------
+
+    // -------------------------------------
+    // TAB 36
+    // -------------------------------------
+    OscilloscopeTab* oscTab;
+
+    // -------------------------------------
+    // TAB UNUSED: X-TRANSPILER (Zyn to Xpressive)
     // -------------------------------------
     QWidget *transpilerTab;
     QPushButton *btnLoadZyn;
@@ -797,6 +807,9 @@ private:
     void initTranspilerTab();
     void processZynFile(const QString &filePath);
     QString translateZynOscillator(int type);
+
+
+
 
 };
 
