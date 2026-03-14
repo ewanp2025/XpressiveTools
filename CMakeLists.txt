@@ -22,6 +22,8 @@ add_executable(WaveConv
     ModularSynth.h
     pcmeditortab.cpp
     pcmeditortab.h
+    oscilloscopetab.cpp
+    oscilloscopetab.h
 )
 
 target_link_libraries(WaveConv PRIVATE
