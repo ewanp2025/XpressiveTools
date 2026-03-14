@@ -3445,6 +3445,15 @@ void MainWindow::setupUI() {
     modeTabs->addTab(PCMTab, "PCM Editor");
 
     // ------------------------------------
+    //TAB 36
+    // ------------------------------------
+    // External now
+    oscTab = new OscilloscopeTab(this);
+    modeTabs->addTab(oscTab, "Oscilloscope Gen");
+
+
+
+    // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
     // ------------------------------------
     QWidget *notesTab = new QWidget();
