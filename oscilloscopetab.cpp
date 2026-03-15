@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QStringList>
 #include <QLabel>
+#include <QLineEdit>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -102,6 +103,7 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     presetCombo->addItems({"Custom / Manual", "Perfect Circle (Unison)", "Diagonal Line (Unison)",
                            "Parabola (Octave)", "Figure-Eight (Octave)",
                            "3-Lobe Interlace (Perfect 5th)", "4-Lobe Interlace (Perfect 4th)"});
+    // REMOVED: "--- ADVANCED SHAPES ---", "Heart", "5-Point Star", "Square", "Spiral"
     controlLayout->addWidget(presetCombo);
 
     controlLayout->addWidget(new QLabel("String Build Mode:", this));
@@ -113,8 +115,15 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     QFormLayout* formLayout = new QFormLayout();
 
     waveformCombo = new QComboBox(this);
-    waveformCombo->addItems({"sinew", "trianglew", "saww", "squarew", "Kick Drum", "Snare Drum"});
+    waveformCombo->addItems({"sinew", "trianglew", "saww", "squarew", "Kick Drum", "Snare Drum", "Custom Expression"});
     formLayout->addRow("Waveform:", waveformCombo);
+
+    sharedExprEdit = new QLineEdit(this);
+    sharedExprEdit->setPlaceholderText("e.g., sinew(t*100) * 0.5");
+    formLayout->addRow("Shared Expr:", sharedExprEdit);
+
+    mixSharedExprCheck = new QCheckBox("Mix Shared Expr (Add to Output)", this);
+    formLayout->addRow("", mixSharedExprCheck);
 
     freqXSpin = new QSpinBox(this);
     freqXSpin->setRange(1, 20); freqXSpin->setValue(3);
@@ -188,6 +197,21 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     rotationTimer = new QTimer(this);
     connect(rotationTimer, &QTimer::timeout, this, &OscilloscopeTab::updateRotation);
 
+    QLabel* usageNote = new QLabel(this);
+    usageNote->setWordWrap(true);
+    usageNote->setTextFormat(Qt::RichText);
+    usageNote->setText(
+        "<b>Note on Custom Expressions & Mixing:</b><br>"
+        "• Selecting 'Custom Expression' as a waveform bypasses the frequency dials.<br>"
+        "• Checking 'Mix Shared Expr' with an imported CSV or 3D object "
+        "will mix your typed math into the final generated string.<br>"
+        "<i style='color: #888;'> (Live screen preview shows basic waves and raw arrays; "
+        "typed math only applies to the generated text box).</i>"
+        );
+    // Optional: Make the font slightly smaller to keep the UI clean
+    usageNote->setStyleSheet("font-size: 11px; margin-top: 10px;");
+    controlLayout->addWidget(usageNote);
+
     generateStringBtn = new QPushButton("Generate Xpressive String", this);
     controlLayout->addWidget(generateStringBtn);
 
@@ -198,7 +222,7 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
 
     mainLayout->addLayout(controlLayout, 1);
 
-    // Connections
+
     connect(presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OscilloscopeTab::loadPreset);
     connect(freqXSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OscilloscopeTab::updateParameters);
     connect(freqYSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OscilloscopeTab::updateParameters);
@@ -246,6 +270,10 @@ void OscilloscopeTab::updateParameters() {
 void OscilloscopeTab::generateString() {
     QString vibCode = vibrateCheck->isChecked() ? "+ (randv(t * 10000) * 0.02)" : "";
 
+    QString sharedExpr = sharedExprEdit->text().trimmed();
+    QString mixStr = (mixSharedExprCheck->isChecked() && !sharedExpr.isEmpty()) ? QString(" + (%1)").arg(sharedExpr) : "";
+
+
     if (rotate3dCheck->isChecked() && !m_vertices3D.empty() && !m_drawPath.empty()) {
         bool isNightly = (buildModeCombo->currentIndex() == 0);
         int size = m_drawPath.size();
@@ -290,8 +318,8 @@ void OscilloscopeTab::generateString() {
         }
 
 
-        QString angleY = "(t * 0.5)";  // Yaw speed
-        QString angleX = "(t * 0.25)"; // Pitch speed
+        QString angleY = "(t * 0.5)";
+        QString angleX = "(t * 0.25)";
 
 
         QString X1 = QString("((%1) * cos(%3) - (%2) * sin(%3))").arg(treeX, treeZ, angleY);
@@ -299,10 +327,8 @@ void OscilloscopeTab::generateString() {
         QString Z1 = QString("((%1) * sin(%3) + (%2) * cos(%3))").arg(treeX, treeZ, angleY);
 
 
-        QString finalX = QString("%1 %2").arg(X1, vibCode);
-
-
-        QString finalY = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4").arg(treeY, Z1, angleX, vibCode);
+        QString finalX = QString("%1 %2%3").arg(X1, vibCode, mixStr).trimmed();
+        QString finalY = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4%5").arg(treeY, Z1, angleX, vibCode, mixStr).trimmed();
 
         stringOutput->setText(QString("--- TRUE 3D DATA (%1 MODE) ---\nO1: %2\n\nO2: %3")
                                   .arg(isNightly ? "NIGHTLY" : "LEGACY")
@@ -344,12 +370,12 @@ void OscilloscopeTab::generateString() {
 
 
         if (rotateCustomCheck->isChecked()) {
-            QString angle = "(t * 0.5)"; // Rotation speed
-            finalX = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4").arg(treeX, treeY, angle, vibCode);
-            finalY = QString("((%1) * sin(%3) + (%2) * cos(%3)) %4").arg(treeX, treeY, angle, vibCode);
+            QString angle = "(t * 0.5)";
+            finalX = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4%5").arg(treeX, treeY, angle, vibCode, mixStr).trimmed();
+            finalY = QString("((%1) * sin(%3) + (%2) * cos(%3)) %4%5").arg(treeX, treeY, angle, vibCode, mixStr).trimmed();
         } else {
-            finalX = QString("%1 %2").arg(treeX, vibCode);
-            finalY = QString("%1 %2").arg(treeY, vibCode);
+            finalX = QString("%1 %2%3").arg(treeX, vibCode, mixStr).trimmed();
+            finalY = QString("%1 %2%3").arg(treeY, vibCode, mixStr).trimmed();
         }
 
         stringOutput->setText(QString("--- CUSTOM DATA (%1 MODE) ---\nO1: %2\n\nO2: %3")
@@ -374,32 +400,31 @@ void OscilloscopeTab::generateString() {
     if (pingPongCheck->isChecked()) {
         sweepLogic = "((trianglew(t * (tempo / 120.0)) + 1.0) / 2.0)";
     } else if (loopSweepCheck->isChecked()) {
-        sweepLogic = QString("(mod(t, %1) / %1)").arg(time); // LOOPS BACK TO START
+        sweepLogic = QString("(mod(t, %1) / %1)").arg(time);
     } else {
-        sweepLogic = QString("min(t / %1, 1.0)").arg(time); // STOPS AT END
+        sweepLogic = QString("min(t / %1, 1.0)").arg(time);
     }
 
-    if (wave == "Kick Drum") {
 
-        exprX = QString("sinew(integrate(f * %1.0 * (1 + 6 * exp(-t * 100))) + (%2 + (%3 - %2) * %4)) * exp(-t * 15) %5")
-                    .arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode);
-        exprY = QString("sinew(integrate(f * %1.0 * (1 + 6 * exp(-t * 100)))) * exp(-t * 15) %2")
-                    .arg(fy).arg(vibCode);
-
+    if (wave == "Custom Expression") {
+        QString base = sharedExpr.isEmpty() ? "0" : sharedExpr;
+        exprX = QString("(%1) %2%3").arg(base, vibCode, mixStr).trimmed();
+        exprY = QString("(%1) %2%3").arg(base, vibCode, mixStr).trimmed();
+    } else if (wave == "Kick Drum") {
+        exprX = QString("sinew(integrate(f * %1.0 * (1 + 6 * exp(-t * 100))) + (%2 + (%3 - %2) * %4)) * exp(-t * 15) %5%6")
+        .arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode).arg(mixStr).trimmed();
+        exprY = QString("sinew(integrate(f * %1.0 * (1 + 6 * exp(-t * 100)))) * exp(-t * 15) %2%3")
+                    .arg(fy).arg(vibCode).arg(mixStr).trimmed();
     } else if (wave == "Snare Drum") {
-
-        exprX = QString("((randsv(t*srate,0)* exp(-t * 50)) + (sinew(integrate(%1.0 * 200 * (1 + 2 * exp(-t * 120))) + (%2 + (%3 - %2) * %4)) * exp(-t * 60))) %5")
-                    .arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode);
-        exprY = QString("((randsv(t*srate,0)* exp(-t * 50)) + (sinew(integrate(%1.0 * 200 * (1 + 2 * exp(-t * 120)))) * exp(-t * 60))) %2")
-                    .arg(fy).arg(vibCode);
-
+        exprX = QString("((randsv(t*srate,0)* exp(-t * 50)) + (sinew(integrate(%1.0 * 200 * (1 + 2 * exp(-t * 120))) + (%2 + (%3 - %2) * %4)) * exp(-t * 60))) %5%6")
+        .arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode).arg(mixStr).trimmed();
+        exprY = QString("((randsv(t*srate,0)* exp(-t * 50)) + (sinew(integrate(%1.0 * 200 * (1 + 2 * exp(-t * 120)))) * exp(-t * 60))) %2%3")
+                    .arg(fy).arg(vibCode).arg(mixStr).trimmed();
     } else {
-
-        exprX = QString("%1(integrate(f * %2.0) + (%3 + (%4 - %3) * %5)) %6")
-                    .arg(wave).arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode);
-        exprY = QString("%1(integrate(f * %2.0)) %3").arg(wave).arg(fy).arg(vibCode);
+        exprX = QString("%1(integrate(f * %2.0) + (%3 + (%4 - %3) * %5)) %6%7")
+        .arg(wave).arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode).arg(mixStr).trimmed();
+        exprY = QString("%1(integrate(f * %2.0)) %3%4").arg(wave).arg(fy).arg(vibCode).arg(mixStr).trimmed();
     }
-
     QString finalText = QString("--- XPRESSIVE SETUP NOTES ---\n"
                                 "PN1 -> Pan Hard Left (100% L)\n"
                                 "PN2 -> Pan Hard Right (100% R)\n"
@@ -478,8 +503,8 @@ void OscilloscopeTab::importVectors() {
 void OscilloscopePlot::setCustomVectors(const std::vector<float>& x, const std::vector<float>& y) {
     m_customX = x;
     m_customY = y;
-    m_useCustom = true; // Tell the painter to use the CSV data!
-    update(); // Redraw the screen
+    m_useCustom = true;
+    update();
 }
 void OscilloscopeTab::importObj() {
     QString fileName = QFileDialog::getOpenFileName(this, "Open 3D Model", "", "OBJ Files (*.obj);;All Files (*)");
@@ -520,7 +545,7 @@ void OscilloscopeTab::importObj() {
             m_drawPath.push_back(v1);
             m_drawPath.push_back(v2);
             m_drawPath.push_back(v3);
-            m_drawPath.push_back(v1); // Loop back to close the triangle
+            m_drawPath.push_back(v1);
         }
     }
     file.close();
@@ -542,7 +567,7 @@ void OscilloscopeTab::importObj() {
         m_angleX = 0.0f;
         m_angleY = 0.0f;
         m_isCustomMode = true;
-        rotationTimer->start(16); // Start spinning! (~60fps)
+        rotationTimer->start(16);
     }
 }
 
@@ -551,8 +576,8 @@ void OscilloscopeTab::updateRotation() {
     if (m_vertices3D.empty() || m_drawPath.empty()) return;
 
 
-    m_angleY += 0.03f; // Spin speed around Y axis
-    m_angleX += 0.015f; // Spin speed around X axis
+    m_angleY += 0.03f;
+    m_angleX += 0.015f;
 
     std::vector<float> frameX;
     std::vector<float> frameY;
@@ -582,7 +607,7 @@ void OscilloscopeTab::updateRotation() {
     }
 
 
-    m_activeX = frameX; // Store the flattened 3D frame for the string generator
+    m_activeX = frameX;
     m_activeY = frameY;
     plotWidget->setCustomVectors(frameX, frameY);
 
@@ -623,13 +648,13 @@ void OscilloscopeTab::exportWav() {
     out << (quint32)(36 + (numSamples * 2 * sizeof(float)));
     out.writeRawData("WAVE", 4);
     out.writeRawData("fmt ", 4);
-    out << (quint32)16; // Subchunk1Size
-    out << (quint16)3;  // AudioFormat (3 = IEEE Float)
-    out << (quint16)2;  // NumChannels (Stereo)
+    out << (quint32)16;
+    out << (quint16)3;
+    out << (quint16)2;
     out << (quint32)sampleRate;
-    out << (quint32)(sampleRate * 2 * sizeof(float)); // ByteRate
-    out << (quint16)(2 * sizeof(float)); // BlockAlign
-    out << (quint16)32; // BitsPerSample
+    out << (quint32)(sampleRate * 2 * sizeof(float));
+    out << (quint16)(2 * sizeof(float));
+    out << (quint16)32;
     out.writeRawData("data", 4);
     out << (quint32)(numSamples * 2 * sizeof(float));
 
