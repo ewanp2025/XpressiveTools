@@ -13,6 +13,7 @@ class QCheckBox;
 class QPushButton;
 class QComboBox;
 class QTextEdit;
+class QLineEdit;
 
 class OscilloscopePlot : public QWidget {
     Q_OBJECT
@@ -64,6 +65,9 @@ private:
     QDoubleSpinBox* timeSpin;
     QCheckBox* pingPongCheck;
     QComboBox* buildModeCombo;
+
+    QLineEdit* sharedExprEdit;
+    QCheckBox* mixSharedExprCheck;
 
     QTextEdit* stringOutput;
 
