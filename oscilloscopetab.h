@@ -97,6 +97,7 @@ private:
     QSlider* csvScaleSlider;
     std::vector<float> m_originalX;
     std::vector<float> m_originalY;
+    QCheckBox* tdmCheck;
 
 };
 
