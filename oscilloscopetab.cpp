@@ -24,6 +24,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+// 16 Slots are: Slot 1: 0.0,0.0625,0.125,0.1875,0.25,0.3125,0.375,0.4375,0.5,0.5625,0.625,0.6875,0.75,0.8125,0.875,0.9375
+// TDM not working on .csv or .obj
+
 OscilloscopePlot::OscilloscopePlot(QWidget *parent) : QWidget(parent) {
     setMinimumSize(400, 300);
     setBackgroundRole(QPalette::Base);
@@ -146,6 +149,9 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     rotateCustomCheck = new QCheckBox("Spin Custom Vector in LMMS", this);
     rotate3dCheck = new QCheckBox("TRUE 3D Spin in LMMS (WARNING: HUGE STRING)", this);
 
+
+    tdmCheck = new QCheckBox("Enable 16-Slot TDM Wrapper", this);
+
     formLayout->addRow("Freq Ratio X:", freqXSpin);
     formLayout->addRow("Freq Ratio Y:", freqYSpin);
     formLayout->addRow("Phase Start (°):", phaseStartSlider);
@@ -156,6 +162,8 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     formLayout->addRow("Effects:", vibrateCheck);
     formLayout->addRow("", rotateCustomCheck);
     formLayout->addRow("", rotate3dCheck);
+
+    formLayout->addRow("Multiplexing:", tdmCheck);
 
     controlLayout->addLayout(formLayout);
 
@@ -269,9 +277,12 @@ void OscilloscopeTab::updateParameters() {
 
 void OscilloscopeTab::generateString() {
     QString vibCode = vibrateCheck->isChecked() ? "+ (randv(t * 10000) * 0.02)" : "";
-
     QString sharedExpr = sharedExprEdit->text().trimmed();
     QString mixStr = (mixSharedExprCheck->isChecked() && !sharedExpr.isEmpty()) ? QString(" + (%1)").arg(sharedExpr) : "";
+
+
+    bool useTDM = tdmCheck->isChecked();
+    QString tdmWrapper = "(mod(integrate(50), 1) >= A1 & mod(integrate(50), 1) < (A1 + 0.0625)) * ( %1 )";
 
 
     if (rotate3dCheck->isChecked() && !m_vertices3D.empty() && !m_drawPath.empty()) {
@@ -279,7 +290,6 @@ void OscilloscopeTab::generateString() {
         int size = m_drawPath.size();
         float hz = 50.0f;
         float scale = objectScaleSlider->value() / 100.0f;
-
 
         std::vector<float> statX(size), statY(size), statZ(size);
         for (int i = 0; i < size; ++i) {
@@ -317,24 +327,28 @@ void OscilloscopeTab::generateString() {
             treeZ = buildLegacy(0, size - 1, statZ);
         }
 
-
         QString angleY = "(t * 0.5)";
         QString angleX = "(t * 0.25)";
 
-
         QString X1 = QString("((%1) * cos(%3) - (%2) * sin(%3))").arg(treeX, treeZ, angleY);
-
         QString Z1 = QString("((%1) * sin(%3) + (%2) * cos(%3))").arg(treeX, treeZ, angleY);
-
 
         QString finalX = QString("%1 %2%3").arg(X1, vibCode, mixStr).trimmed();
         QString finalY = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4%5").arg(treeY, Z1, angleX, vibCode, mixStr).trimmed();
 
-        stringOutput->setText(QString("--- TRUE 3D DATA (%1 MODE) ---\nO1: %2\n\nO2: %3")
-                                  .arg(isNightly ? "NIGHTLY" : "LEGACY")
-                                  .arg(finalX, finalY));
+        // Apply TDM if enabled
+        if (useTDM) {
+            finalX = tdmWrapper.arg(finalX);
+            finalY = tdmWrapper.arg(finalY);
+        }
+
+        QString header = useTDM ? QString("--- TRUE 3D DATA (%1 MODE) [16-SLOT TDM] ---").arg(isNightly ? "NIGHTLY" : "LEGACY")
+                                : QString("--- TRUE 3D DATA (%1 MODE) ---").arg(isNightly ? "NIGHTLY" : "LEGACY");
+
+        stringOutput->setText(QString("%1\nO1: %2\n\nO2: %3").arg(header, finalX, finalY));
         return;
     }
+
 
     else if (m_isCustomMode && !m_activeX.empty() && !m_activeY.empty()) {
         bool isNightly = (buildModeCombo->currentIndex() == 0);
@@ -368,7 +382,6 @@ void OscilloscopeTab::generateString() {
 
         QString finalX, finalY;
 
-
         if (rotateCustomCheck->isChecked()) {
             QString angle = "(t * 0.5)";
             finalX = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4%5").arg(treeX, treeY, angle, vibCode, mixStr).trimmed();
@@ -378,12 +391,18 @@ void OscilloscopeTab::generateString() {
             finalY = QString("%1 %2%3").arg(treeY, vibCode, mixStr).trimmed();
         }
 
-        stringOutput->setText(QString("--- CUSTOM DATA (%1 MODE) ---\nO1: %2\n\nO2: %3")
-                                  .arg(isNightly ? "NIGHTLY" : "LEGACY")
-                                  .arg(finalX, finalY));
+        // Apply TDM if enabled
+        if (useTDM) {
+            finalX = tdmWrapper.arg(finalX);
+            finalY = tdmWrapper.arg(finalY);
+        }
+
+        QString header = useTDM ? QString("--- CUSTOM DATA (%1 MODE) [16-SLOT TDM] ---").arg(isNightly ? "NIGHTLY" : "LEGACY")
+                                : QString("--- CUSTOM DATA (%1 MODE) ---").arg(isNightly ? "NIGHTLY" : "LEGACY");
+
+        stringOutput->setText(QString("%1\nO1: %2\n\nO2: %3").arg(header, finalX, finalY));
         return;
     }
-
 
     QString wave = waveformCombo->currentText();
     int fx = freqXSpin->value();
@@ -395,7 +414,6 @@ void OscilloscopeTab::generateString() {
 
     QString exprX, exprY;
 
-
     QString sweepLogic;
     if (pingPongCheck->isChecked()) {
         sweepLogic = "((trianglew(t * (tempo / 120.0)) + 1.0) / 2.0)";
@@ -404,7 +422,6 @@ void OscilloscopeTab::generateString() {
     } else {
         sweepLogic = QString("min(t / %1, 1.0)").arg(time);
     }
-
 
     if (wave == "Custom Expression") {
         QString base = sharedExpr.isEmpty() ? "0" : sharedExpr;
@@ -425,15 +442,22 @@ void OscilloscopeTab::generateString() {
         .arg(wave).arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode).arg(mixStr).trimmed();
         exprY = QString("%1(integrate(f * %2.0)) %3%4").arg(wave).arg(fy).arg(vibCode).arg(mixStr).trimmed();
     }
-    QString finalText = QString("--- XPRESSIVE SETUP NOTES ---\n"
-                                "PN1 -> Pan Hard Left (100% L)\n"
-                                "PN2 -> Pan Hard Right (100% R)\n"
-                                "-----------------------------\n\n"
-                                "O1 (X-Axis Left):\n%1\n\n"
-                                "O2 (Y-Axis Right):\n%2")
-                            .arg(exprX).arg(exprY);
 
-    stringOutput->setText(finalText);
+    // Apply TDM if enabled
+    if (useTDM) {
+        exprX = tdmWrapper.arg(exprX);
+        exprY = tdmWrapper.arg(exprY);
+        stringOutput->setPlainText(QString("--- 16-SLOT TDM MODE ENABLED ---\n\nO1 (Left/X):\n%1\n\nO2 (Right/Y):\n%2").arg(exprX, exprY));
+    } else {
+        QString finalText = QString("--- XPRESSIVE SETUP NOTES ---\n"
+                                    "PN1 -> Pan Hard Left (100% L)\n"
+                                    "PN2 -> Pan Hard Right (100% R)\n"
+                                    "-----------------------------\n\n"
+                                    "O1 (X-Axis Left):\n%1\n\n"
+                                    "O2 (Y-Axis Right):\n%2")
+                                .arg(exprX, exprY);
+        stringOutput->setPlainText(finalText);
+    }
 }
 
 void OscilloscopeTab::importVectors() {
