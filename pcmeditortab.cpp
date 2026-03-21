@@ -1,6 +1,5 @@
 #include "pcmeditortab.h"
 #include "synthengine.h"
-// #include "universalscope.h" // Uncomment this if UniversalScope has its own header file
 #include <cmath>
 #include <algorithm>
 #include <QDebug>
@@ -14,13 +13,12 @@ PCMEditorTab::PCMEditorTab(SynthEngine* ghostSynth, QWidget *parent)
     m_nightlySampleRate = 8000.0;
     m_nightlyBuffer.resize(8000);
     for(size_t i = 0; i < 8000; ++i) {
-        // Generates a cool decaying 808-style sine wave
-        m_nightlyBuffer[i] = std::sin(i * 0.05) * std::exp(-i * 0.001);
+         m_nightlyBuffer[i] = std::sin(i * 0.05) * std::exp(-i * 0.001);
     }
     updateNightlyPreview();
 }
 void PCMEditorTab::setupAmigaUI() {
-    // --- AMIGA SAMPLER STYLING ---
+
     this->setStyleSheet(R"(
         QWidget {
             background-color: #111111; color: #39ff14;
@@ -114,6 +112,7 @@ void PCMEditorTab::setupAmigaUI() {
     QPushButton* btnNorm = new QPushButton("NORMALIZE");
     QPushButton* btnPitch = new QPushButton("DETECT PITCH");
     QPushButton* btnTimeStretch = new QPushButton("TIME STRETCH");
+    QPushButton* btnFlatten = new QPushButton("FLATTEN (MONOTONE)");
 
     amigaBtnLayout->addWidget(btnTrim);
     amigaBtnLayout->addWidget(btnPingPong);
@@ -122,6 +121,7 @@ void PCMEditorTab::setupAmigaUI() {
     amigaBtnLayout->addWidget(btnPitch);
     amigaBtnLayout->addWidget(btnTimeStretch);
     mainLayout->addLayout(amigaBtnLayout);
+    amigaBtnLayout->addWidget(btnFlatten);
 
     QHBoxLayout *akaiBtnLayout = new QHBoxLayout();
     QPushButton* btnChop = new QPushButton("CHOP (DEL INSIDE)");
@@ -147,6 +147,10 @@ void PCMEditorTab::setupAmigaUI() {
     connect(btnFadeIn, &QPushButton::clicked, this, &PCMEditorTab::onFadeInClicked);
     connect(btnFadeOut, &QPushButton::clicked, this, &PCMEditorTab::onFadeOutClicked);
     connect(btnGrime, &QPushButton::clicked, this, &PCMEditorTab::onAkaiGrimeClicked);
+
+    connect(btnPitch, &QPushButton::clicked, this, &PCMEditorTab::onDetectPitchClicked);
+    connect(btnTimeStretch, &QPushButton::clicked, this, &PCMEditorTab::onTimeStretchClicked);
+    connect(btnFlatten, &QPushButton::clicked, this, &PCMEditorTab::onFlattenPitchClicked); // Hook it up!
 
     QHBoxLayout *btnLayout = new QHBoxLayout();
 
@@ -860,4 +864,75 @@ QString PCMEditorTab::generateLegacyPCM(const std::vector<double>& q, double sr)
     };
 
     return buildLegacyTree(0, N - 1);
+}
+
+void PCMEditorTab::onFlattenPitchClicked() {
+    if (m_nightlyBuffer.empty()) return;
+
+
+    bool ok;
+    double targetHz = QInputDialog::getDouble(this, "Flatten Pitch (Monotone)",
+                                              "Enter target pitch in Hz\n(e.g., 100 for deep, 200 for high):",
+                                              120.0, 40.0, 800.0, 1, &ok);
+    if (!ok) return; // User cancelled
+
+    int n = m_nightlyBuffer.size();
+    std::vector<double> outBuffer(n, 0.0);
+
+    int targetPeriod = static_cast<int>(m_nightlySampleRate / targetHz);
+    int grainSize = targetPeriod * 2;
+    if (grainSize % 2 != 0) grainSize++;
+
+
+    std::vector<double> window(grainSize);
+    for (int i = 0; i < grainSize; ++i) {
+        window[i] = 0.5 * (1.0 - std::cos(2.0 * M_PI * i / (grainSize - 1)));
+    }
+
+    int inPos = 0;
+    int outPos = 0;
+
+    while (inPos + grainSize < n && outPos + grainSize < n) {
+
+        int zcr = 0;
+        for (int i = 1; i < grainSize; ++i) {
+            if ((m_nightlyBuffer[inPos + i] > 0) != (m_nightlyBuffer[inPos + i - 1] > 0)) {
+                zcr++;
+            }
+        }
+        double zcrRate = static_cast<double>(zcr) / grainSize;
+
+
+        if (zcrRate > 0.15) {
+
+            for (int i = 0; i < targetPeriod; ++i) {
+                outBuffer[outPos + i] = m_nightlyBuffer[inPos + i];
+            }
+        } else {
+
+            for (int i = 0; i < grainSize; ++i) {
+                outBuffer[outPos + i] += m_nightlyBuffer[inPos + i] * window[i];
+            }
+        }
+
+
+        outPos += targetPeriod;
+        inPos += targetPeriod;
+    }
+
+
+    double maxVal = 0.0;
+    for (double val : outBuffer) {
+        if (std::abs(val) > maxVal) maxVal = std::abs(val);
+    }
+    if (maxVal > 0.0) {
+        for (double& val : outBuffer) val /= maxVal;
+    }
+
+
+    m_nightlyBuffer = std::move(outBuffer);
+
+    updateNightlyPreview();
+    generateNightlyExpression();
+    update();
 }
