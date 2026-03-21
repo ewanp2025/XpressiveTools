@@ -11,7 +11,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 **Tab Breakdown**
 •  SID Architect – Build multi-segment C64-style oscillator chains with per-segment decay and frequency offsets.
 
-•  PCM Sampler – Converts WAV files into mathematical expressions for sample playback within Xpressive with optimized 4-bit quantisation.
+•  PCM Sampler – Converts WAV files into mathematical expressions for sample playback within Xpressive with optimized 4-bit or 8- bit quantisation. Bit depth of 2000, 4000, 8000, and 16,000. 16,000 slows down my i5 that I use and makes patterns jump in LMMS.
 
 •  Console Lab – A library of classic chip-synth waveforms (NES, GB, C64) with live bit-crushing and quantisation.
 
@@ -77,7 +77,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  House Organ - Generate house music bass organ patches.
 
-•  PCM Editor - Trim PCM "samples", add segments and tune each segment / pitch bend each segment, time stretch, reverse etc. (there is a bug to be solved in PCM editor where if you press play on the GUI it returns the "sample" to the inital state before editing).
+•  PCM Editor - Trim PCM "samples", add segments and tune each segment / pitch bend each segment, time stretch, reverse, pitch flatten etc. (there is a bug to be solved in PCM editor where if you press play on the GUI it returns the "sample" to the inital state before editing).
 
 •  Oscilloscope - Create timbres which animate on an X-Y oscilloscope. Messy at this stage. Requires implementation of TDM controlled by A1.
 
