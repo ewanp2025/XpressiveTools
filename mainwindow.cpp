@@ -208,28 +208,38 @@ void MainWindow::setupUI() {
     pcmDisclaimer->setFixedHeight(80);
     pcmLayout->addWidget(pcmDisclaimer);
 
+
+
     // CONTROLS
-    auto *btnLoad = new QPushButton("Load WAV");
-    btnSave = new QPushButton("Generate String");
-    btnCopy = new QPushButton("Copy Clipboard");
-    pcmLayout->addWidget(btnLoad);
-    pcmLayout->addWidget(btnSave);
-    pcmLayout->addWidget(btnCopy);
+        auto *btnLoad = new QPushButton("Load WAV");
+        btnSave = new QPushButton("Generate String");
+        btnCopy = new QPushButton("Copy Clipboard");
+        pcmLayout->addWidget(btnLoad);
+        pcmLayout->addWidget(btnSave);
+        pcmLayout->addWidget(btnCopy);
 
-    auto *pcmGrid = new QGridLayout();
-    buildModeCombo = new QComboBox(); buildModeCombo->addItems({"Modern", "Legacy"});
-    sampleRateCombo = new QComboBox(); sampleRateCombo->addItems({"8000", "4000", "2000"});
-    maxDurSpin = new QDoubleSpinBox(); maxDurSpin->setRange(0.01, 600.0); maxDurSpin->setValue(2.0);
-    normalizeCheck = new QCheckBox("Normalize 4-bit"); normalizeCheck->setChecked(true);
+        auto *pcmGrid = new QGridLayout();
+        buildModeCombo = new QComboBox(); buildModeCombo->addItems({"Modern", "Legacy"});
 
-    pcmGrid->addWidget(new QLabel("Build Mode:"), 0, 0); pcmGrid->addWidget(buildModeCombo, 0, 1);
-    pcmGrid->addWidget(new QLabel("Rate:"), 1, 0); pcmGrid->addWidget(sampleRateCombo, 1, 1);
-    pcmGrid->addWidget(new QLabel("Max(s):"), 2, 0); pcmGrid->addWidget(maxDurSpin, 2, 1);
 
-    pcmLayout->addLayout(pcmGrid);
-    pcmLayout->addWidget(normalizeCheck);
+        sampleRateCombo = new QComboBox(); sampleRateCombo->addItems({"16000", "8000", "4000", "2000"});
 
-    modeTabs->addTab(pcmTab, "PCM Sampler");
+
+        bitDepthCombo = new QComboBox(); bitDepthCombo->addItems({"4-bit (Gritty)", "8-bit (Clean)", "Uncompressed (Raw)"});
+
+        maxDurSpin = new QDoubleSpinBox(); maxDurSpin->setRange(0.01, 600.0); maxDurSpin->setValue(2.0);
+
+
+        normalizeCheck = new QCheckBox("Normalize Audio"); normalizeCheck->setChecked(true);
+
+        pcmGrid->addWidget(new QLabel("Build Mode:"), 0, 0); pcmGrid->addWidget(buildModeCombo, 0, 1);
+        pcmGrid->addWidget(new QLabel("Rate:"), 1, 0); pcmGrid->addWidget(sampleRateCombo, 1, 1);
+        pcmGrid->addWidget(new QLabel("Bit Depth:"), 2, 0); pcmGrid->addWidget(bitDepthCombo, 2, 1);
+        pcmGrid->addWidget(new QLabel("Max(s):"), 3, 0); pcmGrid->addWidget(maxDurSpin, 3, 1);
+        pcmLayout->addLayout(pcmGrid);
+        pcmLayout->addWidget(normalizeCheck);
+
+        modeTabs->addTab(pcmTab, "PCM Sampler");
 
     // SCOPE ZOOM LOGIC
     connect(pcmZoomSlider, &QSlider::valueChanged, [=]() {
@@ -3781,26 +3791,31 @@ void MainWindow::saveExpr() {
     }
     if (maxVal < 0.0001) maxVal = 1.0; // Prevent div by zero
 
+    // Figure out how many levels to quantize to based on the UI
+    int bitMode = bitDepthCombo->currentIndex();
+    double levels = 15.0; // Default to 4-bit
+    if (bitMode == 1) levels = 255.0; // 8-bit
+
     for(int i=0; i < maxS; ++i) {
         double d = originalData[int(i*step)];
 
         //  Normalise (-1.0 to 1.0)
         if (normalizeCheck->isChecked()) d /= maxVal;
 
-        // 3. Quantise to 4-bit (16 levels), then Scale Back to -1..1
-        // MATLAB equivalent: q = round((y+1)*0.5*15) / 15 * 2 - 1
-        if (normalizeCheck->isChecked()) { // Reuse check for "4-bit mode"
-            double temp = (d + 1.0) * 0.5 * 15.0; // Scale to 0..15
+        // Apply Bitcrushing if they didn't select "Uncompressed"
+        if (bitMode != 2) {
+            double temp = (d + 1.0) * 0.5 * levels; // Scale to 0..levels
             int stepVal = std::round(temp);       // Round to integer step
             if(stepVal < 0) stepVal = 0;
-            if(stepVal > 15) stepVal = 15;
+            if(stepVal > levels) stepVal = levels;
 
             // Convert back to -1.0 .. 1.0 range
-            d = (stepVal / 15.0) * 2.0 - 1.0;
+            d = (stepVal / levels) * 2.0 - 1.0;
         }
 
         proc.push_back(d);
     }
+
     statusBox->setText((buildModeCombo->currentIndex() == 0) ? generateModernPCM(proc, targetFs) : generateLegacyPCM(proc, targetFs));
     btnCopy->setEnabled(true);
 }
