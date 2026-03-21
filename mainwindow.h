@@ -402,6 +402,7 @@ private:
     QSlider *pcmZoomSlider;
     QLabel *pcmDisclaimer;
     std::vector<double> originalData;
+    QComboBox *bitDepthCombo;
     uint32_t fileFs = 44100;
 
     // ------------------------------------
