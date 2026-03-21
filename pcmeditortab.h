@@ -65,6 +65,7 @@ private slots:
     void onFadeInClicked();
     void onFadeOutClicked();
     void onAkaiGrimeClicked();
+    void onFlattenPitchClicked();
 
 private:
     PCMAudioBuffer audioBuffer;
