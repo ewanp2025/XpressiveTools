@@ -16,6 +16,7 @@
 #include <QProgressDialog>
 #include <QtXml/QDomDocument>
 #include "pcmeditortab.h"
+#include "melodyrenderertab.h"
 
 // =========================================================
 // MAIN CONSTRUCTOR
@@ -3461,7 +3462,12 @@ void MainWindow::setupUI() {
     oscTab = new OscilloscopeTab(this);
     modeTabs->addTab(oscTab, "Oscilloscope Gen");
 
-
+    // ------------------------------------
+    //TAB 37
+    // ------------------------------------
+    // External now
+    MelodyRendererTab* melodyTab = new MelodyRendererTab(this);
+    modeTabs->addTab(melodyTab, "Melody Builder");
 
     // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB

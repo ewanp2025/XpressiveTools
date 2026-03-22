@@ -24,6 +24,8 @@ add_executable(WaveConv
     pcmeditortab.h
     oscilloscopetab.cpp
     oscilloscopetab.h
+    melodyrenderertab.cpp
+    melodyrenderertab.h
 )
 
 target_link_libraries(WaveConv PRIVATE
