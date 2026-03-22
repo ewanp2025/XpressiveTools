@@ -81,6 +81,8 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  Oscilloscope - Create timbres which animate on an X-Y oscilloscope. Messy at this stage. Requires implementation of TDM controlled by A1.
 
+•  Melody Renderer - CIntended as an AutoTune type tool for PCMs. Load an LMMS pattern, flatten the pitch of a voice, and output a sung expression. WIP for this tab!!!
+
 **Technical**
 
 Framework: Qt 6.x (Widgets) 
