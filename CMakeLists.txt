@@ -26,6 +26,10 @@ add_executable(WaveConv
     oscilloscopetab.h
     melodyrenderertab.cpp
     melodyrenderertab.h
+    effectstab.h
+    effectstab.cpp
+    vocalgenerator.h
+    vocalgenerator.cpp
 )
 
 target_link_libraries(WaveConv PRIVATE

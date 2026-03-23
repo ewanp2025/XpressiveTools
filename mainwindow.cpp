@@ -17,6 +17,8 @@
 #include <QtXml/QDomDocument>
 #include "pcmeditortab.h"
 #include "melodyrenderertab.h"
+#include "effectstab.h"
+#include "vocalgenerator.h"
 
 // =========================================================
 // MAIN CONSTRUCTOR
@@ -3468,6 +3470,21 @@ void MainWindow::setupUI() {
     // External now
     MelodyRendererTab* melodyTab = new MelodyRendererTab(this);
     modeTabs->addTab(melodyTab, "Melody Builder");
+
+    // ------------------------------------
+    //TAB 38
+    // ------------------------------------
+    // External now
+    EffectsTab* fxTab = new EffectsTab(this);
+    modeTabs->addTab(fxTab, "Effects Builder");
+
+    // ------------------------------------
+    //TAB 39
+    // ------------------------------------
+    // External now
+    VocalGeneratorTab *vocalTab = new VocalGeneratorTab(this);
+    modeTabs->addTab(vocalTab, "Vocal Generator");
+
 
     // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
