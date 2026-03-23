@@ -4722,16 +4722,6 @@ void MainWindow::generateRandomPatch() {
     }
 }
 
-copeAwareChar(const QString &str, char target) {
-    int balance = 0;
-    for (int i = 0; i < str.length(); ++i) {
-        if (str[i] == '(') balance++;
-        else if (str[i] == ')') balance--;
-        else if (str[i] == target && balance == 0) return i;
-    }
-    return -1;
-}
-
 // TAB 17: LOGIC CONVERTER
 int findScopeAwareChar(const QString &str, char target) {
     int balance = 0;
