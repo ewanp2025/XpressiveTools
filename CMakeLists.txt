@@ -30,6 +30,8 @@ add_executable(WaveConv
     effectstab.cpp
     vocalgenerator.h
     vocalgenerator.cpp
+    samgenerator.cpp
+    samgenerator.h
 )
 
 target_link_libraries(WaveConv PRIVATE

@@ -11,7 +11,15 @@
 #include <QSlider>
 #include <QMap>
 #include <QStringList>
-// SAM V2 NOT USED
+#include <QList>
+
+
+struct SamNRLRule {
+    QString leftContextRegex;
+    QString match;
+    QString rightContextRegex;
+    QString phonemes;
+};
 
 enum PhonemeClass {
     CLASS_VOWEL,
@@ -33,7 +41,6 @@ struct SAMPhoneme {
     int length = 10;
 };
 
-
 struct SequenceNode {
     SAMPhoneme data;
     double duration;
@@ -50,6 +57,7 @@ private slots:
     void translateEnglishToPhonemes();
     void generateXpressiveMath();
     void updateLabels();
+    void applyPreset(int index);
 
 private:
     QLineEdit *englishInput;
@@ -57,6 +65,8 @@ private:
 
     QTextEdit *phonemeInput;
     QPushButton *generateBtn;
+
+    QComboBox *presetCombo;
     QComboBox *parserModeCombo;
     QCheckBox *nightlyCheckBox;
 
@@ -64,12 +74,15 @@ private:
     QLabel *mouthLabel;
     QSlider *throatSlider;
     QLabel *throatLabel;
+    QSlider *pitchSlider;
+    QLabel *pitchLabel;
+    QSlider *speedSlider;
+    QLabel *speedLabel;
 
     QTextEdit *w1Output;
     QTextEdit *o1Output;
 
     QMap<QString, SAMPhoneme> samLibrary;
-    QMap<QString, QString> englishDictionary;
 
     void setupUI();
     void initSamLibrary();

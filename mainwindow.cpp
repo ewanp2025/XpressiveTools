@@ -19,12 +19,13 @@
 #include "melodyrenderertab.h"
 #include "effectstab.h"
 #include "vocalgenerator.h"
+#include "samgenerator.h"
 
 // =========================================================
 // MAIN CONSTRUCTOR
 // =========================================================
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    initSamLibrary(); // InitialiSe the new SAM library
+
     m_ghostSynth = new SynthEngine(this);
     setupUI();
     setWindowTitle("Xpressive Sound Design Suite - Ewan Pettigrew - Uses parts of SAM phonetics code for text to speech test");
@@ -1623,43 +1624,8 @@ void MainWindow::setupUI() {
     // ------------------------------------
     // TAB 16: PHONETIC LAB
     // ------------------------------------
-    QWidget *phoneticTab = new QWidget();
-    auto *pLayout = new QVBoxLayout(phoneticTab);
-
-    pLayout->addWidget(new QLabel("<b>Phonetic Input:</b> Space separated. Use numbers 1-8 for stress/pitch (e.g., IY4)."));
-    phoneticInput = new QTextEdit();
-    // Default example: "SAM IS HERE" with stress markers
-    phoneticInput->setPlaceholderText("S* A*4 M* space IY5 Z* space H IY4 R*");
-    phoneticInput->setMaximumHeight(120);
-    pLayout->addWidget(phoneticInput);
-
-    // Settings Bar
-    auto *pModeLayout = new QHBoxLayout();
-    pModeLayout->addWidget(new QLabel("Render Mode:"));
-    parserModeCombo = new QComboBox();
-    parserModeCombo->addItems({"High Quality (Smooth)", "Retro (8-bit Grit)"});
-    pModeLayout->addWidget(parserModeCombo);
-
-    pModeLayout->addWidget(new QLabel("  Parsing Engine:"));
-    parsingStyleCombo = new QComboBox();
-    parsingStyleCombo->addItems({"Legacy (Xpressive)", "Nightly Build (Experimental)"});
-    pModeLayout->addWidget(parsingStyleCombo);
-
-    pLayout->addLayout(pModeLayout);
-
-    btnGenPhonetic = new QPushButton("Generate Formula to Clipboard");
-    pLayout->addWidget(btnGenPhonetic);
-
-    pLayout->addWidget(new QLabel("<b>Phoneme Reference:</b>"));
-    QScrollArea *pScroll = new QScrollArea();
-    phonemeRefLabel = new QLabel(samLibrary.keys().join(" | "));
-    phonemeRefLabel->setWordWrap(true);
-    pScroll->setWidget(phonemeRefLabel);
-    pScroll->setWidgetResizable(true);
-    pLayout->addWidget(pScroll);
-
-    modeTabs->addTab(phoneticTab, "Phonetic Lab");
-    connect(btnGenPhonetic, &QPushButton::clicked, this, &MainWindow::generatePhoneticFormula);
+    SamGeneratorTab* samTab = new SamGeneratorTab(this);
+        modeTabs->addTab(samTab, "SAM Vocal Tools");
 
     // ------------------------------------
     // TAB 17: LOGIC CONVERTER
@@ -4756,220 +4722,7 @@ void MainWindow::generateRandomPatch() {
     }
 }
 
-// TAB 16: PHONETIC LAB (SAM)
-void MainWindow::initSamLibrary() {
-    // Phonemes mapped from SAM source tables.
-    // https://github.com/s-macke/SAM
-    // Structure: {Name, F1, F2, F3, Voiced, A1, A2, A3, LENGTH}
-
-    // --- VOICED VOWELS (Long & Loud) ---
-    samLibrary["IY"] = {"IY", 10, 84, 110, true, 15, 10, 5, 18};
-    samLibrary["IH"] = {"IH", 14, 73, 93,  true, 15, 10, 5, 15};
-    samLibrary["EH"] = {"EH", 19, 67, 91,  true, 15, 10, 5, 16};
-    samLibrary["AE"] = {"AE", 24, 63, 88,  true, 15, 10, 5, 18};
-    samLibrary["AA"] = {"AA", 27, 40, 89,  true, 15, 10, 5, 18};
-    samLibrary["AH"] = {"AH", 23, 44, 87,  true, 15, 10, 5, 16};
-    samLibrary["AO"] = {"AO", 21, 31, 88,  true, 15, 10, 5, 18};
-    samLibrary["UH"] = {"UH", 16, 37, 82,  true, 15, 10, 5, 15};
-    samLibrary["AX"] = {"AX", 20, 45, 89,  true, 15, 10, 5, 12};
-    samLibrary["IX"] = {"IX", 14, 73, 93,  true, 15, 10, 5, 12};
-    samLibrary["ER"] = {"ER", 18, 49, 62,  true, 15, 10, 5, 18};
-    samLibrary["UX"] = {"UX", 14, 36, 82,  true, 15, 10, 5, 15};
-    samLibrary["OH"] = {"OH", 18, 30, 88,  true, 15, 10, 5, 18};
-
-    // --- DIPHTHONGS (Very Long) ---
-    samLibrary["EY"] = {"EY", 19, 72, 90,  true, 15, 10, 5, 20};
-    samLibrary["AY"] = {"AY", 27, 39, 88,  true, 15, 10, 5, 22};
-    samLibrary["OY"] = {"OY", 21, 31, 88,  true, 15, 10, 5, 22};
-    samLibrary["AW"] = {"AW", 27, 43, 88,  true, 15, 10, 5, 22};
-    samLibrary["OW"] = {"OW", 18, 30, 88,  true, 15, 10, 5, 20};
-    samLibrary["UW"] = {"UW", 13, 34, 82,  true, 15, 10, 5, 18};
-
-    // --- LIQUIDS & NASALS (Medium) ---
-    samLibrary["M*"] = {"M*", 6,  46, 81,  true, 12, 8, 4, 15};
-    samLibrary["N*"] = {"N*", 6,  54, 121, true, 12, 8, 4, 15};
-    samLibrary["NX"] = {"NX", 6,  86, 101, true, 12, 8, 4, 15};
-    samLibrary["R*"] = {"R*", 18, 50, 60,  true, 12, 8, 4, 14};
-    samLibrary["L*"] = {"L*", 14, 30, 110, true, 12, 8, 4, 14};
-    samLibrary["W*"] = {"W*", 11, 24, 90,  true, 12, 8, 4, 12};
-    samLibrary["Y*"] = {"Y*", 9,  83, 110, true, 12, 8, 4, 12};
-
-    // --- VOICED CONSONANTS (Short) ---
-    samLibrary["Z*"] = {"Z*", 9,  51, 93,  true, 10, 6, 3, 10};
-    samLibrary["ZH"] = {"ZH", 10, 66, 103, true, 10, 6, 3, 10};
-    samLibrary["V*"] = {"V*", 8,  40, 76,  true, 10, 6, 3, 8};
-    samLibrary["DH"] = {"DH", 10, 47, 93,  true, 10, 6, 3, 8};
-    samLibrary["J*"] = {"J*", 6,  66, 121, true, 10, 6, 3, 8};
-    samLibrary["B*"] = {"B*", 6,  26, 81,  true, 10, 6, 3, 6};
-    samLibrary["D*"] = {"D*", 6,  66, 121, true, 10, 6, 3, 6};
-    samLibrary["G*"] = {"G*", 6,  110, 112, true, 10, 6, 3, 6};
-    samLibrary["GX"] = {"GX", 6,  84, 94,  true, 10, 6, 3, 6};
-
-    // --- UNVOICED / NOISE ---
-
-    // Fricatives (Sustained Noise)
-    samLibrary["S*"] = {"S*", 6,  73, 99,  false, 8, 0, 0, 12};
-    samLibrary["SH"] = {"SH", 6,  79, 106, false, 8, 0, 0, 12};
-    samLibrary["F*"] = {"F*", 6,  26, 81,  false, 8, 0, 0, 10};
-    samLibrary["TH"] = {"TH", 6,  66, 121, false, 8, 0, 0, 10};
-    samLibrary["/H"] = {"/H", 14, 73, 93,  false, 8, 0, 0, 10};
-    samLibrary["CH"] = {"CH", 6,  79, 101, false, 8, 0, 0, 10};
-
-    // Plosives (Bursts) - UPDATED FOR AUDIBILITY
-    samLibrary["P*"] = {"P*", 6,  26, 81,  false, 10, 0, 0, 5};
-    samLibrary["T*"] = {"T*", 6,  66, 121, false, 10, 0, 0, 5};
-    samLibrary["K*"] = {"K*", 6,  85, 101, false, 10, 0, 0, 6};
-    samLibrary["KX"] = {"KX", 6,  84, 94,  false, 10, 0, 0, 6};
-
-    // Special Characters
-    samLibrary[" *"] = {" *", 0, 0, 0, false, 0, 0, 0, 5};
-    samLibrary[".*"] = {".*", 19, 67, 91, false, 0, 0, 0, 10};
-
-    // Internal Bridge Phonemes
-    for(int b=43; b<=77; ++b) {
-        QString key = QString("**%1").arg(b);
-        if(!samLibrary.contains(key)) samLibrary[key] = {"**", 6, 60, 100, true, 10, 5, 2, 8};
-    }
-}
-
-void MainWindow::generatePhoneticFormula() {
-    QStringList input = phoneticInput->toPlainText().split(" ", Qt::SkipEmptyParts);
-
-    // SETTINGS ---
-    double frameTime = 0.012;
-    double hzScale = 19.5;
-
-    // Engine Logic: 0 = Legacy (Additive), 1 = Nightly (Nested Ternary)
-    bool isNightly = (parsingStyleCombo->currentIndex() == 1);
-    bool isLofi = (parserModeCombo->currentIndex() == 1);
-
-    // Temp structure to hold parsed phonemes before assembly
-    struct ParsedSegment {
-        QString content;
-        double duration;
-    };
-    QList<ParsedSegment> sequence;
-
-    // PARSE INPUT TO DATA ---
-    for(int i = 0; i < std::min((int)input.size(), 128); ++i) {
-        QString rawToken = input[i].toUpper();
-        QRegularExpression re("([A-Z\\*\\/\\.\\?\\,\\-]+)(\\d*)");
-        QRegularExpressionMatch match = re.match(rawToken);
-
-        QString key = match.captured(1);
-        QString stressStr = match.captured(2);
-
-        if(!samLibrary.contains(key)) continue;
-        SAMPhoneme p = samLibrary[key];
-
-        // Stress Logic
-        int stress = stressStr.isEmpty() ? 4 : stressStr.toInt();
-        double pitchMult = 0.85 + (stress * 0.05);
-        double duration = (p.length * frameTime) * (0.8 + (stress * 0.05));
-
-        QString content;
-
-        if (p.voiced) {
-            // VOICED SYNTHESIS
-            double freq1 = p.f1 * hzScale;
-            double freq2 = p.f2 * hzScale;
-            double freq3 = p.f3 * hzScale;
-
-            QString s1 = QString("%1*sinew(integrate(%2))").arg(p.a1 * 0.05).arg(freq1);
-            QString s2 = QString("%1*sinew(integrate(%2))").arg(p.a2 * 0.05).arg(freq2);
-            QString s3 = QString("%1*sinew(integrate(%2))").arg(p.a3 * 0.05).arg(freq3);
-            QString glottal = QString("(0.8 * (1 - mod(t*f*%1, 1)))").arg(pitchMult);
-
-            content = QString("((%1 + %2 + %3) * %4)").arg(s1, s2, s3, glottal);
-        } else {
-            // NOISE SYNTHESIS
-            double rawF1 = (p.f1 > 0 ? p.f1 : 100);
-            double noiseColor = (rawF1 > 90 ? 90 : rawF1) * 80.0;
-            double noiseAmp = (p.length < 8) ? 0.9 : 0.4;
-
-            content = QString("(%1 * randv(t*%2))").arg(noiseAmp).arg(noiseColor);
-        }
-
-        sequence.append({content, duration});
-    }
-
-    if (sequence.isEmpty()) return;
-
-    QString finalFormula;
-
-    // ASSEMBLE FORMULA ---
-    if (isNightly) {
-        // NIGHTLY BUILD: Nested Ternary Logic (Recursive Backwards)
-        // Matches "Modern" logic in SID Architect
-
-        QString nestedBody = "0"; // End of chain (silence)
-        double totalTime = 0;
-        for(const auto &s : sequence) totalTime += s.duration;
-
-        double currentTime = totalTime;
-
-        // Iterate backwards from last sound to first
-        for (int i = sequence.size() - 1; i >= 0; --i) {
-            ParsedSegment seg = sequence[i];
-            currentTime -= seg.duration;
-
-            // Envelopes relative to local segment start (currentTime)
-            // Fast attack/release to prevent clicks
-            double fadeSpeed = 120.0;
-            QString attack = QString("min(1, (t-%1)*%2)").arg(currentTime).arg(fadeSpeed);
-            QString decay = QString("min(1, (%1-t)*%2)").arg(currentTime + seg.duration).arg(fadeSpeed);
-
-            double tEnd = currentTime + seg.duration;
-
-            // Structure: (t < end_time ? (sound * env) : (next_nested_block))
-            nestedBody = QString("(t < %1 ? (%2 * %3 * %4) : %5)")
-                             .arg(tEnd, 0, 'f', 4)
-                             .arg(seg.content)
-                             .arg(attack)
-                             .arg(decay)
-                             .arg(nestedBody);
-        }
-        finalFormula = nestedBody;
-
-    } else {
-        // LEGACY PARSING: Additive Logic (Forwards)
-        // Calculates all segments simultaneously and sums them
-
-        QStringList stringSegments;
-        double time = 0.0;
-
-        for (const auto &seg : sequence) {
-            double fadeSpeed = 120.0; // Same envelope speed
-            QString attack = QString("min(1, (t-%1)*%2)").arg(time).arg(fadeSpeed);
-            QString decay = QString("min(1, (%1-t)*%2)").arg(time + seg.duration).arg(fadeSpeed);
-
-            // Structure: ((Range Check) * Sound * Env)
-            QString block = QString("((t >= %1 & t < %2) * %3 * %4 * %5)")
-                                .arg(time)
-                                .arg(time + seg.duration)
-                                .arg(seg.content)
-                                .arg(attack)
-                                .arg(decay);
-            stringSegments << block;
-            time += seg.duration;
-        }
-        finalFormula = stringSegments.join(" + ");
-    }
-
-    // --- 3. POST-PROCESSING (Audio Quality) ---
-    if (isLofi) {
-        // Bitcrush / Retro mode: Quantize to 16 steps
-        finalFormula = QString("clamp(-1, floor((%1) * 16)/16, 1)").arg(finalFormula);
-    } else {
-        // High Quality: Simple safety clamp
-        finalFormula = QString("clamp(-1, %1, 1)").arg(finalFormula);
-    }
-
-    statusBox->setText(finalFormula);
-    QApplication::clipboard()->setText(finalFormula);
-}
-
-int findScopeAwareChar(const QString &str, char target) {
+copeAwareChar(const QString &str, char target) {
     int balance = 0;
     for (int i = 0; i < str.length(); ++i) {
         if (str[i] == '(') balance++;
@@ -4980,7 +4733,15 @@ int findScopeAwareChar(const QString &str, char target) {
 }
 
 // TAB 17: LOGIC CONVERTER
-
+int findScopeAwareChar(const QString &str, char target) {
+    int balance = 0;
+    for (int i = 0; i < str.length(); ++i) {
+        if (str[i] == '(') balance++;
+        else if (str[i] == ')') balance--;
+        else if (str[i] == target && balance == 0) return i;
+    }
+    return -1;
+}
 
 QString MainWindow::convertLegacyToNightly(QString input) {
     input = input.trimmed();

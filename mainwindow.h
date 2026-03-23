@@ -38,16 +38,7 @@
 // DATA STRUCTURES & STRUCTS
 // ==============================================================================
 
-// --- PHONETIC LAB STRUCTS ---
-struct SAMPhoneme {
-    QString name;
-    int f1, f2, f3;
-    bool voiced;
-    int a1 = 15;
-    int a2 = 10;
-    int a3 = 5;
-    int length = 12;
-};
+
 
 // --- SID ARCHITECT STRUCTS ---
 struct SidSegment {
@@ -335,7 +326,6 @@ private slots:
     void generateLeadStack();
     void generateRandomPatch();
     void generateDrumXpf();
-    void generatePhoneticFormula();
     void generateStepGate();
     void generateNumbers1981();
     void generateDelayArchitect();
@@ -360,7 +350,6 @@ private slots:
 private:
     // --- CORE & HELPERS ---
     void setupUI();
-    void initSamLibrary();
     QString generateLegacyPCM(const std::vector<double>& q, double sr);
     QString generateModernPCM(const std::vector<double>& q, double sr);
     QString getModulatorFormula(int index);
@@ -549,7 +538,6 @@ private:
     QComboBox *parsingStyleCombo;
     QPushButton *btnGenPhonetic;
     QLabel *phonemeRefLabel;
-    QMap<QString, SAMPhoneme> samLibrary;
 
     // ------------------------------------
     // TAB 17: LOGIC CONVERTER
