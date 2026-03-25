@@ -20,6 +20,7 @@
 #include "effectstab.h"
 #include "vocalgenerator.h"
 #include "samgenerator.h"
+#include "drumeditortab.h"
 
 // =========================================================
 // MAIN CONSTRUCTOR
@@ -1047,242 +1048,16 @@ void MainWindow::setupUI() {
     // ------------------------------------
     // TAB 9: DRUM DESIGNER
     // ------------------------------------
-    QWidget *drumWidget = new QWidget();
-    QVBoxLayout *drumLayout = new QVBoxLayout(drumWidget);
 
-    // ADD OSCILLOSCOPE (Visualizer)
-    drumScope = new UniversalScope();
-    drumScope->setMinimumHeight(150);
-    drumLayout->addWidget(drumScope);
+    DrumEditorTab* drumTab = new DrumEditorTab(m_ghostSynth, this);
 
-    // Disclaimer Label
-    drumDisclaimer = new QLabel("⚠️ NOTICE: Panning must be set manually. Filters are simulated math approximations.");
-    drumDisclaimer->setStyleSheet("color: red; font-weight: bold; border: 1px solid red; padding: 5px; background-color: #ffeeee;");
-    drumDisclaimer->setAlignment(Qt::AlignCenter);
-    drumLayout->addWidget(drumDisclaimer);
+    // connect(drumTab, &DrumEditorTab::statusMessage, [=](const QString& msg){
+    //        statusBox->setText(msg);
+    //    });
 
-    // CONTROLS SETUP
-    drumTypeCombo = new QComboBox();
-    drumTypeCombo->addItems({"Kick (LPF)", "Snare (BPF)", "Hi-Hat (HPF)", "Tom (LPF)", "Cowbell (BPF)", "Rimshot (HPF)", "Clap (BPF)"});
+    modeTabs->addTab(drumTab, "Drum Forge / Analysis");
 
-    drumWaveCombo = new QComboBox();
-    drumWaveCombo->addItems({"Sine", "Triangle", "Square", "Sawtooth"});
 
-    QFormLayout *fLayout = new QFormLayout();
-
-    // Initialise Sliders
-    drumPitchSlider = new QSlider(Qt::Horizontal); drumPitchSlider->setRange(20, 150); drumPitchSlider->setValue(40);
-    drumDecaySlider = new QSlider(Qt::Horizontal); drumDecaySlider->setRange(1, 200); drumDecaySlider->setValue(40);
-    drumPitchDropSlider = new QSlider(Qt::Horizontal); drumPitchDropSlider->setRange(0, 500); drumPitchDropSlider->setValue(350);
-    drumToneSlider = new QSlider(Qt::Horizontal);  drumToneSlider->setRange(100, 14000); drumToneSlider->setValue(1000);
-    drumSnapSlider = new QSlider(Qt::Horizontal);  drumSnapSlider->setRange(10, 100); drumSnapSlider->setValue(50);
-    drumNoiseSlider = new QSlider(Qt::Horizontal); drumNoiseSlider->setRange(0, 100); drumNoiseSlider->setValue(0);
-    drumPWMSlider = new QSlider(Qt::Horizontal);   drumPWMSlider->setRange(0, 100); drumPWMSlider->setValue(50);
-    drumExpSlider = new QSlider(Qt::Horizontal);   drumExpSlider->setRange(1, 10); drumExpSlider->setValue(2);
-
-    // Add rows to Form Layout
-    fLayout->addRow("Body Waveform:", drumWaveCombo);
-    fLayout->addRow("Base Pitch:", drumPitchSlider);
-    fLayout->addRow("Decay Speed:", drumDecaySlider);
-    fLayout->addRow("Exponential Curve:", drumExpSlider);
-    fLayout->addRow("Pitch Punch (Drop):", drumPitchDropSlider);
-    fLayout->addRow("Filter Cutoff (Sim):", drumToneSlider);
-    fLayout->addRow("Filter Res (Snap):", drumSnapSlider);
-    fLayout->addRow("Noise Mix:", drumNoiseSlider);
-    fLayout->addRow("Pulse Width:", drumPWMSlider);
-
-    drumLayout->addWidget(new QLabel("<b>Internal Filter Drum Designer</b>"));
-    drumLayout->addLayout(fLayout);
-    drumLayout->addWidget(drumTypeCombo);
-
-    // BUTTONS
-    auto *dBtnLay = new QHBoxLayout();
-
-    btnPlayDrum = new QPushButton("▶ Play Drum Loop");
-    btnPlayDrum->setCheckable(true);
-    btnPlayDrum->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
-
-    btnGenerateDrum = new QPushButton("Copy XPF to Clipboard");
-    btnSaveDrumXpf = new QPushButton("Save Drum as .XPF File");
-
-    dBtnLay->addWidget(btnPlayDrum);
-    dBtnLay->addWidget(btnGenerateDrum);
-    dBtnLay->addWidget(btnSaveDrumXpf);
-    drumLayout->addLayout(dBtnLay);
-    drumLayout->addStretch();
-
-    modeTabs->addTab(drumWidget, "Drum Designer");
-
-    // AUDIO & VISUAL LOGIC (The Math)
-    auto updateDrum = [=]() {
-    // Gather Values from UI
-    int waveIdx = drumWaveCombo->currentIndex(); // 0=Sin, 1=Tri, 2=Sqr, 3=Saw
-    double baseFreq = drumPitchSlider->value();
-    double decayFactor = drumDecaySlider->value();
-    double pitchDrop = drumPitchDropSlider->value();
-    double noiseMix = drumNoiseSlider->value() / 100.0;
-    double expCurve = drumExpSlider->value();
-
-    // Calculate a loop length that fits the decay so it doesn't click
-    double loopLen = 0.5 + (200.0 / (decayFactor > 0 ? decayFactor : 1.0));
-
-    // The Audio Generation Lambda
-    std::function<double(double)> drumAlgo = [=](double t) {
-        // Loop logic (retrigger)
-        double localT = std::fmod(t, loopLen);
-        if(localT < 0) return 0.0;
-
-        //Pitch Envelope (Exponential Drop)
-        // f(t) = Base + Drop * exp(-t * decay/2)
-        double instFreq = baseFreq + (pitchDrop * std::exp(-localT * (decayFactor / 2.0)));
-
-        //Oscillator Generation
-        double phase = localT * instFreq * 6.283185; // 2*PI
-        double osc = 0.0;
-
-        if (waveIdx == 0) osc = std::sin(phase);
-        else if (waveIdx == 1) osc = (2.0/3.14159) * std::asin(std::sin(phase)); // Triangle
-        else if (waveIdx == 2) osc = (std::sin(phase) > 0 ? 1.0 : -1.0); // Square
-        else osc = 2.0 * (std::fmod(localT * instFreq, 1.0)) - 1.0; // Saw
-
-        //Noise Generation
-        double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
-
-        //Mix Osc and Noise
-        double signal = (osc * (1.0 - noiseMix)) + (noise * noiseMix);
-
-        //Volume Envelope (Exponential Decay)
-        double env = std::exp(-localT * decayFactor * expCurve);
-
-        return signal * env;
-    };
-
-    // Update Visualizer (Zoomed in to 0.2s to see the hit clearly)
-    drumScope->updateScope(drumAlgo, 0.2, 1.0);
-
-    // Update Audio Engine if Playing
-    if (btnPlayDrum->isChecked()) {
-        m_ghostSynth->setAudioSource(drumAlgo);
-    }
-};
-
-    // CONNECTIONS
-
-    // Connect sliders to live update
-    connect(drumPitchSlider, &QSlider::valueChanged, updateDrum);
-    connect(drumDecaySlider, &QSlider::valueChanged, updateDrum);
-    connect(drumPitchDropSlider, &QSlider::valueChanged, updateDrum);
-    connect(drumExpSlider, &QSlider::valueChanged, updateDrum);
-    connect(drumNoiseSlider, &QSlider::valueChanged, updateDrum);
-    connect(drumWaveCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), updateDrum);
-
-    // PRESET LOGIC: Sets sliders when you choose a drum type
-    connect(drumTypeCombo, &QComboBox::currentIndexChanged, [=](int idx){
-    // Stop audio briefly to prevent glitches while setting sliders
-    bool wasPlaying = btnPlayDrum->isChecked();
-    if(wasPlaying) m_ghostSynth->stop();
-
-    // Block signals so we don't trigger 10 updates in a row
-    drumPitchSlider->blockSignals(true);
-    drumDecaySlider->blockSignals(true);
-
-    switch(idx) {
-    case 0: // Kick
-            drumWaveCombo->setCurrentText("Sine");
-            drumPitchSlider->setValue(40);
-            drumPitchDropSlider->setValue(350);
-            drumDecaySlider->setValue(40);
-            drumExpSlider->setValue(2);
-            drumToneSlider->setValue(1000);
-            drumSnapSlider->setValue(50);
-            drumNoiseSlider->setValue(0);
-            break;
-    case 1: // Snare
-            drumWaveCombo->setCurrentText("Triangle");
-            drumPitchSlider->setValue(60);
-            drumPitchDropSlider->setValue(200);
-            drumNoiseSlider->setValue(70);
-            drumToneSlider->setValue(1200);
-            drumDecaySlider->setValue(80);
-            drumExpSlider->setValue(4);
-            break;
-    case 2: // Hi-Hat
-            drumWaveCombo->setCurrentText("Square");
-            drumPitchSlider->setValue(80);
-            drumPitchDropSlider->setValue(50);
-            drumDecaySlider->setValue(160);
-            drumNoiseSlider->setValue(100);
-            drumToneSlider->setValue(8000);
-            drumExpSlider->setValue(8);
-            break;
-    case 3: // Tom
-            drumWaveCombo->setCurrentText("Sine");
-            drumPitchSlider->setValue(50);
-            drumPitchDropSlider->setValue(150);
-            drumDecaySlider->setValue(60);
-            drumNoiseSlider->setValue(10);
-            drumToneSlider->setValue(800);
-            drumExpSlider->setValue(3);
-            break;
-    case 4: // Cowbell
-            drumWaveCombo->setCurrentText("Square");
-            drumPitchSlider->setValue(80);
-            drumPitchDropSlider->setValue(0);
-            drumToneSlider->setValue(3000);
-            drumExpSlider->setValue(3);
-            drumDecaySlider->setValue(100);
-            drumNoiseSlider->setValue(0);
-            break;
-    case 5: // Rimshot
-            drumWaveCombo->setCurrentText("Square");
-            drumPitchSlider->setValue(95);
-            drumPitchDropSlider->setValue(20);
-            drumNoiseSlider->setValue(20);
-            drumToneSlider->setValue(5000);
-            drumExpSlider->setValue(8);
-            drumDecaySlider->setValue(30);
-            break;
-    case 6: // Clap
-            drumWaveCombo->setCurrentText("Sawtooth");
-            drumPitchSlider->setValue(70);
-            drumPitchDropSlider->setValue(50);
-            drumNoiseSlider->setValue(90);
-            drumDecaySlider->setValue(120);
-            drumToneSlider->setValue(1000);
-            drumExpSlider->setValue(5);
-            break;
-        }
-
-    // Unblock signals
-    drumPitchSlider->blockSignals(false);
-    drumDecaySlider->blockSignals(false);
-
-    updateDrum(); // Force one update with new values
-
-    if(wasPlaying) m_ghostSynth->start();
-    });
-
-    // Play Button Logic
-    connect(btnPlayDrum, &QPushButton::toggled, [=](bool checked){
-        if(!checked) {
-            m_ghostSynth->setAudioSource([](double){ return 0.0; });
-            m_ghostSynth->stop();
-            btnPlayDrum->setText("▶ Play Drum Loop");
-            btnPlayDrum->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
-        } else {
-            m_ghostSynth->start();
-            btnPlayDrum->setText("⏹ Stop");
-            btnPlayDrum->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
-            updateDrum();
-        }
-    });
-
-    // Generator Buttons
-    connect(btnGenerateDrum, &QPushButton::clicked, this, &MainWindow::generateDrumXpf);
-    connect(btnSaveDrumXpf, &QPushButton::clicked, this, &MainWindow::generateDrumXpf);
-
-    // Initial Trigger to draw the default wave
-    QTimer::singleShot(200, updateDrum);
 
     // ------------------------------------
     // TAB 10: VELOCILOGIC
@@ -4230,57 +4005,7 @@ void MainWindow::generateHarmonicLab() {
 }
 
 // TAB 9: DRUM DESIGNER
-void MainWindow::generateDrumXpf() {
-    QString waveFunc = drumWaveCombo->currentText().toLower() + "w";
-    if(waveFunc == "sinew") waveFunc = "sinew";
 
-    double decayBase = drumDecaySlider->value();
-    double expFactor = drumExpSlider->value(); //
-
-    // Pitch Drop Formula
-    QString pitch = QString("(f + (%1 * exp(-t * %2)))").arg(drumPitchDropSlider->value()).arg(decayBase / 2.0);
-
-    // Osc + Noise Mix
-    double nMix = drumNoiseSlider->value() / 100.0;
-    QString source = QString("((%1(integrate(%2)) * %3) + (randv(t*10000) * %4))")
-                         .arg(waveFunc).arg(pitch).arg(1.0 - nMix).arg(nMix);
-
-    // Final Exponential Volume Shape
-    QString formula = QString("(%1 * exp(-t * %2))").arg(source).arg(decayBase * expFactor);
-    formula = formula.replace("\"", "&quot;");
-
-    int typeIndex = drumTypeCombo->currentIndex();
-    int filterType = 0; // Default LPF (0)
-    if (typeIndex == 1 || typeIndex == 4 || typeIndex == 6) filterType = 2; // BPF
-    if (typeIndex == 2 || typeIndex == 5) filterType = 1; // HPF
-
-
-
-
-
-    QString xpf = getXpfTemplate()
-                      .arg(drumTypeCombo->currentText()).arg(drumPitchSlider->value())
-                      .arg(formula).arg(drumToneSlider->value())
-                      .arg(drumSnapSlider->value() / 100.0).arg(filterType)
-                      .arg(0.1).arg(0.5);
-
-    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
-    if (clickedButton == btnSaveDrumXpf) {
-        QString fileName = QFileDialog::getSaveFileName(this, "Save Drum", "", "LMMS Preset (*.xpf)");
-        if (!fileName.isEmpty()) {
-            QFile file(fileName);
-            if (file.open(QIODevice::WriteOnly)) {
-                QTextStream stream(&file);
-                stream << xpf;
-                file.close();
-                statusBox->setText("Drum saved: " + fileName);
-            }
-        }
-    } else {
-        QApplication::clipboard()->setText(xpf);
-        statusBox->setText("Drum XPF copied to clipboard!");
-    }
-}
 
 QString MainWindow::getXpfTemplate() {
     QStringList lines;

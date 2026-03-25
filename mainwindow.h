@@ -325,7 +325,6 @@ private slots:
     void generateXPFPackager();
     void generateLeadStack();
     void generateRandomPatch();
-    void generateDrumXpf();
     void generateStepGate();
     void generateNumbers1981();
     void generateDelayArchitect();
@@ -457,21 +456,7 @@ private:
     // ------------------------------------
     // TAB 9: DRUM DESIGNER
     // ------------------------------------
-    QComboBox *drumTypeCombo;
-    QComboBox *drumWaveCombo;
-    QSlider *drumPitchSlider;
-    QSlider *drumDecaySlider;
-    QSlider *drumToneSlider;
-    QSlider *drumSnapSlider;
-    QSlider *drumNoiseSlider;
-    QSlider *drumPitchDropSlider;
-    QSlider *drumPWMSlider;
-    QSlider *drumExpSlider;
-    UniversalScope *drumScope;
-    QPushButton *btnPlayDrum;
-    QPushButton *btnGenerateDrum;
-    QPushButton *btnSaveDrumXpf;
-    QLabel *drumDisclaimer;
+
 
     // ------------------------------------
     // TAB 10: VELOCILOGIC

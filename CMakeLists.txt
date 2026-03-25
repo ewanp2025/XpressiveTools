@@ -32,6 +32,8 @@ add_executable(WaveConv
     vocalgenerator.cpp
     samgenerator.cpp
     samgenerator.h
+    drumeditortab.h
+    drumeditortab.cpp
 )
 
 target_link_libraries(WaveConv PRIVATE
