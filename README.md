@@ -4,7 +4,7 @@ A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive
 
 This is still very much work in progress. The intent was to create a suite of tools for creating Xpressive expressions as I had realised that Xpressive can do many things that people are asking for in instruments within the LMMS forums. However, the 'language' of the time domain may be quite strange to people who have no prior experience with signal processing.
 
-**Key Features**
+**Key Features** 
 
 The suite is divided into several tabs each targeting a specific era or style of sound design.
 
