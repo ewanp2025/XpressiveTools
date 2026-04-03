@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(WaveConv VERSION 0.1 LANGUAGES CXX)
+project(HarmonicGridAnalyser VERSION 0.1 LANGUAGES CXX C)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -9,55 +9,81 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Xml)
-
-add_executable(WaveConv
-    MACOSX_BUNDLE 
-    main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    synthengine.cpp
-    synthengine.h
-    ModularSynth.cpp
-    ModularSynth.h
-    pcmeditortab.cpp
-    pcmeditortab.h
-    oscilloscopetab.cpp
-    oscilloscopetab.h
-    melodyrenderertab.cpp
-    melodyrenderertab.h
-    effectstab.h
-    effectstab.cpp
-    vocalgenerator.h
-    vocalgenerator.cpp
-    samgenerator.cpp
-    samgenerator.h
-    drumeditortab.h
-    drumeditortab.cpp
-)
-
-target_link_libraries(WaveConv PRIVATE
-    Qt6::Widgets
-    Qt6::Multimedia
-    Qt6::Xml
-)
-
-if(APPLE)
-    # This sets the name that appears in the macOS Finder and Menu Bar
-    set_target_properties(WaveConv PROPERTIES
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.yourdomain.WaveConv"
-        MACOSX_BUNDLE_BUNDLE_NAME "WaveConv"
-    )
-elseif(WIN32)
-    # This prevents a console window from popping up behind your app on Windows
-    set_target_properties(WaveConv PROPERTIES
-        WIN32_EXECUTABLE TRUE
-    )
+if(MINGW)
+    add_compile_options(-Wa,-mbig-obj)
 endif()
 
-if(Qt6_EXECUTABLE_PROPERTIES)
-    set_target_properties(WaveConv PROPERTIES
-        ${Qt6_EXECUTABLE_PROPERTIES}
+
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport Multimedia Concurrent Xml)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets PrintSupport Multimedia Concurrent Xml)
+
+set(PROJECT_SOURCES
+        main.cpp
+        mainwindow.cpp
+        mainwindow.h
+
+        libs/qcustomplot.cpp
+        libs/qcustomplot.h
+        libs/kiss_fft.c
+        libs/kiss_fft.h
+        libs/_kiss_fft_guts.h
+        libs/kiss_fft_log.h
+)
+
+if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
+    qt_add_executable(HarmonicGridAnalyser
+        MANUAL_FINALIZATION
+        ${PROJECT_SOURCES}
     )
+
+else()
+    if(ANDROID)
+        add_library(HarmonicGridAnalyser SHARED
+            ${PROJECT_SOURCES}
+        )
+
+    else()
+        add_executable(HarmonicGridAnalyser
+            ${PROJECT_SOURCES}
+        )
+    endif()
 endif()
 
+target_link_libraries(HarmonicGridAnalyser PRIVATE
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::PrintSupport
+    Qt${QT_VERSION_MAJOR}::Multimedia
+    Qt${QT_VERSION_MAJOR}::Concurrent
+    Qt${QT_VERSION_MAJOR}::Xml
+)
+
+target_include_directories(HarmonicGridAnalyser PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs
+)
+
+
+if(${QT_VERSION} VERSION_LESS 6.1.0)
+  set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.HarmonicGridAnalyser)
+endif()
+
+set_target_properties(HarmonicGridAnalyser PROPERTIES
+    ${BUNDLE_ID_OPTION}
+    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+    MACOSX_BUNDLE TRUE
+    WIN32_EXECUTABLE TRUE
+)
+
+include(GNUInstallDirs)
+install(TARGETS HarmonicGridAnalyser
+    BUNDLE DESTINATION .
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+if(QT_VERSION_MAJOR EQUAL 6)
+    qt_finalize_executable(HarmonicGridAnalyser)
+endif()
