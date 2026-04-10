@@ -83,6 +83,8 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  Melody Renderer - Intended as an AutoTune type tool for xpressive PCMs. Load an LMMS pattern, flatten the pitch of a voice, and output a sung expression. WIP for this tab!!!
 
+•  FM Bessel Matcher - Convert samples of stabs into FM formulas. WIP.
+
 **Technical**
 
 Framework: Qt 6.x (Widgets) 
