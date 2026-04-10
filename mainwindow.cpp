@@ -21,6 +21,7 @@
 #include "vocalgenerator.h"
 #include "samgenerator.h"
 #include "drumeditortab.h"
+#include <complex>
 
 // =========================================================
 // MAIN CONSTRUCTOR
@@ -3226,6 +3227,12 @@ void MainWindow::setupUI() {
     VocalGeneratorTab *vocalTab = new VocalGeneratorTab(this);
     modeTabs->addTab(vocalTab, "Vocal Generator");
 
+    // ------------------------------------
+    // TAB 40: FM BESSEL RESYNTH
+    // ------------------------------------
+    initFmResynthTab();
+    modeTabs->addTab(fmResynthTab, "FM Bessel Matcher");
+
 
     // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
@@ -6063,3 +6070,346 @@ void MainWindow::generateHouseOrgan() {
          default: return "saww";
      }
  }
+
+
+ // =========================================================
+ // TAB 40: FM BESSEL RESYNTHESISER
+ // =========================================================
+ void MainWindow::initFmResynthTab() {
+     fmResynthTab = new QWidget();
+     auto *fmLayout = new QVBoxLayout(fmResynthTab);
+
+
+     fmScope = new UniversalScope();
+     fmScope->setMinimumHeight(120);
+     fmLayout->addWidget(fmScope);
+
+
+     auto *fmForm = new QFormLayout();
+
+     fmBuildMode = new QComboBox();
+     fmBuildMode->addItems({"Nightly (Nested Variables)", "Legacy (Additive Inline)"});
+
+     fmStyleCombo = new QComboBox();
+     fmStyleCombo->addItems({"Continuous Formula (Smooth & Safe)", "Time-Segmented (Step-Sequenced)"});
+
+     fmWindowRes = new QDoubleSpinBox();
+     fmWindowRes->setRange(1, 100);
+     fmWindowRes->setValue(8);
+     fmWindowRes->setSuffix(" Analysis Windows");
+
+     fmOperators = new QSpinBox();
+     fmOperators->setRange(1, 8);
+     fmOperators->setValue(3);
+     fmOperators->setSuffix(" Cascading Operators");
+
+     fmDecaySlider = new QSlider(Qt::Horizontal);
+     fmDecaySlider->setRange(1, 100);
+     fmDecaySlider->setValue(40);
+
+     fmForm->addRow("Build Mode:", fmBuildMode);
+     fmForm->addRow("Generation Style:", fmStyleCombo);
+     fmForm->addRow("Time Resolution:", fmWindowRes);
+     fmForm->addRow("FM Complexity:", fmOperators);
+     fmForm->addRow("FM Index Decay:", fmDecaySlider);
+     fmLayout->addLayout(fmForm);
+
+
+     auto *fmBtnGrid = new QGridLayout();
+
+         fmPitchCombo = new QComboBox();
+         fmPitchCombo->addItems({"C-3", "G-3", "A-3", "C-4", "E-4", "A-4", "C-5", "CUSTOM"});
+         fmPitchCombo->setCurrentText("A-4");
+
+         btnFmDeChord = new QPushButton("De-Chord: OFF");
+         btnFmDeChord->setCheckable(true);
+         btnFmDeChord->setStyleSheet("background-color: #444; color: white; height: 35px;");
+
+         btnLoadFm = new QPushButton("Load Stab (.wav)");
+         btnLoadFm->setStyleSheet("height: 35px;");
+
+         btnAutoGuessFm = new QPushButton("✨ Auto-Analyze WAV"); // <--- NEW BUTTON
+         btnAutoGuessFm->setStyleSheet("background-color: #aa5500; color: white; font-weight: bold; height: 35px;");
+         btnAutoGuessFm->setEnabled(false);
+
+         btnPlayFm = new QPushButton("▶ Play Preview");
+         btnPlayFm->setCheckable(true);
+         btnPlayFm->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 35px;");
+
+
+         fmBtnGrid->addWidget(new QLabel("Pitch:"), 0, 0);
+         fmBtnGrid->addWidget(fmPitchCombo, 0, 1);
+         fmBtnGrid->addWidget(btnFmDeChord, 0, 2);
+
+
+         fmBtnGrid->addWidget(btnLoadFm, 1, 0);
+         fmBtnGrid->addWidget(btnAutoGuessFm, 1, 1);
+         fmBtnGrid->addWidget(btnPlayFm, 1, 2);
+
+         fmLayout->addLayout(fmBtnGrid);
+
+
+     fmExpressionBox = new QTextEdit();
+     fmExpressionBox->setPlaceholderText("Generated Bessel FM formula will appear here...");
+     fmExpressionBox->setMaximumHeight(120);
+     fmExpressionBox->setReadOnly(true);
+     fmExpressionBox->setStyleSheet("font-family: Consolas, Monospace; background: #111; color: #ffaa00;");
+     fmLayout->addWidget(fmExpressionBox);
+
+
+     connect(fmStyleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int idx){
+         fmWindowRes->setEnabled(idx == 1); // Disable window slider if continuous
+         updateFmPreview();
+     });
+     connect(fmWindowRes, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [=](){ updateFmPreview(); });
+     connect(fmOperators, QOverload<int>::of(&QSpinBox::valueChanged), [=](){ updateFmPreview(); });
+     connect(fmBuildMode, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateFmPreview(); });
+     connect(fmPitchCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](){ updateFmPreview(); });
+     connect(fmDecaySlider, &QSlider::valueChanged, [=](){ updateFmPreview(); });
+
+     connect(btnFmDeChord, &QPushButton::toggled, [=](bool checked){
+         m_fmDeChordEnabled = checked;
+         btnFmDeChord->setText(checked ? "De-Chord: ON (Harmonic)" : "De-Chord: OFF (Inharmonic)");
+         btnFmDeChord->setStyleSheet(checked ? "background-color: #ffaa00; color: black;" : "background-color: #444; color: white;");
+         updateFmPreview();
+     });
+
+     connect(btnLoadFm, &QPushButton::clicked, this, [=](){
+             loadWav();
+             if(!originalData.empty()) {
+                 fmSampleData = originalData;
+                 if(fmSampleData.size() > (fileFs * 2)) fmSampleData.resize(fileFs * 2);
+                 btnAutoGuessFm->setEnabled(true);
+                 updateFmPreview();
+             }
+         });
+
+
+         connect(btnAutoGuessFm, &QPushButton::clicked, this, &MainWindow::autoGuessFmParameters);
+
+     connect(btnPlayFm, &QPushButton::toggled, [=](bool checked){
+         if(!checked) {
+             m_ghostSynth->stop();
+             btnPlayFm->setText("▶ Play Preview");
+             btnPlayFm->setStyleSheet("background-color: #335533; color: white;");
+         } else {
+             m_ghostSynth->start();
+             btnPlayFm->setText("⏹ Stop");
+             btnPlayFm->setStyleSheet("background-color: #338833; color: white;");
+             updateFmPreview();
+         }
+     });
+ }
+
+ void MainWindow::updateFmPreview() {
+     if (fmSampleData.empty()) return;
+
+     int numWindows = (int)fmWindowRes->value();
+     int opCount = fmOperators->value();
+     double totalDur = (double)fmSampleData.size() / fileFs;
+     bool deChord = m_fmDeChordEnabled;
+     bool isNightly = (fmBuildMode->currentIndex() == 0);
+     bool isContinuous = (fmStyleCombo->currentIndex() == 0);
+     double decayVal = fmDecaySlider->value() / 5.0;
+
+     double fundamental = 440.0;
+     QString pText = fmPitchCombo->currentText();
+     if(pText.contains("C-3")) fundamental = 130.81;
+     else if(pText.contains("A-3")) fundamental = 220.00;
+     else if(pText.contains("C-4")) fundamental = 261.63;
+     else if(pText.contains("C-5")) fundamental = 523.25;
+
+
+     std::function<double(double)> fmAlgo = [=](double t) {
+         double loopTime = std::fmod(t, totalDur + 0.1);
+         if (loopTime >= totalDur) return 0.0;
+
+         double signal = 0.0;
+
+         for (int i = opCount; i >= 1; --i) {
+             double ratio = deChord ? (double)i : (1.0 + (i-1)*0.414);
+             double modIndex = (i > 1) ? (10.0 / i) * std::exp(-loopTime * decayVal) : 1.0;
+
+             if (i == opCount) {
+                 signal = std::sin(loopTime * fundamental * ratio * 6.283185);
+             } else {
+                 signal = std::sin((loopTime * fundamental * ratio * 6.283185) + (signal * modIndex));
+             }
+         }
+         return signal * std::exp(-loopTime * (decayVal * 0.5)) * 0.5;
+     };
+
+
+     QString finalFormula;
+
+     if (isContinuous) {
+
+         QString fmString = "";
+
+         for (int op = opCount; op >= 1; --op) {
+             double ratio = deChord ? (double)op : (1.0 + (op-1)*0.414);
+
+             if (op == opCount) {
+                 fmString = QString("sinew(integrate(f*%1))").arg(ratio, 0, 'f', 3);
+             } else {
+
+                 double baseModIndex = (10.0 / op) / 6.283185;
+
+                 fmString = QString("sinew(integrate(f*%1) + (%2 * exp(-t*%3) * %4))")
+                             .arg(ratio, 0, 'f', 3)
+                             .arg(baseModIndex, 0, 'f', 4)
+                             .arg(decayVal, 0, 'f', 2)
+                             .arg(fmString);
+             }
+         }
+
+         if (isNightly) {
+             finalFormula = QString("var env := exp(-t * %1);\nclamp(-1, env * %2, 1)")
+                             .arg(decayVal * 0.5, 0, 'f', 2).arg(fmString);
+         } else {
+             finalFormula = QString("clamp(-1, exp(-t*%1) * (%2), 1)")
+                             .arg(decayVal * 0.5, 0, 'f', 2).arg(fmString);
+         }
+
+     } else {
+         if (isNightly) {
+             finalFormula = QString("var w := floor(t * (%1 / %2));\n").arg(numWindows).arg(totalDur);
+             finalFormula += QString("var env := exp(-t * %1);\n").arg(decayVal * 0.5, 0, 'f', 2);
+
+             QStringList windowBlocks;
+             for(int w = 0; w < numWindows; ++w) {
+                 QString fmString = "";
+                 double windowTime = (double)w * (totalDur / numWindows);
+
+                 for (int op = opCount; op >= 1; --op) {
+                     double ratio = deChord ? (double)op : (1.0 + (op-1)*0.414);
+                     if (op == opCount) {
+                         fmString = QString("sinew(integrate(f*%1))").arg(ratio, 0, 'f', 3);
+                     } else {
+
+                         double modIndex = ((10.0 / op) * std::exp(-windowTime * decayVal)) / 6.283185;
+
+                         fmString = QString("sinew(integrate(f*%1) + (%2 * %3))")
+                                     .arg(ratio, 0, 'f', 3).arg(modIndex, 0, 'f', 4).arg(fmString);
+                     }
+                 }
+                 windowBlocks << QString("(w == %1 ? (%2) : ").arg(w).arg(fmString);
+             }
+
+             finalFormula += "clamp(-1, env * (" + windowBlocks.join("") + "0" + QString(")").repeated(numWindows) + "), 1)";
+
+         } else {
+             QStringList parts;
+             double winSize = totalDur / numWindows;
+
+             for(int w = 0; w < numWindows; ++w) {
+                 QString fmString = "";
+                 double windowTime = (double)w * winSize;
+
+                 for (int op = opCount; op >= 1; --op) {
+                     double ratio = deChord ? (double)op : (1.0 + (op-1)*0.414);
+                     if (op == opCount) {
+                         fmString = QString("sinew(integrate(f*%1))").arg(ratio, 0, 'f', 3);
+                     } else {
+
+                         double modIndex = ((10.0 / op) * std::exp(-windowTime * decayVal)) / 6.283185;
+
+                         fmString = QString("sinew(integrate(f*%1) + (%2 * %3))")
+                                     .arg(ratio, 0, 'f', 3).arg(modIndex, 0, 'f', 4).arg(fmString);
+                     }
+                 }
+
+                 parts << QString("((t >= %1 & t < %2) * (%3))")
+                         .arg(w*winSize, 0, 'f', 4).arg((w+1)*winSize, 0, 'f', 4).arg(fmString);
+             }
+
+             finalFormula = QString("clamp(-1, exp(-t*%1) * (%2), 1)").arg(decayVal * 0.5, 0, 'f', 2).arg(parts.join(" + "));
+         }
+     }
+
+     fmExpressionBox->setText(finalFormula);
+     fmScope->updateScope(fmAlgo, totalDur, 1.0);
+
+     if (btnPlayFm->isChecked()) {
+         m_ghostSynth->setAudioSource(fmAlgo);
+     }
+ }
+
+void MainWindow::autoGuessFmParameters() {
+    if (fmSampleData.empty()) return;
+
+    statusBox->setText("Analyzing WAV file...");
+    QApplication::processEvents();
+
+    const int N = 4096;
+    int scanLen = std::min((int)fmSampleData.size(), N);
+
+    std::vector<std::complex<double>> buffer(N, 0.0);
+    for (int i = 0; i < scanLen; ++i) {
+
+        double window = 0.5 * (1.0 - std::cos(2.0 * 3.14159265 * i / (scanLen - 1)));
+        buffer[i] = std::complex<double>(fmSampleData[i] * window, 0.0);
+    }
+
+    std::function<void(std::vector<std::complex<double>>&)> fft = [&](std::vector<std::complex<double>>& x) {
+        int n = x.size();
+        if (n <= 1) return;
+        std::vector<std::complex<double>> even(n / 2), odd(n / 2);
+        for (int i = 0; i < n / 2; ++i) { even[i] = x[i * 2]; odd[i] = x[i * 2 + 1]; }
+        fft(even); fft(odd);
+        for (int k = 0; k < n / 2; ++k) {
+            std::complex<double> t = std::polar(1.0, -2.0 * 3.14159265 * k / n) * odd[k];
+            x[k] = even[k] + t; x[k + n / 2] = even[k] - t;
+        }
+    };
+
+    fft(buffer);
+
+
+    double maxMag = 0;
+    int maxBin = 1;
+    for (int i = 1; i < N / 2; ++i) {
+        double mag = std::abs(buffer[i]);
+        if (mag > maxMag) {
+            maxMag = mag;
+            maxBin = i;
+        }
+    }
+
+    double detectedFreq = (double)maxBin * fileFs / N;
+
+
+    if (std::abs(detectedFreq - 130.8) < 10) fmPitchCombo->setCurrentText("C-3");
+    else if (std::abs(detectedFreq - 220.0) < 15) fmPitchCombo->setCurrentText("A-3");
+    else if (std::abs(detectedFreq - 261.6) < 15) fmPitchCombo->setCurrentText("C-4");
+    else if (std::abs(detectedFreq - 440.0) < 20) fmPitchCombo->setCurrentText("A-4");
+    else if (std::abs(detectedFreq - 523.2) < 25) fmPitchCombo->setCurrentText("C-5");
+    else {
+
+        fmPitchCombo->setCurrentText("A-4");
+    }
+
+
+    double sumStart = 0, sumMid = 0;
+    int tenth = fmSampleData.size() / 10;
+    int half = fmSampleData.size() / 2;
+
+    for(int i = 0; i < tenth; i++) sumStart += fmSampleData[i] * fmSampleData[i];
+    for(int i = tenth; i < half; i++) sumMid += fmSampleData[i] * fmSampleData[i];
+
+    double rmsStart = std::sqrt(sumStart / tenth);
+    double rmsMid = std::sqrt(sumMid / (half - tenth));
+
+
+    double dropRatio = (rmsStart > 0.0001) ? (rmsMid / rmsStart) : 1.0;
+
+
+    int guessedDecay = 100 - (int)(dropRatio * 100.0);
+    guessedDecay = std::clamp(guessedDecay, 10, 95);
+
+    fmDecaySlider->setValue(guessedDecay);
+
+    statusBox->setText(QString("Auto-Analysis Complete!\nDetected Freq: ~%1 Hz\nEstimated Decay Curve: %2%").arg(detectedFreq, 0, 'f', 1).arg(guessedDecay));
+
+    updateFmPreview();
+}

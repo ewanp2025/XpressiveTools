@@ -782,7 +782,29 @@ private:
     // TAB 39
     // -------------------------------------
 
+    // -------------------------------------
+    // TAB 40: FM BESSEL RESYNTH
+    // -------------------------------------
+    QWidget *fmResynthTab;
+    QComboBox *fmBuildMode;
+    QComboBox *fmPitchCombo;
+    QComboBox *fmStyleCombo;
+    QDoubleSpinBox *fmWindowRes;
+    QSpinBox *fmOperators;
+    QSlider *fmDecaySlider;
+    QPushButton *btnFmDeChord;
+    QPushButton *btnPlayFm;
+    QPushButton *btnLoadFm;
+    QTextEdit *fmExpressionBox;
+    UniversalScope *fmScope;
+    QPushButton *btnAutoGuessFm;
 
+    bool m_fmDeChordEnabled = false;
+    std::vector<double> fmSampleData;
+
+    void initFmResynthTab();
+    void updateFmPreview();
+    void autoGuessFmParameters();
 
     // -------------------------------------
     // TAB UNUSED: X-TRANSPILER (Zyn to Xpressive)
