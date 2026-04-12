@@ -335,8 +335,6 @@ private slots:
     void generateKeyMapper();
     void generateWestCoast();
 
-    void generateNatureLogic();
-    void updateNatureLabels(int index);
 
     // Preset Loading
     void loadBesselPreset(int index);

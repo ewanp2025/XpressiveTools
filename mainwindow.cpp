@@ -21,6 +21,7 @@
 #include "vocalgenerator.h"
 #include "samgenerator.h"
 #include "drumeditortab.h"
+#include "naturelabtab.h"
 #include <complex>
 
 // =========================================================
@@ -2846,119 +2847,16 @@ void MainWindow::setupUI() {
         });
 
         // ---------------------------------------------------------
-        // TAB 31: NATURE MEGA LAB
+        // TAB 31: NATURE LAB
         // ---------------------------------------------------------
-        QWidget *natureTab = new QWidget();
-        QVBoxLayout *natureLayout = new QVBoxLayout(natureTab);
 
-        // TOP BAR: Mode & Build Type
-        QGroupBox *natureModeBox = new QGroupBox("Environment Settings");
-        QHBoxLayout *natureModeLayout = new QHBoxLayout(natureModeBox);
+	NatureLabTab *natureTab = new NatureLabTab(this);
+    modeTabs->addTab(natureTab, "Nature Lab");
 
-        natureTypeCombo = new QComboBox();
-        natureTypeCombo->addItems({
-                "Forest Birds (FM)",
-                "Night Crickets (Pulse)",
-                "Guinea Pig Herd (Harmonic)",
-                "Rushing Stream (Granular)",
-                "Rainstorm (Stochastic)",
-                "Thunder & Rumble (Explosive)",
-                "Swamp Frogs (Resonant)"
-        });
 
-        natureBuildMode = new QComboBox();
-        natureBuildMode->addItems({"Nightly (Variables)", "Legacy (Additive)"});
-
-        natureModeLayout->addWidget(new QLabel("Model:"));
-        natureModeLayout->addWidget(natureTypeCombo, 1);
-        natureModeLayout->addWidget(new QLabel("Build:"));
-        natureModeLayout->addWidget(natureBuildMode, 1);
-        natureLayout->addWidget(natureModeBox);
-
-        // The Mega Slider Bank
-        QGroupBox *paramBox = new QGroupBox("Physics Parameters");
-        QGridLayout *paramGrid = new QGridLayout(paramBox);
-
-        for(int i=0; i<8; i++) {
-            natureLabels[i] = new QLabel(QString("Param %1").arg(i+1));
-            natureLabels[i]->setAlignment(Qt::AlignCenter);
-                natureLabels[i]->setStyleSheet("font-size: 10px; color: #555;");
-
-                // Dynamic pointers to our class members
-                QSlider** targetSlider = nullptr;
-                switch(i) {
-                    case 0: targetSlider = &natureParam1; break;
-                    case 1: targetSlider = &natureParam2; break;
-                    case 2: targetSlider = &natureParam3; break;
-                    case 3: targetSlider = &natureParam4; break;
-                    case 4: targetSlider = &natureParam5; break;
-                    case 5: targetSlider = &natureParam6; break;
-                    case 6: targetSlider = &natureParam7; break;
-                    case 7: targetSlider = &natureParam8; break;
-                }
-
-                *targetSlider = new QSlider(Qt::Vertical);
-                (*targetSlider)->setRange(0, 100);
-                (*targetSlider)->setValue(50);
-
-                // Add to grid (2 rows of 4)
-                int row = (i < 4) ? 0 : 2;
-                int col = i % 4;
-
-                paramGrid->addWidget(*targetSlider, row, col, Qt::AlignHCenter);
-                paramGrid->addWidget(natureLabels[i], row+1, col, Qt::AlignHCenter);
-
-                // Connect update
-                connect(*targetSlider, &QSlider::valueChanged, this, &MainWindow::generateNatureLogic);
-            }
-            natureLayout->addWidget(paramBox);
-
-            // Visuals & Controls
-            natureScope = new UniversalScope();
-            natureScope->setMinimumHeight(120);
-            natureLayout->addWidget(natureScope);
-
-            // BUTTON LAYOUT
-            QHBoxLayout *natureBtnLay = new QHBoxLayout();
-
-            btnPlayNature = new QPushButton("▶ Play Preview");
-            btnPlayNature->setCheckable(true);
-            btnPlayNature->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
-
-            btnGenNature = new QPushButton("GENERATE STRING");
-            btnGenNature->setStyleSheet("background-color: #444; color: white; font-weight: bold; height: 40px;");
-
-            natureBtnLay->addWidget(btnPlayNature);
-            natureBtnLay->addWidget(btnGenNature);
-            natureLayout->addLayout(natureBtnLay);
-
-            // CONNECTIONS
-            connect(natureTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int index){
-                updateNatureLabels(index);
-                generateNatureLogic();
-            });
-
-            // Play Toggle Logic
-            connect(btnPlayNature, &QPushButton::toggled, [=](bool checked){
-                if(!checked) {
-                    m_ghostSynth->setAudioSource([](double){ return 0.0; });
-                    m_ghostSynth->stop();
-                    btnPlayNature->setText("▶ Play Preview");
-                    btnPlayNature->setStyleSheet("background-color: #335533; color: white; font-weight: bold; height: 40px;");
-                } else {
-                    m_ghostSynth->start();
-                    btnPlayNature->setText("⏹ Stop");
-                    btnPlayNature->setStyleSheet("background-color: #338833; color: white; font-weight: bold; height: 40px;");
-                    generateNatureLogic(); // Trigger sound
-                }
-            });
-
-            connect(btnGenNature, &QPushButton::clicked, this, &MainWindow::generateNatureLogic);
-
-            modeTabs->addTab(natureTab, "Nature Lab");
-
-            // Initialize labels
-            updateNatureLabels(0);
+	connect(natureTab, &NatureLabTab::playRequested, this, [this](QString expression) {
+    	m_ghostSynth->setExpression(expression);
+	});
 
         // ---------------------------------------------------------
         // TAB 32: VECTOR MORPH (XY SYNTHESIS)
@@ -5642,172 +5540,8 @@ void MainWindow::generateScratchLogic() {
     statusBox->setText(formula);
     QApplication::clipboard()->setText(formula);
 }
+// TAB 31: NATURELAB
 
-// TAB 31
-
-void MainWindow::updateNatureLabels(int index) {
-    QStringList labels;
-    switch(index) {
-        case 0: labels = QStringList{"Bird Pitch", "Chirp Rate", "FM Depth", "Flock Size", "Tone", "Distance", "Trill Speed", "Echo"}; break;
-        case 1: labels = QStringList{"Cricket Pitch", "Chirp Speed", "Pulse Width", "Jitter", "Leg Scrape", "Resonance", "Swarm", "Dampen"}; break;
-        case 2: labels = QStringList{"Wheek Pitch", "Urgency", "Vibrato", "Herd Size", "Breath", "Vocal Formant", "Rise Time", "Fall Time"}; break;
-        case 3: labels = QStringList{"Flow Rate", "Turbulence", "Bubble Amt", "Bubble Pitch", "Rock Size", "Depth", "Foam", "Stereo"}; break;
-        case 4: labels = QStringList{"Rain Intensity", "Droplet Size", "Wind Speed", "Gust Var", "Roof Tone", "Splash", "Stereo", "Distance"}; break;
-        case 5: labels = QStringList{"Rumble Freq", "Crack Rate", "Distance", "Blast Pwr", "Echo Tail", "Wind Howl", "Rain Mix", "Pre-Delay"}; break;
-        case 6: labels = QStringList{"Croak Pitch", "Ribbit Rate", "Throat Size", "Wetness", "Swamp Gas", "Echo", "Insect Mix", "Night"}; break;
-        default: labels = QStringList{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"}; break;
-    }
-
-    for(int i=0; i<8; i++) {
-        if(i < labels.size()) natureLabels[i]->setText(labels[i]);
-    }
-}
-
-void MainWindow::generateNatureLogic() {
-    int type = natureTypeCombo->currentIndex();
-    bool isNightly = (natureBuildMode->currentIndex() == 0);
-
-
-    double p1 = natureParam1->value() / 100.0;
-    double p2 = natureParam2->value() / 100.0;
-    double p3 = natureParam3->value() / 100.0;
-    double p4 = natureParam4->value() / 100.0;
-    double p5 = natureParam5->value() / 100.0;
-    double p6 = natureParam6->value() / 100.0;
-    double p7 = natureParam7->value() / 100.0;
-    double p8 = natureParam8->value() / 100.0;
-
-
-    std::function<double(double)> natureAlgo;
-    auto noise = [](double s) { return std::sin(s * 12.9898) * 43758.5453 - std::floor(std::sin(s * 12.9898) * 43758.5453); };
-
-    if (type == 0) { // FOREST BIRDS
-        natureAlgo = [=](double t) {
-            double out = 0.0;
-            for(int i=0; i<3; i++) {
-                double birdOffset = i * 1.5;
-                double rhythm = t * (0.5 + p2 * 2.0) + birdOffset + (noise(std::floor(t)) * p4);
-                if (std::fmod(rhythm, 2.0) < 0.2 + (p4*0.1)) {
-                    double localT = std::fmod(rhythm, 2.0) * (5.0 + p7*5.0);
-                    double pitch = (2000 + p1*3000) + std::sin(localT * (20 + p3*50)) * (500 * p3);
-                    double amp = std::exp(-localT * (2.0 + p8));
-                    out += std::sin(localT * pitch) * amp * p5;
-                }
-            }
-            return std::clamp(out, -0.8, 0.8);
-        };
-    }
-    else if (type == 1) { // CRICKETS
-        natureAlgo = [=](double t) {
-            double rate = 5.0 + p2 * 15.0;
-            double chirp = std::fmod(t * rate, 1.0);
-            double carrier = std::sin(t * (3000 + p1 * 4000) * 6.28);
-            double env = (chirp < 0.5) ? std::sin(chirp * 3.14) * (std::sin(t*150)>0?1:0) : 0.0;
-            return carrier * env * (0.5 + p5);
-        };
-    }
-    else if (type == 3) { // STREAM
-        natureAlgo = [=](double t) {
-            double flow = 0.0;
-            for(int i=1; i<5; i++) flow += std::sin(t * i * (50 + p1*200) + noise(t*i)) / i;
-            double bubbles = (noise(t*100) > (0.95 - p3*0.2)) ? std::sin(t*800*6.28)*0.5 : 0.0;
-            return (flow * 0.4 * p5) + (bubbles * p3);
-        };
-    }
-
-    else {
-
-         natureAlgo = [=](double t) { return (noise(t*5000) * p5 * 0.5); };
-    }
-
-    QString code;
-
-    if (type == 0) { // FOREST BIRDS
-
-        double speed = 0.5 + p2 * 2.0;
-        double pitch = 1000 + p1 * 2000;
-        double fm = 20 + p3 * 50;
-
-
-        auto birdStr = [&](double offset) {
-            QString rhythm = QString("mod(t*%1 + %2, 2.0)").arg(speed).arg(offset);
-            QString env = QString("exp(-%1 * 5.0)").arg(rhythm); // Decay
-            QString osc = QString("sinew(integrate(%1 + 500*sinew(t*%2)))").arg(pitch).arg(fm);
-            return QString("((%1 < 0.3) * %2 * %3)").arg(rhythm).arg(osc).arg(env);
-        };
-
-        code = QString("(%1 + %2 + %3) * %4")
-               .arg(birdStr(0.0)).arg(birdStr(1.3)).arg(birdStr(2.7)).arg(p5);
-    }
-    else if (type == 1) {
-        double rate = 5.0 + p2 * 15.0;
-        double pitch = 3000 + p1 * 4000;
-
-
-        QString carrier = QString("sinew(integrate(%1))").arg(pitch);
-        QString lfo = QString("(sinew(t*%1) > 0)").arg(rate); // On/Off rhythm
-        QString pulse = QString("sinew(t*150)"); // The "trill" texture inside the chirp
-
-        code = QString("%1 * %2 * %3 * %4").arg(carrier).arg(lfo).arg(pulse).arg(p5);
-    }
-    else if (type == 2) {
-        double speed = 0.5 + p2;
-        double pitch = 400 + p1 * 400;
-
-
-        QString sweep = QString("mod(t*%1, 2.0)").arg(speed);
-        QString osc = QString("saww(integrate(%1 + (%2 * 400)))").arg(pitch).arg(sweep);
-
-        code = QString("((%1 < 0.8) * %2 * sinew(%1 * 3.14)) * %3").arg(sweep).arg(osc).arg(p5);
-    }
-    else if (type == 3) { // RUSHING STREAM
-        QString flow = QString("randv(t*%1)").arg(100 + p1 * 500);
-        // Bubble: High pitch sine triggered randomly
-        QString bubbleTrig = QString("(randv(t*100) > %1)").arg(0.95 - p3*0.2);
-        QString bubble = QString("sinew(integrate(800)) * %1").arg(bubbleTrig);
-
-        code = QString("(%1 * 0.4 + %2) * %3").arg(flow).arg(bubble).arg(p5);
-    }
-    else if (type == 4) { // RAINSTORM
-
-        QString wind = QString("randv(t*%1)").arg(50 + p4*100); // Low rate noise
-        QString rain = QString("(randv(t*10000) > %1 ? randv(t*20000) : 0)").arg(0.95 - p1*0.1);
-
-        code = QString("(%1 * 0.2 + %2) * %3").arg(wind).arg(rain).arg(p5);
-    }
-    else if (type == 5) { // THUNDER
-
-        double rate = 0.1 + p2 * 0.2;
-        QString cycle = QString("mod(t*%1, 1.0)").arg(rate);
-        QString boom = QString("((%1 < 0.1) * randv(t) * (1.0 - (%1/0.1)))").arg(cycle);
-        QString rumble = QString("sinew(integrate(50)) * %1").arg(boom); // Low freq add
-
-        code = QString("(%1 + %2) * %3").arg(boom).arg(rumble).arg(p4);
-    }
-    else if (type == 6) { // SWAMP FROGS
-        // Low pitch saw with envelope
-        double rate = 1.0 + p2 * 2.0;
-        QString croak = QString("saww(integrate(100 + %1*50))").arg(p1);
-        QString rhythm = QString("sinew(t*%1)").arg(rate);
-
-        code = QString("(%1 * (%2 > 0.5 ? 1 : 0)) * %3").arg(croak).arg(rhythm).arg(p5);
-    }
-
-
-    QString finalResult = QString("clamp(-1, %1, 1)").arg(code);
-
-
-    if(statusBox) statusBox->setText(finalResult);
-    QApplication::clipboard()->setText(finalResult);
-
-
-    if(natureScope) natureScope->updateScope(natureAlgo, 1.0, 1.0);
-
-
-    if (btnPlayNature->isChecked()) {
-        m_ghostSynth->setAudioSource(natureAlgo);
-    }
-}
 // TAB 32: VECTOR MORPH
 void MainWindow::initVectorTab() {
     vectorTab = new QWidget();

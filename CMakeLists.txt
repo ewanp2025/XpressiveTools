@@ -34,6 +34,8 @@ add_executable(WaveConv
     samgenerator.h
     drumeditortab.h
     drumeditortab.cpp
+    naturelabtab.cpp
+    naturelabtab.h
 )
 
 target_link_libraries(WaveConv PRIVATE
