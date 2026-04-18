@@ -6,6 +6,8 @@
 #include <QInputDialog>
 #include <QDebug>
 #include <functional>
+#include <QDialog>
+#include <QDialogButtonBox>
 
 PCMEditorTab::PCMEditorTab(SynthEngine* ghostSynth, QWidget *parent)
     : QWidget(parent), m_ghostSynth(ghostSynth) {
@@ -699,23 +701,48 @@ void PCMEditorTab::onTimeStretchClicked() {
     if (m_nightlyBuffer.empty()) return;
 
 
-    bool ok;
-    double factor = QInputDialog::getDouble(this, "Time Stretch",
-                                            "Enter stretch factor (e.g., 2.0 = Double Length, 0.5 = Half Length):",
-                                            1.5, 0.1, 10.0, 2, &ok);
-    if (!ok) return; // User clicked cancel
+    QDialog dialog(this);
+    dialog.setWindowTitle("BPM Time Stretch");
+    dialog.setStyleSheet(this->styleSheet()); // Inherit your Amiga theme
+    QFormLayout form(&dialog);
+
+    QDoubleSpinBox fromBpm;
+    fromBpm.setRange(10.0, 999.0);
+    fromBpm.setValue(120.0);
+    fromBpm.setSuffix(" BPM");
+
+    QDoubleSpinBox toBpm;
+    toBpm.setRange(10.0, 999.0);
+    toBpm.setValue(120.0);
+    toBpm.setSuffix(" BPM");
+
+    form.addRow("Original Tempo (From):", &fromBpm);
+    form.addRow("Target Tempo (To):", &toBpm);
+
+    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
+    form.addRow(&buttonBox);
+
+    connect(&buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(&buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) return; // User cancelled
+
+
+    double factor = fromBpm.value() / toBpm.value();
+
+
+    if (factor <= 0.01) return;
 
 
     int grainSize = static_cast<int>(m_nightlySampleRate * 0.05);
-    if (grainSize % 2 != 0) grainSize++; // Keep it an even number
+    if (grainSize % 2 != 0) grainSize++;
     if (grainSize > m_nightlyBuffer.size()) grainSize = m_nightlyBuffer.size();
 
     int halfGrain = grainSize / 2;
-    double inHop = halfGrain / factor; // How fast we move through the input
-    int outHop = halfGrain;            // How fast we move through the output
+    double inHop = halfGrain / factor;
+    int outHop = halfGrain;
 
     std::vector<double> outBuffer;
-
     outBuffer.resize(static_cast<size_t>(m_nightlyBuffer.size() * factor) + grainSize, 0.0);
 
     std::vector<double> window(grainSize);
@@ -725,7 +752,6 @@ void PCMEditorTab::onTimeStretchClicked() {
 
     double inPos = 0.0;
     int outPos = 0;
-
 
     while (inPos + grainSize < m_nightlyBuffer.size()) {
         int inIdx = static_cast<int>(inPos);
@@ -745,9 +771,7 @@ void PCMEditorTab::onTimeStretchClicked() {
         for (double& val : outBuffer) val /= maxVal;
     }
 
-
     m_nightlyBuffer = std::move(outBuffer);
-
 
     updateNightlyPreview();
     generateNightlyExpression();
