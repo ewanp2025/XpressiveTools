@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(WaveConv VERSION 0.1 LANGUAGES CXX)
+project(WaveConv VERSION 0.1 LANGUAGES CXX C)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -40,9 +40,22 @@ add_executable(WaveConv
     SymbolicRegressionTab.cpp
     MicroGP.h
     MicroGP.cpp
+
+    libs/kiss_fft.c
+    libs/kiss_fft.h
+    libs/_kiss_fft_guts.h
+    libs/kiss_fft_log.h
+
 )
 
 target_link_libraries(WaveConv PRIVATE Qt6::Widgets Qt6::Multimedia Qt6::Xml Qt6::Concurrent)
+
+target_include_directories(WaveConv PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs
+)
+
+
 
 if(APPLE)
     # This sets the name that appears in the macOS Finder and Menu Bar

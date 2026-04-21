@@ -4,8 +4,9 @@
 #include <QFutureWatcher>
 #include <vector>
 #include <memory>
-
+#include "synthengine.h"
 #include "MicroGP.h"
+#include <QSpinBox>
 
 class QVBoxLayout;
 class QPushButton;
@@ -20,7 +21,7 @@ class SymbolicRegressionTab : public QWidget
 {
     Q_OBJECT
 public:
-    explicit SymbolicRegressionTab(QWidget* parent = nullptr);
+    explicit SymbolicRegressionTab(SynthEngine* synth, QWidget* parent = nullptr);
 
 private slots:
     void onLoadWavClicked();
@@ -39,14 +40,21 @@ private:
     QComboBox* m_cmbDownsample;
     QCheckBox* m_chkDechord;
     QComboBox* m_cmbSyntax;
+
+    QSpinBox* m_popSizeSpin;
+    QSpinBox* m_genSpin;
+    QSpinBox* m_maxDepthSpin;
+
     QPushButton* m_btnDiscover;
     QLabel* m_lblStatus;
     QTextEdit* m_txtExpression;
     QPushButton* m_btnCopy;
+    QPushButton* m_btnPlay;
 
+    SynthEngine* m_ghostSynth = nullptr;
     UniversalScope* m_scope = nullptr;
 
-    QFutureWatcher<QString>* m_watcher = nullptr;
+    QFutureWatcher<MicroGP::DiscoveryResult>* m_watcher = nullptr;
 
     std::vector<double> m_audioData;
     double m_sampleRate = 44100.0;

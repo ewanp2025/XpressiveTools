@@ -19,7 +19,9 @@
 #include <QFutureWatcher>
 #include <QDebug>
 #include <QSlider>
-
+#include <QSpinBox>
+#include <QGroupBox>
+#include <QFormLayout>
 #include <vector>
 #include <memory>
 #include <random>
@@ -28,7 +30,8 @@
 #include <numeric>
 #include <cmath>
 
-SymbolicRegressionTab::SymbolicRegressionTab(QWidget* parent) : QWidget(parent)
+SymbolicRegressionTab::SymbolicRegressionTab(SynthEngine* synth, QWidget* parent)
+    : QWidget(parent), m_ghostSynth(synth)
 {
     setupUi();
 }
@@ -37,12 +40,12 @@ void SymbolicRegressionTab::setupUi()
 {
     m_layout = new QVBoxLayout(this);
 
-    // === OSCILLOSCOPE (live preview) ===
+
     m_scope = new UniversalScope(this);
     m_scope->setMinimumHeight(180);
     m_layout->addWidget(m_scope);
 
-    // Load row
+
     auto loadLayout = new QHBoxLayout();
     m_btnLoad = new QPushButton("Load WAV", this);
     m_txtPath = new QLineEdit(this);
@@ -51,7 +54,7 @@ void SymbolicRegressionTab::setupUi()
     loadLayout->addWidget(m_txtPath);
     m_layout->addLayout(loadLayout);
 
-    // Options
+
     m_cmbDownsample = new QComboBox(this);
     m_cmbDownsample->addItems({"Original", "8000", "4000", "2000", "1000"});
     m_layout->addWidget(new QLabel("Downsample to (Hz) [Lower = faster]:", this));
@@ -79,15 +82,57 @@ void SymbolicRegressionTab::setupUi()
 
     m_btnCopy = new QPushButton("📋 Copy to Clipboard", this);
     m_layout->addWidget(m_btnCopy);
+    m_btnPlay = new QPushButton("▶ Play Discovered Audio", this);
+    m_btnPlay->setCheckable(true);
+
+    auto *gpGroup = new QGroupBox("Micro-GP Settings (higher = slower but better)");
+    auto *gpForm = new QFormLayout(gpGroup);
+
+    m_popSizeSpin = new QSpinBox(this);
+    m_popSizeSpin->setRange(50, 2000);
+    m_popSizeSpin->setValue(100);
+    m_popSizeSpin->setSingleStep(50);
+
+    m_genSpin = new QSpinBox(this);
+    m_genSpin->setRange(10, 300);
+    m_genSpin->setValue(25);
+
+    m_maxDepthSpin = new QSpinBox(this);
+    m_maxDepthSpin->setRange(8, 512);
+    m_maxDepthSpin->setValue(12);
+
+    gpForm->addRow("Population Size:", m_popSizeSpin);
+    gpForm->addRow("Generations:", m_genSpin);
+    gpForm->addRow("Max Tree Depth:", m_maxDepthSpin);
+    m_layout->addWidget(gpGroup);
 
     connect(m_btnLoad, &QPushButton::clicked, this, &SymbolicRegressionTab::onLoadWavClicked);
     connect(m_btnDiscover, &QPushButton::clicked, this, &SymbolicRegressionTab::onDiscoverClicked);
     connect(m_btnCopy, &QPushButton::clicked, this, &SymbolicRegressionTab::onCopyClicked);
+
+    connect(m_btnPlay, &QPushButton::toggled, [this](bool checked) {
+        if (!m_ghostSynth) return;
+
+        if (checked && m_bestTree) {
+
+            auto treePtr = std::shared_ptr<GPNode>(m_bestTree->clone().release());
+
+            m_ghostSynth->setAudioSource([treePtr](double t) -> double {
+                return treePtr->evaluate(t, 523.25); // Evaluate at C5
+            });
+            m_ghostSynth->start();
+            m_btnPlay->setText("⏹ Stop Audio");
+            m_btnPlay->setStyleSheet("background-color: #aa0000; color: white;");
+        } else {
+            m_ghostSynth->stop();
+            m_btnPlay->setText("▶ Play Discovered Audio");
+            m_btnPlay->setStyleSheet(""); // Reset style
+        }
+    });
 }
 
 bool SymbolicRegressionTab::loadWavToMemory(const QString& path)
 {
-
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) return false;
 
@@ -133,7 +178,6 @@ bool SymbolicRegressionTab::loadWavToMemory(const QString& path)
     m_audioData.clear();
     file.seek(dataOffset);
     QByteArray raw = file.read(dataSize);
-
 
     if (audioFormat == 3 && bitsPerSample == 32) {
         const float* samples = reinterpret_cast<const float*>(raw.data());
@@ -196,7 +240,6 @@ void SymbolicRegressionTab::updateScopePreview(bool useGenerated)
     double duration = m_audioData.size() / m_sampleRate;
 
     if (!useGenerated || !m_bestTree) {
-
         auto preview = [this, duration](double t) -> double {
             int idx = static_cast<int>(t * m_sampleRate);
             if (idx < 0 || idx >= static_cast<int>(m_audioData.size())) return 0.0;
@@ -204,9 +247,9 @@ void SymbolicRegressionTab::updateScopePreview(bool useGenerated)
         };
         m_scope->updateScope(preview, duration, 1.0);
     } else {
-
         auto preview = [tree = m_bestTree.get()](double t) -> double {
-            return tree ? tree->evaluate(t) : 0.0;
+
+            return tree ? tree->evaluate(t, 523.25) : 0.0;
         };
         m_scope->updateScope(preview, duration, 1.0);
     }
@@ -232,55 +275,64 @@ void SymbolicRegressionTab::onDiscoverClicked()
         return;
     }
 
+
     std::vector<double> processData = m_audioData;
     double processRate = m_sampleRate;
 
-    QString targetStr = m_cmbDownsample->currentText();
-    if (targetStr != "Original") {
-        double targetRate = targetStr.toDouble();
-        if (targetRate < processRate) {
-            std::vector<double> dec;
-            double step = processRate / targetRate;
-            for (size_t i = 0; i < processData.size(); i += static_cast<size_t>(step)) {
-                dec.push_back(processData[i]);
+
+    if (m_cmbDownsample->currentIndex() > 0) {
+        double targetRate = m_cmbDownsample->currentText().toDouble();
+        if (targetRate > 0 && targetRate < m_sampleRate) {
+
+            int step = std::max(1, (int)std::round(m_sampleRate / targetRate));
+            std::vector<double> downsampled;
+
+            for (size_t i = 0; i < m_audioData.size(); i += step) {
+                downsampled.push_back(m_audioData[i]);
             }
-            processData = std::move(dec);
-            processRate = targetRate;
+            processData = downsampled;
+            processRate = m_sampleRate / step;
         }
     }
+
 
     MicroGP::Config config;
     config.legacySyntax = (m_cmbSyntax->currentText() == "Legacy");
     config.dechord = m_chkDechord->isChecked();
     config.sampleRate = processRate;
-    config.populationSize = 300;
-    config.generations = 60;
+    config.populationSize = m_popSizeSpin->value();
+    config.generations = m_genSpin->value();
+    config.maxDepth = m_maxDepthSpin->value();
 
     m_btnDiscover->setEnabled(false);
-    m_lblStatus->setText(QString("Running Native Micro-GP on %1 points...").arg(processData.size()));
+    m_lblStatus->setText(QString("Running Micro-GP (%1 pop, %2 gens)...")
+                             .arg(config.populationSize).arg(config.generations));
 
     if (m_watcher) m_watcher->deleteLater();
-    m_watcher = new QFutureWatcher<QString>(this);
-    connect(m_watcher, &QFutureWatcher<QString>::finished, this, &SymbolicRegressionTab::onProcessFinished);
+    m_watcher = new QFutureWatcher<MicroGP::DiscoveryResult>(this);
+    connect(m_watcher, &QFutureWatcher<MicroGP::DiscoveryResult>::finished,
+            this, &SymbolicRegressionTab::onProcessFinished);
 
-    QFuture<QString> future = QtConcurrent::run([config, processData, this]() mutable -> QString {
+
+    QFuture<MicroGP::DiscoveryResult> future = QtConcurrent::run([config, processData]() -> MicroGP::DiscoveryResult {
         MicroGP engine(config);
-        auto result = engine.discoverExpression(processData);
-
-        return result;
+        return engine.discoverExpression(processData);
     });
 
     m_watcher->setFuture(future);
 }
-
 void SymbolicRegressionTab::onProcessFinished()
 {
     m_btnDiscover->setEnabled(true);
-    QString result = m_watcher->result();
-    if (result.isEmpty()) result = "0";
-    m_txtExpression->setPlainText(result);
-    m_lblStatus->setText("Native Micro-GP Expression discovered!");
+    MicroGP::DiscoveryResult res = m_watcher->result();
 
+    QString expr = res.expression.isEmpty() ? "0" : res.expression;
+    m_txtExpression->setPlainText(expr);
+    m_lblStatus->setText("✅ Expression discovered!");
+
+    if (res.tree) {
+        m_bestTree = std::move(res.tree);
+    }
 
     updateScopePreview(true);
 }

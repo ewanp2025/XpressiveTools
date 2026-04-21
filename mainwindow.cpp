@@ -3133,7 +3133,7 @@ void MainWindow::setupUI() {
     modeTabs->addTab(fmResynthTab, "FM Bessel Matcher");
 
     // TAB 41: Symbolic Regression
-    SymbolicRegressionTab* srTab = new SymbolicRegressionTab(this);
+    SymbolicRegressionTab* srTab = new SymbolicRegressionTab(m_ghostSynth, this);
     modeTabs->addTab(srTab, "SR Audio Lab");
 
 
