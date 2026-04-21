@@ -9,7 +9,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Xml)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Xml Concurrent)
 
 add_executable(WaveConv
     MACOSX_BUNDLE 
@@ -36,13 +36,13 @@ add_executable(WaveConv
     drumeditortab.cpp
     naturelabtab.cpp
     naturelabtab.h
+    SymbolicRegressionTab.h
+    SymbolicRegressionTab.cpp
+    MicroGP.h
+    MicroGP.cpp
 )
 
-target_link_libraries(WaveConv PRIVATE
-    Qt6::Widgets
-    Qt6::Multimedia
-    Qt6::Xml
-)
+target_link_libraries(WaveConv PRIVATE Qt6::Widgets Qt6::Multimedia Qt6::Xml Qt6::Concurrent)
 
 if(APPLE)
     # This sets the name that appears in the macOS Finder and Menu Bar

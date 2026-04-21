@@ -22,6 +22,7 @@
 #include "samgenerator.h"
 #include "drumeditortab.h"
 #include "naturelabtab.h"
+#include "SymbolicRegressionTab.h"
 #include <complex>
 
 // =========================================================
@@ -3130,6 +3131,10 @@ void MainWindow::setupUI() {
     // ------------------------------------
     initFmResynthTab();
     modeTabs->addTab(fmResynthTab, "FM Bessel Matcher");
+
+    // TAB 41: Symbolic Regression
+    SymbolicRegressionTab* srTab = new SymbolicRegressionTab(this);
+    modeTabs->addTab(srTab, "SR Audio Lab");
 
 
     // ------------------------------------
