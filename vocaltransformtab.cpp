@@ -20,15 +20,13 @@ VocalTransformTab::VocalTransformTab(SynthEngine* ghostSynth, QWidget *parent)
 {
     setupUI();
 
-    audioFormat.setSampleRate(44100);
-    audioFormat.setChannelCount(1);
-    audioFormat.setSampleFormat(QAudioFormat::Int16);
-
     connect(btnRecord, &QPushButton::clicked, this, &VocalTransformTab::toggleRecording);
     connect(btnProcess, &QPushButton::clicked, this, &VocalTransformTab::processAudio);
     connect(btnPlay, &QPushButton::clicked, this, &VocalTransformTab::playAudio);
     connect(btnTrim, &QPushButton::clicked, this, &VocalTransformTab::trimSelection);
     connect(btnVocalMask, &QPushButton::clicked, this, &VocalTransformTab::applyVocalMask);
+    connect(btnShiftBright, &QPushButton::clicked, this, &VocalTransformTab::applyBrightShift);
+    connect(btnShiftDeep, &QPushButton::clicked, this, &VocalTransformTab::applyDeepShift);
 }
 
 VocalTransformTab::~VocalTransformTab()
@@ -54,6 +52,25 @@ void VocalTransformTab::setupUI()
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(10);
 
+
+    QHBoxLayout *qualityLayout = new QHBoxLayout();
+    qualityLayout->addWidget(new QLabel("Sample Rate:"));
+    sampleRateCombo = new QComboBox(this);
+    sampleRateCombo->addItem("48000 Hz", 48000);
+    sampleRateCombo->addItem("44100 Hz", 44100);
+    sampleRateCombo->addItem("16000 Hz", 16000);
+    sampleRateCombo->setCurrentIndex(1); // Default 44.1k
+    qualityLayout->addWidget(sampleRateCombo);
+
+    qualityLayout->addWidget(new QLabel("Bit Depth:"));
+    bitDepthCombo = new QComboBox(this);
+    bitDepthCombo->addItem("16-bit Integer", QAudioFormat::Int16);
+    bitDepthCombo->addItem("32-bit Float (Hi-Res)", QAudioFormat::Float);
+    qualityLayout->addWidget(bitDepthCombo);
+    qualityLayout->addStretch();
+    mainLayout->addLayout(qualityLayout);
+
+
     QHBoxLayout *controlLayout = new QHBoxLayout();
     btnRecord = new QPushButton("🎤 Start Recording", this);
     btnRecord->setCheckable(true);
@@ -75,9 +92,20 @@ void VocalTransformTab::setupUI()
     mainLayout->addLayout(controlLayout);
 
 
+    QHBoxLayout *presetLayout = new QHBoxLayout();
+    btnShiftDeep = new QPushButton("🌘 Shift Timbre: Deep", this);
+    btnShiftDeep->setStyleSheet("font-weight: bold; padding: 8px; background-color: #333366; color: white;");
+
+    btnShiftBright = new QPushButton("🌟 Shift Timbre: Bright", this);
+    btnShiftBright->setStyleSheet("font-weight: bold; padding: 8px; background-color: #663333; color: white;");
+
     btnVocalMask = new QPushButton("🎭 Apply Identity Mask (Non-Human)", this);
     btnVocalMask->setStyleSheet("font-weight: bold; padding: 8px; background-color: #550088; color: white;");
-    mainLayout->addWidget(btnVocalMask);
+
+    presetLayout->addWidget(btnShiftDeep);
+    presetLayout->addWidget(btnShiftBright);
+    presetLayout->addWidget(btnVocalMask);
+    mainLayout->addLayout(presetLayout);
 
 
     QFormLayout *sliderLayout = new QFormLayout();
@@ -93,7 +121,7 @@ void VocalTransformTab::setupUI()
 
     roboticSlider = new QSlider(Qt::Horizontal, this);
     roboticSlider->setRange(0, 100);
-    roboticSlider->setValue(20);
+    roboticSlider->setValue(0);
     sliderLayout->addRow("Robotic Effect (%):", roboticSlider);
 
     mainLayout->addLayout(sliderLayout);
@@ -101,7 +129,9 @@ void VocalTransformTab::setupUI()
 
     mainLayout->addWidget(new QLabel("Waveform (Click + Drag to select region):"));
 
-    setMinimumHeight(500);
+    setMinimumHeight(550);
+
+
     QHBoxLayout *outputModeLayout = new QHBoxLayout();
     outputModeLayout->addWidget(new QLabel("Output Format:"));
     buildModeCombo = new QComboBox(this);
@@ -111,7 +141,6 @@ void VocalTransformTab::setupUI()
     outputModeLayout->addStretch();
     mainLayout->addLayout(outputModeLayout);
 
-
     mainLayout->addWidget(new QLabel("Xpressive Output:"));
     xpressiveOutput = new QTextEdit(this);
     xpressiveOutput->setReadOnly(true);
@@ -119,20 +148,36 @@ void VocalTransformTab::setupUI()
     xpressiveOutput->setFontFamily("Consolas");
     mainLayout->addWidget(xpressiveOutput);
 
-    QLabel *status = new QLabel("Ready — Click 'Start Recording' and speak or sing into your microphone", this);
+    QLabel *status = new QLabel("Ready — Select Quality, click 'Start Recording', and speak into your microphone", this);
     status->setWordWrap(true);
     mainLayout->addWidget(status);
 }
 
 void VocalTransformTab::applyVocalMask()
 {
-
     pitchSlider->setValue(60);
     formantSlider->setValue(155);
     roboticSlider->setValue(85);
-
     QMessageBox::information(this, "Identity Mask Applied",
                              "Vocal parameters have been heavily scrambled to create a non-human, synthetic output.");
+}
+
+void VocalTransformTab::applyBrightShift()
+{
+    pitchSlider->setValue(135);
+    formantSlider->setValue(125);
+    roboticSlider->setValue(0);
+    QMessageBox::information(this, "Timbre Shift Applied",
+                             "Vocal resonance has been shifted upward for a brighter acoustic profile.");
+}
+
+void VocalTransformTab::applyDeepShift()
+{
+    pitchSlider->setValue(75);
+    formantSlider->setValue(85);
+    roboticSlider->setValue(0);
+    QMessageBox::information(this, "Timbre Shift Applied",
+                             "Vocal resonance has been shifted downward for a deeper acoustic profile.");
 }
 
 void VocalTransformTab::toggleRecording()
@@ -147,9 +192,13 @@ void VocalTransformTab::toggleRecording()
         selectionStartPixel = -1;
         selectionEndPixel = -1;
 
+
+        audioFormat.setSampleRate(sampleRateCombo->currentData().toInt());
+        audioFormat.setChannelCount(1);
+        audioFormat.setSampleFormat(static_cast<QAudioFormat::SampleFormat>(bitDepthCombo->currentData().toInt()));
+
         QAudioDevice inputDevice = QMediaDevices::defaultAudioInput();
         if (!inputDevice.isNull()) {
-            // Fallback to preferred format if 44.1k/Int16 is rejected
             if (!inputDevice.isFormatSupported(audioFormat)) {
                 audioFormat = inputDevice.preferredFormat();
             }
@@ -281,7 +330,7 @@ void VocalTransformTab::paintEvent(QPaintEvent *)
 
     if (recordedBuffer.empty()) return;
 
-    QRect waveRect = rect().adjusted(20, 140, -20, -250);
+    QRect waveRect = rect().adjusted(20, 180, -20, -280);
     int w = waveRect.width();
     int h = waveRect.height();
     int midY = waveRect.top() + h / 2;
@@ -307,7 +356,6 @@ void VocalTransformTab::paintEvent(QPaintEvent *)
 
         painter.drawLine(waveRect.left() + x, y1, waveRect.left() + x, y2);
     }
-
 
     if (selectionStartPixel != -1 && selectionEndPixel != -1) {
         int left = std::min(selectionStartPixel, selectionEndPixel);
@@ -441,7 +489,6 @@ QString VocalTransformTab::generateLegacyVocalExpression(const std::vector<doubl
     };
 
     QString tree = buildTree(0, N - 1);
-
 
     QString expr = QString(
                        "var s := floor(mod(t * %1 * %2, %3));\n"

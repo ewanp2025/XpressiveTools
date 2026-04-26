@@ -40,6 +40,8 @@ private slots:
     void playAudio();
     void trimSelection();
     void applyVocalMask();
+    void applyBrightShift();
+    void applyDeepShift();
 
 private:
     void setupUI();
@@ -56,11 +58,18 @@ private:
     QPushButton *btnPlay;
     QPushButton *btnTrim;
     QPushButton *btnVocalMask;
+    QPushButton *btnShiftBright;
+    QPushButton *btnShiftDeep;
     QPushButton *btnProcess;
+
     QSlider *pitchSlider;
     QSlider *formantSlider;
     QSlider *roboticSlider;
+
+    QComboBox *sampleRateCombo;
+    QComboBox *bitDepthCombo;
     QComboBox *buildModeCombo;
+
     QTextEdit *xpressiveOutput;
 
     QAudioSource *audioInput = nullptr;
