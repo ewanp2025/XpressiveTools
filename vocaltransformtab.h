@@ -9,11 +9,14 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QAudioSource>
+#include <QAudioSink>
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QByteArray>
 #include <QBuffer>
+#include <QComboBox>
 #include <vector>
+#include <QMouseEvent>
 
 class SynthEngine;
 
@@ -34,20 +37,36 @@ private slots:
     void processAudio();
     void generateXpressive();
     void handleAudioData();
+    void playAudio();
+    void trimSelection();
+    void applyVocalMask();
 
 private:
     void setupUI();
 
+    QString generateNightlyVocalExpression(const std::vector<double>& buffer,
+                                           double pitchMult,
+                                           double formantMult);
+
+    QString generateLegacyVocalExpression(const std::vector<double>& buffer,
+                                          double pitchMult,
+                                          double formantMult);
+
     QPushButton *btnRecord;
+    QPushButton *btnPlay;
+    QPushButton *btnTrim;
+    QPushButton *btnVocalMask;
     QPushButton *btnProcess;
     QSlider *pitchSlider;
     QSlider *formantSlider;
     QSlider *roboticSlider;
+    QComboBox *buildModeCombo;
     QTextEdit *xpressiveOutput;
-
 
     QAudioSource *audioInput = nullptr;
     QIODevice *audioIODevice = nullptr;
+    QAudioSink *audioOutput = nullptr;
+    QBuffer *playbackBuffer = nullptr;
     QAudioFormat audioFormat;
 
     std::vector<double> recordedBuffer;

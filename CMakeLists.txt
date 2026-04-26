@@ -22,8 +22,7 @@ add_executable(WaveConv
     ModularSynth.h
     pcmeditortab.cpp
     pcmeditortab.h
-    oscilloscopetab.cpp
-    oscilloscopetab.h
+    oscilloscopetab.cpp    oscilloscopetab.h
     melodyrenderertab.cpp
     melodyrenderertab.h
     effectstab.h

@@ -1,138 +1,462 @@
 #include "vocaltransformtab.h"
 #include "synthengine.h"
+
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QFormLayout>
+#include <QMessageBox>
 #include <QPainter>
-#include <QDebug>
+#include <QAudioFormat>
+#include <QAudioDevice>
+#include <QMediaDevices>
+#include <QMouseEvent>
+#include <QApplication>
+#include <cmath>
+#include <algorithm>
+#include <QClipboard>
 
 VocalTransformTab::VocalTransformTab(SynthEngine* ghostSynth, QWidget *parent)
-    : QWidget(parent), m_ghostSynth(ghostSynth) {
-    
-    // Set up standard 44.1kHz mono audio format for recording
+    : QWidget(parent), m_ghostSynth(ghostSynth)
+{
+    setupUI();
+
     audioFormat.setSampleRate(44100);
     audioFormat.setChannelCount(1);
-    audioFormat.setSampleFormat(QAudioFormat::Float);
+    audioFormat.setSampleFormat(QAudioFormat::Int16);
 
-    QAudioDevice info = QMediaDevices::defaultAudioInput();
-    if (!info.isFormatSupported(audioFormat)) {
-        qWarning() << "Default format not supported, trying to use nearest.";
-        audioFormat = info.preferredFormat();
-    }
-
-    setupUI();
+    connect(btnRecord, &QPushButton::clicked, this, &VocalTransformTab::toggleRecording);
+    connect(btnProcess, &QPushButton::clicked, this, &VocalTransformTab::processAudio);
+    connect(btnPlay, &QPushButton::clicked, this, &VocalTransformTab::playAudio);
+    connect(btnTrim, &QPushButton::clicked, this, &VocalTransformTab::trimSelection);
+    connect(btnVocalMask, &QPushButton::clicked, this, &VocalTransformTab::applyVocalMask);
 }
 
-VocalTransformTab::~VocalTransformTab() {
+VocalTransformTab::~VocalTransformTab()
+{
     if (audioInput) {
         audioInput->stop();
         delete audioInput;
+        audioInput = nullptr;
+    }
+    if (audioOutput) {
+        audioOutput->stop();
+        delete audioOutput;
+        audioOutput = nullptr;
+    }
+    if (playbackBuffer) {
+        delete playbackBuffer;
+        playbackBuffer = nullptr;
     }
 }
 
-void VocalTransformTab::setupUI() {
+void VocalTransformTab::setupUI()
+{
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->setSpacing(10);
 
-    // Top Controls
-    QHBoxLayout *topLayout = new QHBoxLayout();
-    btnRecord = new QPushButton("🔴 Start Recording");
-    btnRecord->setStyleSheet("background-color: #550000; color: white; font-weight: bold; padding: 10px;");
-    
-    btnProcess = new QPushButton("Apply Formant/Pitch Shift");
-    
-    topLayout->addWidget(btnRecord);
-    topLayout->addWidget(btnProcess);
-    mainLayout->addLayout(topLayout);
+    QHBoxLayout *controlLayout = new QHBoxLayout();
+    btnRecord = new QPushButton("🎤 Start Recording", this);
+    btnRecord->setCheckable(true);
+    btnRecord->setStyleSheet("font-weight: bold; padding: 8px;");
 
-    // Waveform Canvas Area
-    QWidget* canvasPlaceholder = new QWidget();
-    canvasPlaceholder->setObjectName("waveArea");
-    canvasPlaceholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    canvasPlaceholder->setMinimumHeight(150);
-    mainLayout->addWidget(new QLabel("Raw Audio (Click & Drag to Trim):"));
-    mainLayout->addWidget(canvasPlaceholder);
+    btnPlay = new QPushButton("▶ Play Audio", this);
+    btnPlay->setStyleSheet("font-weight: bold; padding: 8px; background-color: #004488; color: white;");
 
-    // Processing Sliders
-    QHBoxLayout *slidersLayout = new QHBoxLayout();
-    
-    QVBoxLayout *pitchLayout = new QVBoxLayout();
-    pitchSlider = new QSlider(Qt::Horizontal);
-    pitchSlider->setRange(-12, 12); pitchSlider->setValue(0);
-    pitchLayout->addWidget(new QLabel("Pitch Shift (Semitones)"));
-    pitchLayout->addWidget(pitchSlider);
-    
-    QVBoxLayout *formantLayout = new QVBoxLayout();
-    formantSlider = new QSlider(Qt::Horizontal);
-    formantSlider->setRange(-100, 100); formantSlider->setValue(0);
-    formantLayout->addWidget(new QLabel("Formant Character (Throat Size)"));
-    formantLayout->addWidget(formantSlider);
+    btnTrim = new QPushButton("✂ Trim Selection", this);
+    btnTrim->setStyleSheet("font-weight: bold; padding: 8px; background-color: #884400; color: white;");
 
-    slidersLayout->addLayout(pitchLayout);
-    slidersLayout->addLayout(formantLayout);
-    mainLayout->addLayout(slidersLayout);
+    btnProcess = new QPushButton("⚡ Process to Xpressive", this);
+    btnProcess->setStyleSheet("font-weight: bold; padding: 8px; background-color: #006600; color: white;");
 
-    // Output
-    xpressiveOutput = new QTextEdit();
+    controlLayout->addWidget(btnRecord);
+    controlLayout->addWidget(btnPlay);
+    controlLayout->addWidget(btnTrim);
+    controlLayout->addWidget(btnProcess);
+    mainLayout->addLayout(controlLayout);
+
+
+    btnVocalMask = new QPushButton("🎭 Apply Identity Mask (Non-Human)", this);
+    btnVocalMask->setStyleSheet("font-weight: bold; padding: 8px; background-color: #550088; color: white;");
+    mainLayout->addWidget(btnVocalMask);
+
+
+    QFormLayout *sliderLayout = new QFormLayout();
+    pitchSlider = new QSlider(Qt::Horizontal, this);
+    pitchSlider->setRange(50, 200);
+    pitchSlider->setValue(100);
+    sliderLayout->addRow("Pitch Shift (%):", pitchSlider);
+
+    formantSlider = new QSlider(Qt::Horizontal, this);
+    formantSlider->setRange(50, 200);
+    formantSlider->setValue(100);
+    sliderLayout->addRow("Formant Shift (%):", formantSlider);
+
+    roboticSlider = new QSlider(Qt::Horizontal, this);
+    roboticSlider->setRange(0, 100);
+    roboticSlider->setValue(20);
+    sliderLayout->addRow("Robotic Effect (%):", roboticSlider);
+
+    mainLayout->addLayout(sliderLayout);
+
+
+    mainLayout->addWidget(new QLabel("Waveform (Click + Drag to select region):"));
+
+    setMinimumHeight(500);
+    QHBoxLayout *outputModeLayout = new QHBoxLayout();
+    outputModeLayout->addWidget(new QLabel("Output Format:"));
+    buildModeCombo = new QComboBox(this);
+    buildModeCombo->addItem("Nightly / 1.3 Xpressive");
+    buildModeCombo->addItem("Legacy (1.2) Xpressive");
+    outputModeLayout->addWidget(buildModeCombo);
+    outputModeLayout->addStretch();
+    mainLayout->addLayout(outputModeLayout);
+
+
+    mainLayout->addWidget(new QLabel("Xpressive Output:"));
+    xpressiveOutput = new QTextEdit(this);
     xpressiveOutput->setReadOnly(true);
-    mainLayout->addWidget(new QLabel("Xpressive Math Output:"));
+    xpressiveOutput->setMinimumHeight(140);
+    xpressiveOutput->setFontFamily("Consolas");
     mainLayout->addWidget(xpressiveOutput);
 
-    // Connections
-    connect(btnRecord, &QPushButton::clicked, this, &VocalTransformTab::toggleRecording);
-    connect(btnProcess, &QPushButton::clicked, this, &VocalTransformTab::processAudio);
+    QLabel *status = new QLabel("Ready — Click 'Start Recording' and speak or sing into your microphone", this);
+    status->setWordWrap(true);
+    mainLayout->addWidget(status);
 }
 
-void VocalTransformTab::toggleRecording() {
-    if (!audioInput) {
-        audioInput = new QAudioSource(QMediaDevices::defaultAudioInput(), audioFormat, this);
-    }
+void VocalTransformTab::applyVocalMask()
+{
 
-    if (audioInput->state() == QAudio::StoppedState || audioInput->state() == QAudio::IdleState) {
+    pitchSlider->setValue(60);
+    formantSlider->setValue(155);
+    roboticSlider->setValue(85);
+
+    QMessageBox::information(this, "Identity Mask Applied",
+                             "Vocal parameters have been heavily scrambled to create a non-human, synthetic output.");
+}
+
+void VocalTransformTab::toggleRecording()
+{
+    if (btnRecord->isChecked()) {
+        btnRecord->setText("⏹ Stop Recording");
+        btnRecord->setStyleSheet("background-color: #aa0000; color: white; font-weight: bold;");
+
         recordedBuffer.clear();
         processedBuffer.clear();
-        audioIODevice = audioInput->start();
-        connect(audioIODevice, &QIODevice::readyRead, this, &VocalTransformTab::handleAudioData);
-        
-        btnRecord->setText("⏹ Stop Recording");
-        btnRecord->setStyleSheet("background-color: #880000; color: white;");
+
+        selectionStartPixel = -1;
+        selectionEndPixel = -1;
+
+        QAudioDevice inputDevice = QMediaDevices::defaultAudioInput();
+        if (!inputDevice.isNull()) {
+            // Fallback to preferred format if 44.1k/Int16 is rejected
+            if (!inputDevice.isFormatSupported(audioFormat)) {
+                audioFormat = inputDevice.preferredFormat();
+            }
+
+            audioInput = new QAudioSource(inputDevice, audioFormat, this);
+            audioIODevice = audioInput->start();
+            if (audioIODevice) {
+                connect(audioIODevice, &QIODevice::readyRead, this, &VocalTransformTab::handleAudioData);
+            }
+        } else {
+            QMessageBox::warning(this, "Error", "No microphone detected!");
+            btnRecord->setChecked(false);
+            btnRecord->setText("🎤 Start Recording");
+        }
     } else {
-        audioInput->stop();
-        btnRecord->setText("🔴 Start Recording");
-        btnRecord->setStyleSheet("background-color: #550000; color: white;");
-        update(); // Force a redraw to show the recorded waveform
+        if (audioInput) {
+            audioInput->stop();
+            delete audioInput;
+            audioInput = nullptr;
+        }
+        btnRecord->setText("🎤 Start Recording");
+        btnRecord->setStyleSheet("");
+        update();
     }
 }
 
-void VocalTransformTab::handleAudioData() {
+void VocalTransformTab::handleAudioData()
+{
     if (!audioIODevice) return;
-    
+
     QByteArray data = audioIODevice->readAll();
-    int samples = data.size() / sizeof(float);
-    const float* rawSamples = reinterpret_cast<const float*>(data.constData());
-    
-    for (int i = 0; i < samples; ++i) {
-        recordedBuffer.push_back(rawSamples[i]);
+
+    if (audioFormat.sampleFormat() == QAudioFormat::Int16) {
+        const int16_t* samples = reinterpret_cast<const int16_t*>(data.constData());
+        int numSamples = data.size() / sizeof(int16_t);
+        for (int i = 0; i < numSamples; ++i) {
+            recordedBuffer.push_back(samples[i] / 32768.0);
+        }
+    } else if (audioFormat.sampleFormat() == QAudioFormat::Float) {
+        const float* samples = reinterpret_cast<const float*>(data.constData());
+        int numSamples = data.size() / sizeof(float);
+        for (int i = 0; i < numSamples; ++i) {
+            recordedBuffer.push_back(samples[i]);
+        }
     }
-    
-    // Keep UI responsive and updating while recording
+
     update();
 }
 
-void VocalTransformTab::processAudio() {
-    // This is where we will write the kiss_fft Phase Vocoder!
-    // For now, let's just copy the recorded buffer so we don't crash.
-    processedBuffer = recordedBuffer;
-    
-    generateXpressive();
+void VocalTransformTab::playAudio()
+{
+    if (recordedBuffer.empty()) {
+        QMessageBox::warning(this, "No Audio", "Record something to play back first!");
+        return;
+    }
+
+    if (audioOutput) {
+        audioOutput->stop();
+        delete audioOutput;
+        audioOutput = nullptr;
+    }
+    if (playbackBuffer) {
+        delete playbackBuffer;
+        playbackBuffer = nullptr;
+    }
+
+    int startIdx = 0;
+    int endIdx = recordedBuffer.size();
+
+    if (selectionStartPixel != -1 && selectionEndPixel != -1 && selectionStartPixel != selectionEndPixel) {
+        int widgetWidth = width();
+        startIdx = static_cast<int>((std::min(selectionStartPixel, selectionEndPixel) / (float)widgetWidth) * recordedBuffer.size());
+        endIdx   = static_cast<int>((std::max(selectionStartPixel, selectionEndPixel) / (float)widgetWidth) * recordedBuffer.size());
+
+        startIdx = std::max(0, std::min(startIdx, (int)recordedBuffer.size() - 1));
+        endIdx   = std::max(startIdx + 1, std::min(endIdx, (int)recordedBuffer.size()));
+    }
+
+    QByteArray playData;
+    playData.resize((endIdx - startIdx) * sizeof(int16_t));
+    int16_t* ptr = reinterpret_cast<int16_t*>(playData.data());
+
+    for (int i = startIdx; i < endIdx; ++i) {
+        ptr[i - startIdx] = static_cast<int16_t>(std::clamp(recordedBuffer[i], -1.0, 1.0) * 32767.0);
+    }
+
+    playbackBuffer = new QBuffer(this);
+    playbackBuffer->setData(playData);
+    playbackBuffer->open(QIODevice::ReadOnly);
+
+    QAudioFormat outputFormat = audioFormat;
+    outputFormat.setSampleFormat(QAudioFormat::Int16);
+    outputFormat.setChannelCount(1);
+
+    QAudioDevice outputDevice = QMediaDevices::defaultAudioOutput();
+    audioOutput = new QAudioSink(outputDevice, outputFormat, this);
+    audioOutput->start(playbackBuffer);
 }
 
-void VocalTransformTab::generateXpressive() {
-    // We will port over your binary tree generator from PCMEditorTab here.
-    if (processedBuffer.empty()) return;
-    xpressiveOutput->setText("Expression generating...");
+void VocalTransformTab::trimSelection()
+{
+    if (recordedBuffer.empty()) return;
+
+    if (selectionStartPixel == -1 || selectionEndPixel == -1 || selectionStartPixel == selectionEndPixel) {
+        QMessageBox::information(this, "Select Area", "Click and drag on the waveform to select an area to trim.");
+        return;
+    }
+
+    int widgetWidth = width();
+    int startIdx = static_cast<int>((std::min(selectionStartPixel, selectionEndPixel) / (float)widgetWidth) * recordedBuffer.size());
+    int endIdx   = static_cast<int>((std::max(selectionStartPixel, selectionEndPixel) / (float)widgetWidth) * recordedBuffer.size());
+
+    startIdx = std::max(0, std::min(startIdx, (int)recordedBuffer.size() - 1));
+    endIdx   = std::max(startIdx + 1, std::min(endIdx, (int)recordedBuffer.size()));
+
+    std::vector<double> trimmed;
+    trimmed.assign(recordedBuffer.begin() + startIdx, recordedBuffer.begin() + endIdx);
+    recordedBuffer = trimmed;
+
+    selectionStartPixel = -1;
+    selectionEndPixel = -1;
+    update();
 }
 
-// ---- You can paste the paintEvent, mousePressEvent, and mouseMoveEvent 
-// ---- directly from your PCMEditorTab here so the waveform drawing works immediately!
-void VocalTransformTab::paintEvent(QPaintEvent *event) {
-    // Copy your painting logic from PCMEditorTab here
+void VocalTransformTab::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.fillRect(rect(), QColor(10, 10, 15));
+
+    if (recordedBuffer.empty()) return;
+
+    QRect waveRect = rect().adjusted(20, 140, -20, -250);
+    int w = waveRect.width();
+    int h = waveRect.height();
+    int midY = waveRect.top() + h / 2;
+
+    painter.setPen(QPen(QColor(0, 255, 100), 1.5));
+
+    float samplesPerPixel = static_cast<float>(recordedBuffer.size()) / w;
+
+    for (int x = 0; x < w; ++x) {
+        int startIdx = static_cast<int>(x * samplesPerPixel);
+        int endIdx = std::min(static_cast<int>((x + 1) * samplesPerPixel), (int)recordedBuffer.size() - 1);
+
+        float minVal = 0.0f, maxVal = 0.0f;
+        for (int i = startIdx; i <= endIdx; ++i) {
+            float val = recordedBuffer[i];
+            if (val < minVal) minVal = val;
+            if (val > maxVal) maxVal = val;
+        }
+
+        int y1 = midY - static_cast<int>(maxVal * (h / 2.0f) * 0.95f);
+        int y2 = midY - static_cast<int>(minVal * (h / 2.0f) * 0.95f);
+        if (y1 == y2) y2 += 1;
+
+        painter.drawLine(waveRect.left() + x, y1, waveRect.left() + x, y2);
+    }
+
+
+    if (selectionStartPixel != -1 && selectionEndPixel != -1) {
+        int left = std::min(selectionStartPixel, selectionEndPixel);
+        int right = std::max(selectionStartPixel, selectionEndPixel);
+        painter.fillRect(left, waveRect.top(), right - left, waveRect.height(), QColor(0, 255, 120, 60));
+        painter.setPen(QPen(QColor(0, 255, 120), 2, Qt::DashLine));
+        painter.drawRect(left, waveRect.top(), right - left, waveRect.height());
+    }
 }
-void VocalTransformTab::mousePressEvent(QMouseEvent *event) {}
-void VocalTransformTab::mouseMoveEvent(QMouseEvent *event) {}
+
+void VocalTransformTab::mousePressEvent(QMouseEvent *event)
+{
+    selectionStartPixel = event->pos().x();
+    selectionEndPixel = event->pos().x();
+    update();
+}
+
+void VocalTransformTab::mouseMoveEvent(QMouseEvent *event)
+{
+    if (selectionStartPixel != -1) {
+        selectionEndPixel = event->pos().x();
+        update();
+    }
+}
+
+void VocalTransformTab::processAudio()
+{
+    if (recordedBuffer.empty()) {
+        QMessageBox::warning(this, "No Audio", "Record something first!");
+        return;
+    }
+
+    std::vector<double> inputBuffer = recordedBuffer;
+
+    if (selectionStartPixel != -1 && selectionEndPixel != -1 && selectionStartPixel != selectionEndPixel) {
+        int widgetWidth = width();
+        int startIdx = static_cast<int>((std::min(selectionStartPixel, selectionEndPixel) / (float)widgetWidth) * recordedBuffer.size());
+        int endIdx   = static_cast<int>((std::max(selectionStartPixel, selectionEndPixel) / (float)widgetWidth) * recordedBuffer.size());
+
+        startIdx = std::max(0, std::min(startIdx, (int)recordedBuffer.size()-1));
+        endIdx   = std::max(startIdx + 1, std::min(endIdx, (int)recordedBuffer.size()));
+
+        inputBuffer.assign(recordedBuffer.begin() + startIdx, recordedBuffer.begin() + endIdx);
+    }
+
+    double pitchFactor = pitchSlider->value() / 100.0;
+    double formantFactor = formantSlider->value() / 100.0;
+    double robotic = roboticSlider->value() / 100.0;
+
+    processedBuffer.clear();
+    processedBuffer.reserve(inputBuffer.size());
+
+    for (double sample : inputBuffer) {
+        double processed = sample;
+        if (robotic > 0.01) {
+            int bits = 8 + static_cast<int>((1.0 - robotic) * 8);
+            processed = std::floor(processed * (1 << bits)) / (1 << bits);
+        }
+        processedBuffer.push_back(processed);
+    }
+
+    QString expr;
+    if (buildModeCombo->currentIndex() == 0) {
+        expr = generateNightlyVocalExpression(processedBuffer, pitchFactor, formantFactor);
+    } else {
+        expr = generateLegacyVocalExpression(processedBuffer, pitchFactor, formantFactor);
+    }
+
+    xpressiveOutput->setPlainText(expr);
+    QApplication::clipboard()->setText(expr);
+
+    QMessageBox::information(this, "Success",
+                             "Xpressive expression generated!\n\n"
+                             "It has been copied to the clipboard.\n"
+                             "Paste it into the O1 field in LMMS Xpressive.");
+}
+
+QString VocalTransformTab::generateNightlyVocalExpression(const std::vector<double>& buffer,
+                                                          double pitchMult,
+                                                          double formantMult)
+{
+    if (buffer.empty()) return "0";
+
+    int N = buffer.size();
+    double sampleRate = audioFormat.sampleRate() > 0 ? audioFormat.sampleRate() : 44100.0;
+
+    std::function<QString(int, int)> buildTree = [&](int start, int end) -> QString {
+        if (start == end) {
+            return QString::number(buffer[start], 'f', 4);
+        }
+        int mid = start + (end - start) / 2;
+        return QString("((s <= %1) ? %2 : %3)")
+            .arg(mid)
+            .arg(buildTree(start, mid))
+            .arg(buildTree(mid + 1, end));
+    };
+
+    QString tree = buildTree(0, N - 1);
+
+    QString expr = QString(
+                       "var s := floor(mod(t * %1 * %2, %3));\n"
+                       "var raw := %4;\n"
+                       "clamp(-1.0, raw * %5, 1.0)")
+                       .arg(sampleRate, 0, 'f', 1)
+                       .arg(pitchMult, 0, 'f', 3)
+                       .arg(N)
+                       .arg(tree)
+                       .arg(formantMult, 0, 'f', 3);
+
+    return expr;
+}
+
+QString VocalTransformTab::generateLegacyVocalExpression(const std::vector<double>& buffer,
+                                                         double pitchMult,
+                                                         double formantMult)
+{
+    if (buffer.empty()) return "0";
+
+    int N = buffer.size();
+    double sampleRate = audioFormat.sampleRate() > 0 ? audioFormat.sampleRate() : 44100.0;
+
+    std::function<QString(int, int)> buildTree = [&](int start, int end) -> QString {
+        if (start == end) {
+            return QString::number(buffer[start], 'f', 4);
+        }
+        int mid = start + (end - start) / 2;
+        return QString("((s <= %1) ? %2 : %3)")
+            .arg(mid)
+            .arg(buildTree(start, mid))
+            .arg(buildTree(mid + 1, end));
+    };
+
+    QString tree = buildTree(0, N - 1);
+
+
+    QString expr = QString(
+                       "var s := floor(mod(t * %1 * %2, %3));\n"
+                       "var raw := %4;\n"
+                       "max(-1.0, min(raw * %5, 1.0))")
+                       .arg(sampleRate, 0, 'f', 1)
+                       .arg(pitchMult, 0, 'f', 3)
+                       .arg(N)
+                       .arg(tree)
+                       .arg(formantMult, 0, 'f', 3);
+
+    return expr;
+}
+
+void VocalTransformTab::generateXpressive()
+{
+    processAudio();
+}
