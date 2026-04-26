@@ -79,7 +79,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  PCM Editor - Trim PCM "samples", add segments and tune each segment / pitch bend each segment, time stretch, reverse, pitch flatten etc. (there is a bug to be solved in PCM editor where if you press play on the GUI it returns the "sample" to the inital state before editing).
 
-•  Oscilloscope - Create timbres which animate on an X-Y oscilloscope. Messy at this stage. Requires implementation of TDM controlled by A1.
+•  Oscilloscope - Create timbres which animate on an X-Y oscilloscope. Messy at this stage. TDM controlled by A1.
 
 •  Melody Renderer - Intended as an AutoTune type tool for xpressive PCMs. Load an LMMS pattern, flatten the pitch of a voice, and output a sung expression. WIP for this tab!!!
 
@@ -87,7 +87,7 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  Vocal Transform - Record live audio through your microphone and transform it into Xpressive compatible expressions with pitch and formant shifting. WIP.
 
-•  Symbolic Regression - WIP to use genetic programming and symbolic regression to automatically discover mathematical expressions which closely match loaded WAV samples. WIP.
+•  Symbolic Regression - WIP to use symbolic regression to automatically discover mathematical expressions which closely match loaded WAV samples. WIP.
 
 **Technical**
 
