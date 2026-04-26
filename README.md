@@ -85,6 +85,10 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  FM Bessel Matcher - Convert samples of stabs into FM formulas. WIP.
 
+•  Vocal Transform - Record live audio through your microphone and transform it into Xpressive compatible expressions with pitch and formant shifting. WIP.
+
+•  Symbolic Regression - WIP to use genetic programming and symbolic regression to automatically discover mathematical expressions which closely match loaded WAV samples. WIP.
+
 **Technical**
 
 Framework: Qt 6.x (Widgets) 
