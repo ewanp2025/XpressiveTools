@@ -3,6 +3,7 @@ extern "C" {
 }
 
 #include "MicroGP.h"
+#include <QStringList>
 #include <cmath>
 #include <algorithm>
 #include <numeric>
@@ -10,7 +11,6 @@ extern "C" {
 #include <thread>
 #include <functional>
 #include <cstdlib>
-
 
 std::unique_ptr<GPNode> GPNode::clone() const {
     auto n = std::make_unique<GPNode>(type, value);
@@ -25,6 +25,34 @@ int GPNode::getSize() const {
     if (right) size += right->getSize();
     return size;
 }
+
+
+QString GPNode::serialize() const {
+    QStringList tokens;
+
+    tokens << QString::number((int)type) << QString::number(value, 'f', 6);
+    if (left) tokens << left->serialize();
+    else tokens << "-1";
+    if (right) tokens << right->serialize();
+    else tokens << "-1";
+    return tokens.join(" ");
+}
+
+std::unique_ptr<GPNode> GPNode::deserialize(QTextStream& stream) {
+    QString typeStr;
+    stream >> typeStr;
+    if (typeStr == "-1" || typeStr.isEmpty()) return nullptr;
+
+    int typeInt = typeStr.toInt();
+    double val;
+    stream >> val;
+
+    auto node = std::make_unique<GPNode>(static_cast<NodeType>(typeInt), val);
+    node->left = deserialize(stream);
+    node->right = deserialize(stream);
+    return node;
+}
+
 
 double GPNode::evaluate(double t, double f) const {
     double pi2 = 6.28318530718;
@@ -198,9 +226,97 @@ MicroGP::MicroGP(Config config) : m_config(config) {
     m_rng.seed(rd());
 }
 
-// ---------------------------------------------------------
-// FFT IMPLEMENTATION ROUTER
-// ---------------------------------------------------------
+std::vector<double> MicroGP::computeEnvelope(const std::vector<double>& audio) const {
+    std::vector<double> env(audio.size(), 0.0);
+    double alpha = 0.97;
+    double current = 0.0;
+    for (size_t i = 0; i < audio.size(); ++i) {
+        current = alpha * current + (1.0 - alpha) * std::abs(audio[i]);
+        env[i] = current;
+    }
+    return env;
+}
+
+void MicroGP::optimizeConstants(GPNode* tree, const std::vector<double>& targetAudio, const std::vector<double>& targetSpectrum) {
+    if (!tree) return;
+    std::vector<GPNode*> constants;
+    std::function<void(GPNode*)> collect = [&](GPNode* n) {
+        if (!n) return;
+        if (n->type == NodeType::Const) constants.push_back(n);
+        collect(n->left.get());
+        collect(n->right.get());
+    };
+    collect(tree);
+
+    if (constants.empty()) return;
+
+    double bestFit = calculateFitness(*tree, targetAudio, targetSpectrum);
+    std::normal_distribution<double> noise(0.0, 0.3);
+
+    for (int iter = 0; iter < 60; ++iter) {
+        GPNode* c = constants[m_rng() % constants.size()];
+        double oldVal = c->value;
+        c->value += noise(m_rng);
+
+        double newFit = calculateFitness(*tree, targetAudio, targetSpectrum);
+        if (newFit < bestFit) {
+            bestFit = newFit;
+        } else {
+            c->value = oldVal;
+        }
+    }
+}
+
+double MicroGP::calculateFitness(const GPNode& tree, const std::vector<double>& targetAudio, const std::vector<double>& targetSpectrum) {
+    int samples = targetAudio.size();
+    if (samples == 0) return 999999.0;
+
+    std::vector<double> generated(samples);
+    double timeDomainError = 0.0;
+    double baseFrequency = 523.25;
+
+    auto targetEnv = computeEnvelope(targetAudio);
+
+    for (int i = 0; i < samples; ++i) {
+        double t = (double)i / m_config.sampleRate;
+        double val = tree.evaluate(t, baseFrequency);
+        if (std::isnan(val) || std::isinf(val)) return 999999.0;
+        generated[i] = val;
+
+        double diff = val - targetAudio[i];
+        double weight = (i < samples * 0.2) ? 8.0 : (i < samples * 0.4 ? 3.0 : 1.0);
+        timeDomainError += (diff * diff) * weight;
+    }
+    timeDomainError /= samples;
+
+    auto genEnv = computeEnvelope(generated);
+    double envError = 0.0;
+    for (size_t i = 0; i < targetEnv.size(); ++i) {
+        double d = targetEnv[i] - genEnv[i];
+        envError += d * d;
+    }
+    envError /= targetEnv.size();
+
+    if (!m_config.useSpectralFitness) {
+        return timeDomainError + 0.4 * envError;
+    }
+
+    std::vector<double> genSpectrum = calculateMagnitudeSpectrum(generated);
+    double spectralError = 0.0;
+    double totalWeight = 0.0;
+    size_t limit = std::min(genSpectrum.size(), targetSpectrum.size()) / 3;
+
+    for (size_t i = 1; i < limit; ++i) {
+        double diff = genSpectrum[i] - targetSpectrum[i];
+        double weight = 1.0 / std::log(2.0 + i);
+        spectralError += (diff * diff) * weight;
+        totalWeight += weight;
+    }
+    if (totalWeight > 0) spectralError /= totalWeight;
+
+    return (timeDomainError * 0.25) + (envError * 0.35) + (spectralError * 0.40);
+}
+
 std::vector<double> MicroGP::calculateMagnitudeSpectrum(const std::vector<double>& audio) {
     if (m_config.fftType == FftType::KissFFT) {
         return calculateMagnitudeSpectrumKiss(audio);
@@ -209,9 +325,6 @@ std::vector<double> MicroGP::calculateMagnitudeSpectrum(const std::vector<double
     }
 }
 
-// ---------------------------------------------------------
-// METHOD 1: Superior KissFFT Implementation
-// ---------------------------------------------------------
 std::vector<double> MicroGP::calculateMagnitudeSpectrumKiss(const std::vector<double>& audio) {
     int n = 1;
     while (n < audio.size()) n *= 2;
@@ -233,7 +346,7 @@ std::vector<double> MicroGP::calculateMagnitudeSpectrumKiss(const std::vector<do
     }
 
     kiss_fft(cfg, cx_in.data(), cx_out.data());
-    free(cfg); // kiss_fft uses standard malloc
+    free(cfg);
 
     std::vector<double> magnitudes(n / 2);
     for (int i = 0; i < n / 2; ++i) {
@@ -241,10 +354,6 @@ std::vector<double> MicroGP::calculateMagnitudeSpectrumKiss(const std::vector<do
     }
     return magnitudes;
 }
-
-// ---------------------------------------------------------
-// METHOD 2: Fallback Native Iterative In-Place FFT
-// ---------------------------------------------------------
 
 void MicroGP::fft(std::vector<std::complex<double>>& a) {
     int n = a.size();
@@ -292,11 +401,8 @@ std::vector<double> MicroGP::calculateMagnitudeSpectrumNative(const std::vector<
     return magnitudes;
 }
 
-// ---------------------------------------------------------
-// CORE DISCOVERY ENGINE
-// ---------------------------------------------------------
 MicroGP::DiscoveryResult MicroGP::discoverExpression(const std::vector<double>& targetAudio) {
-    if (targetAudio.empty()) return {"0", nullptr};
+    if (targetAudio.empty()) return {"0", "", nullptr};
 
     std::vector<double> processAudio = targetAudio;
     if (processAudio.size() > m_config.maxAnalysisSamples)
@@ -307,10 +413,20 @@ MicroGP::DiscoveryResult MicroGP::discoverExpression(const std::vector<double>& 
         targetSpectrum = calculateMagnitudeSpectrum(processAudio);
 
     std::vector<std::unique_ptr<GPNode>> population;
-    for (int i = 0; i < m_config.populationSize; ++i) {
-        if (i < 30) population.push_back(createClassicFmTree());
-        else if (i < 60) population.push_back(createSuperSawTree());
-        else population.push_back(generateRandomTree(0));
+
+
+    for (const QString& seedStr : m_config.seedStrings) {
+        QString tempStr = seedStr;
+        QTextStream stream(&tempStr);
+        auto tree = GPNode::deserialize(stream);
+        if (tree && population.size() < m_config.populationSize) {
+            population.push_back(std::move(tree));
+        }
+    }
+
+
+    while (population.size() < m_config.populationSize) {
+        population.push_back(generateRandomTree(0));
     }
 
     std::unique_ptr<GPNode> bestOverall;
@@ -318,7 +434,6 @@ MicroGP::DiscoveryResult MicroGP::discoverExpression(const std::vector<double>& 
 
     for (int gen = 0; gen < m_config.generations; ++gen) {
         std::vector<std::pair<double, int>> fitnessScores(m_config.populationSize);
-
 
         int hardwareThreads = std::max(1, (int)std::thread::hardware_concurrency());
         int chunkSize = m_config.populationSize / hardwareThreads;
@@ -337,14 +452,12 @@ MicroGP::DiscoveryResult MicroGP::discoverExpression(const std::vector<double>& 
         }
         for (auto& f : futures) f.get();
 
-
         for (int i = 0; i < m_config.populationSize; ++i) {
             if (fitnessScores[i].first < bestFitness) {
                 bestFitness = fitnessScores[i].first;
                 bestOverall = population[i]->clone();
             }
         }
-
 
         std::sort(fitnessScores.begin(), fitnessScores.end());
 
@@ -353,7 +466,6 @@ MicroGP::DiscoveryResult MicroGP::discoverExpression(const std::vector<double>& 
 
         for (int i = 0; i < elites; ++i) {
             auto eliteClone = population[fitnessScores[i].second]->clone();
-
             nextGen.push_back(std::move(eliteClone));
         }
 
@@ -370,12 +482,18 @@ MicroGP::DiscoveryResult MicroGP::discoverExpression(const std::vector<double>& 
         population = std::move(nextGen);
     }
 
+    if (bestOverall) {
+        optimizeConstants(bestOverall.get(), processAudio, targetSpectrum);
+    }
+
     DiscoveryResult res;
     if (bestOverall) {
         res.expression = bestOverall->toString(m_config.legacySyntax);
+        res.serializedDNA = bestOverall->serialize(); // Export the DNA
         res.tree = bestOverall->clone();
     } else {
         res.expression = "0";
+        res.serializedDNA = "";
         res.tree = nullptr;
     }
     m_bestTree = bestOverall ? bestOverall->clone() : nullptr;
@@ -384,7 +502,7 @@ MicroGP::DiscoveryResult MicroGP::discoverExpression(const std::vector<double>& 
 
 int MicroGP::tournamentSelection(const std::vector<std::pair<double, int>>& fitnessScores, int k) {
     std::uniform_int_distribution<int> dist(0, m_config.populationSize - 1);
-    int bestIdx = dist(m_rng);           // index into fitnessScores
+    int bestIdx = dist(m_rng);
     double bestFit = fitnessScores[bestIdx].first;
 
     for (int i = 1; i < k; ++i) {
@@ -394,74 +512,7 @@ int MicroGP::tournamentSelection(const std::vector<std::pair<double, int>>& fitn
             bestIdx = cand;
         }
     }
-    return fitnessScores[bestIdx].second;  // return the population index
-}
-
-double MicroGP::calculateFitness(const GPNode& tree, const std::vector<double>& targetAudio, const std::vector<double>& targetSpectrum) {
-    int samples = targetAudio.size();
-    if (samples == 0) return 999999.0;
-
-    std::vector<double> generated(samples);
-    double timeDomainError = 0.0;
-    double baseFrequency = 523.25;
-
-    for (int i = 0; i < samples; ++i) {
-        double t = (double)i / m_config.sampleRate;
-        double val = tree.evaluate(t, baseFrequency);
-        if (std::isnan(val) || std::isinf(val)) return 999999.0;
-        generated[i] = val;
-
-        double diff = val - targetAudio[i];
-
-        double weight = 1.0;
-        if (t < 0.05) weight = 5.0;
-        else if (t < 0.2) weight = 2.0;
-
-        timeDomainError += (diff * diff) * weight;
-    }
-    timeDomainError /= samples;
-
-    if (!m_config.useSpectralFitness) {
-        return timeDomainError;
-    }
-
-    std::vector<double> genSpectrum = calculateMagnitudeSpectrum(generated);
-    double spectralError = 0.0;
-    double totalWeight = 0.0;
-
-    size_t limit = genSpectrum.size() / 4;
-    if (limit < 2) limit = genSpectrum.size();
-
-    for (size_t i = 1; i < limit; ++i) {
-        double diff = genSpectrum[i] - targetSpectrum[i];
-        double weight = 1.0 / std::log(i + 1.0);
-
-        spectralError += (diff * diff) * weight;
-        totalWeight += weight;
-    }
-
-    if (totalWeight > 0.0001) {
-        spectralError /= totalWeight;
-    } else {
-        spectralError = 999999.0;
-    }
-
-    return (spectralError * 0.99) + (timeDomainError * 0.01);
-}
-
-std::unique_ptr<GPNode> MicroGP::createClassicFmTree() {
-    auto node = std::make_unique<GPNode>(NodeType::FmRaveBass);
-    node->left = std::make_unique<GPNode>(NodeType::Const, 3.5);
-    return node;
-}
-
-std::unique_ptr<GPNode> MicroGP::createSuperSawTree() {
-    auto node = std::make_unique<GPNode>(NodeType::ChordStack);
-    node->left = std::make_unique<GPNode>(NodeType::Saw);
-    node->left->left = std::make_unique<GPNode>(NodeType::Mul);
-    node->left->left->left = std::make_unique<GPNode>(NodeType::VarF);
-    node->left->left->right = std::make_unique<GPNode>(NodeType::VarT);
-    return node;
+    return fitnessScores[bestIdx].second;
 }
 
 std::unique_ptr<GPNode> MicroGP::generateRandomTree(int currentDepth) {
@@ -498,7 +549,6 @@ std::unique_ptr<GPNode> MicroGP::generateRandomTree(int currentDepth) {
         node->right = generateRandomTree(currentDepth + 1);
     }
     else if (type == NodeType::VarT || type == NodeType::VarF || type == NodeType::Const || type == NodeType::Noise || type == NodeType::PitchKick || type == NodeType::OrganStab) {
-        // Leave left and right null
     }
     else {
         node->left = generateRandomTree(currentDepth + 1);

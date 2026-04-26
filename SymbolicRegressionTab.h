@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QVector>
 #include <QFutureWatcher>
+#include <QStringList>
 #include <vector>
 #include <memory>
 #include "synthengine.h"
@@ -16,6 +17,7 @@ class QTextEdit;
 class QLabel;
 class QLineEdit;
 class UniversalScope;
+class QGroupBox;
 
 class SymbolicRegressionTab : public QWidget
 {
@@ -28,11 +30,13 @@ private slots:
     void onDiscoverClicked();
     void onCopyClicked();
     void onProcessFinished();
+    void onSaveLearnedClicked();
 
 private:
     void setupUi();
     bool loadWavToMemory(const QString& path);
     void updateScopePreview(bool useGenerated = false);
+    void loadSeedsFromFile();
 
     QVBoxLayout* m_layout;
     QPushButton* m_btnLoad;
@@ -47,7 +51,10 @@ private:
 
     QPushButton* m_btnDiscover;
     QLabel* m_lblStatus;
+
     QTextEdit* m_txtExpression;
+    QTextEdit* m_txtDNAOutput;
+
     QPushButton* m_btnCopy;
     QPushButton* m_btnPlay;
 
@@ -59,4 +66,11 @@ private:
     std::vector<double> m_audioData;
     double m_sampleRate = 44100.0;
     std::unique_ptr<GPNode> m_bestTree;
+
+
+    QGroupBox* m_learnerGroup = nullptr;
+    QTextEdit* m_txtLearnerInput = nullptr;
+    QPushButton* m_btnSaveLearned = nullptr;
+
+    QStringList m_loadedSeeds;
 };
