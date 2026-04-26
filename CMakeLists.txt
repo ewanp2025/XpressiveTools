@@ -40,6 +40,8 @@ add_executable(WaveConv
     SymbolicRegressionTab.cpp
     MicroGP.h
     MicroGP.cpp
+    vocaltransformtab.h
+    vocaltransformtab.cpp
 
     libs/kiss_fft.c
     libs/kiss_fft.h

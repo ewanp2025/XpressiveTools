@@ -3136,6 +3136,10 @@ void MainWindow::setupUI() {
     SymbolicRegressionTab* srTab = new SymbolicRegressionTab(m_ghostSynth, this);
     modeTabs->addTab(srTab, "SR Audio Lab");
 
+    // TAB 42: Symbolic Regression
+    VocalTransformTab* vocalTransformTab = new VocalTransformTab(m_ghostSynth, this);
+    modeTabs->addTab(vocalTransformTab, "Vocal Transformer");
+
 
     // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB

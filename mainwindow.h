@@ -32,6 +32,7 @@
 #include <QRandomGenerator>
 #include <QClipboard>
 #include "oscilloscopetab.h"
+#include "vocaltransformtab.h"
 
 
 // ==============================================================================
