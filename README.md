@@ -110,8 +110,26 @@ Export: Use the Copy Clipboard function to take the generated string and paste i
 
 For Drum Generator generate the .xpf file and save it to your instruments folder. Drum generator works differently so that it can control the instrument filters external to the expression (as I have had limited success with FIR with last(n).
 
+---
+
+### Third-Party Libraries
+This project relies on the following open-source libraries:
+
+#### KissFFT
+* **Description:** A simple, lightweight Fast Fourier Transform (FFT) library used to generate the spectrogram visuals and power the frequency-based pitch/chord detection algorithms.
+* **Author:** Mark Borgerding
+* **License:** BSD-3-Clause 
+* **Source:** https://github.com/mborgerding/kissfft
+
+#### NanoSVG
+* **Description:** A simple, header-only SVG parser and rasterizer designed for embedding SVG graphics into applications without the bloat of a full rendering engine.
+* **Author:** Mikko Mononen
+* **License:** zlib License
+* **Source:** https://github.com/memononen/nanosvg
+
 **License**
 
 The phonemes were worked out by various versions of reversed engineered SAM (1982) found on github which was from the Commodore 64 and no longer exists / is assumed abandonware. Therefore due to this assumption, I cannot put my code under any specific open source software license.
 
 Copyright (c) 2026 Ewan Pettigrew
+
