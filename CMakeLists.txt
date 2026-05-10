@@ -46,6 +46,7 @@ add_executable(WaveConv
     libs/kiss_fft.h
     libs/_kiss_fft_guts.h
     libs/kiss_fft_log.h
+    libs/nanosvg.h
 
 )
 

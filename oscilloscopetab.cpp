@@ -20,6 +20,9 @@
 #include <QLabel>
 #include <QLineEdit>
 
+#define NANOSVG_IMPLEMENTATION
+#include "libs/nanosvg.h"
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -195,6 +198,25 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     importObjBtn = new QPushButton("Import 3D Object (.obj)", this);
     controlLayout->addWidget(importObjBtn);
     connect(importObjBtn, &QPushButton::clicked, this, &OscilloscopeTab::importObj);
+
+
+    importSvgBtn = new QPushButton("load SVG animation WIP will show in gui but not create string (.svg)", this);
+    controlLayout->addWidget(importSvgBtn);
+
+    QHBoxLayout* svgAnimLayout = new QHBoxLayout();
+    svgAnimLayout->addWidget(new QLabel("SVG Spritesheet Frames:", this));
+    svgFramesSpin = new QSpinBox(this);
+    svgFramesSpin->setRange(1, 16);
+    svgFramesSpin->setValue(4);
+    svgAnimLayout->addWidget(svgFramesSpin);
+    controlLayout->addLayout(svgAnimLayout);
+
+    svgAnimTimer = new QTimer(this);
+
+    connect(importSvgBtn, &QPushButton::clicked, this, &OscilloscopeTab::importSvg);
+    connect(svgAnimTimer, &QTimer::timeout, this, &OscilloscopeTab::updateSvgAnimation);
+
+
 
     exportWavBtn = new QPushButton("Export 3D Rotation to .WAV", this);
     controlLayout->addWidget(exportWavBtn);
@@ -727,3 +749,130 @@ void OscilloscopeTab::updateCsvScale() {
         generateString();
     }
 }
+
+void OscilloscopeTab::importSvg() {
+    QString fileName = QFileDialog::getOpenFileName(this, "Open SVG", "", "SVG Files (*.svg);;All Files (*)");
+    if (fileName.isEmpty()) return;
+
+    NSVGimage* image = nsvgParseFromFile(fileName.toUtf8().constData(), "px", 96.0f);
+    if (!image) {
+        QMessageBox::warning(this, "Error", "Could not parse SVG file.");
+        return;
+    }
+
+    int numFrames = svgFramesSpin->value();
+    if (numFrames < 1) numFrames = 4;
+
+    m_svgFramesX.assign(numFrames, {});
+    m_svgFramesY.assign(numFrames, {});
+
+    const int pointsPerCurve = 28;
+    const float bopAmount = 6.0f;
+    const float centerY = image->height / 2.0f;
+
+    std::vector<float> allX, allY;
+
+    for (int frame = 0; frame < numFrames; ++frame) {
+        float phase = (float)frame / numFrames * 2.0f * M_PI;
+        float bopOffset = std::sin(phase) * (bopAmount / 2.0f);
+
+        std::vector<float> frameX, frameY;
+
+        for (NSVGshape* shape = image->shapes; shape != NULL; shape = shape->next) {
+            for (NSVGpath* path = shape->paths; path != NULL; path = path->next) {
+                for (int i = 0; i < path->npts - 1; i += 3) {
+                    float* p = &path->pts[i * 2];
+
+                    for (int j = 0; j <= pointsPerCurve; ++j) {
+                        float t = (float)j / pointsPerCurve;
+                        float invT = 1.0f - t;
+
+                        float x = invT*invT*invT*p[0] + 3*invT*invT*t*p[2] + 3*invT*t*t*p[4] + t*t*t*p[6];
+                        float y = invT*invT*invT*p[1] + 3*invT*invT*t*p[3] + 3*invT*t*t*p[5] + t*t*t*p[7];
+
+                        float finalY = (y < 160) ? y + bopOffset : y;
+
+                        float centeredX = x - image->width / 2.0f;
+                        float centeredY = centerY - finalY;
+
+                        frameX.push_back(centeredX);
+                        frameY.push_back(centeredY);
+
+                        allX.push_back(centeredX);
+                        allY.push_back(centeredY);
+                    }
+                }
+            }
+        }
+
+        m_svgFramesX[frame] = frameX;
+        m_svgFramesY[frame] = frameY;
+    }
+
+    nsvgDelete(image);
+
+
+    if (!allX.empty()) {
+        float minX = *std::min_element(allX.begin(), allX.end());
+        float maxX = *std::max_element(allX.begin(), allX.end());
+        float minY = *std::min_element(allY.begin(), allY.end());
+        float maxY = *std::max_element(allY.begin(), allY.end());
+
+        float width = maxX - minX;
+        float height = maxY - minY;
+
+        float targetSize = 0.75f;
+        float scaleFactor = targetSize / std::max(width, height);
+
+
+        for (int f = 0; f < numFrames; ++f) {
+            for (size_t i = 0; i < m_svgFramesX[f].size(); ++i) {
+                m_svgFramesX[f][i] *= scaleFactor;
+                m_svgFramesY[f][i] *= scaleFactor;
+            }
+        }
+    }
+
+
+    size_t maxPoints = 0;
+    for (const auto& fx : m_svgFramesX)
+        maxPoints = std::max(maxPoints, fx.size());
+
+    for (int f = 0; f < numFrames; ++f) {
+        while (m_svgFramesX[f].size() < maxPoints) {
+            m_svgFramesX[f].push_back(0.0f);
+            m_svgFramesY[f].push_back(0.0f);
+        }
+    }
+
+    m_currentSvgFrame = 0;
+    m_isCustomMode = true;
+
+    if (rotationTimer && rotationTimer->isActive()) rotationTimer->stop();
+    if (svgAnimTimer) svgAnimTimer->start(1000 / 12);
+
+    generateString();
+}
+
+void OscilloscopeTab::updateSvgAnimation() {
+    if (m_svgFramesX.empty()) return;
+
+    m_currentSvgFrame = (m_currentSvgFrame + 1) % m_svgFramesX.size();
+
+    float userScale = csvScaleSlider->value() / 100.0f;   // 0.01 → 2.0
+
+    const auto& srcX = m_svgFramesX[m_currentSvgFrame];
+    const auto& srcY = m_svgFramesY[m_currentSvgFrame];
+
+    std::vector<float> scaledX(srcX.size()), scaledY(srcY.size());
+
+    for (size_t i = 0; i < srcX.size(); ++i) {
+        scaledX[i] = srcX[i] * userScale;
+        scaledY[i] = srcY[i] * userScale;
+    }
+
+    m_activeX = scaledX;
+    m_activeY = scaledY;
+    plotWidget->setCustomVectors(scaledX, scaledY);
+}
+

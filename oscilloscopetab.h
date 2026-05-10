@@ -54,6 +54,8 @@ private slots:
     void updateRotation();
     void exportWav();
     void updateCsvScale();
+    void importSvg();
+    void updateSvgAnimation();
 
 private:
     QComboBox* presetCombo;
@@ -98,6 +100,14 @@ private:
     std::vector<float> m_originalX;
     std::vector<float> m_originalY;
     QCheckBox* tdmCheck;
+    QPushButton* importSvgBtn;
+    QSpinBox* svgFramesSpin;
+    QTimer* svgAnimTimer;
+
+    std::vector<std::vector<float>> m_svgFramesX;
+    std::vector<std::vector<float>> m_svgFramesY;
+    int m_currentSvgFrame = 0;
+
 
 };
 
