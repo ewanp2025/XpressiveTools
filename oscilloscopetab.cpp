@@ -296,7 +296,7 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     connect(importBtn, &QPushButton::clicked, this, &OscilloscopeTab::importVectors);
 
     connect(fineRotationSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OscilloscopeTab::generateString);
-    connect(fixMirrorCheck, &QCheckBox::checkStateChanged, this, &OscilloscopeTab::generateString);
+    connect(fixMirrorCheck, &QCheckBox::toggled, this, &OscilloscopeTab::generateString);
     updateParameters();
 }
 
