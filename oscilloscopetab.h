@@ -95,6 +95,9 @@ private:
     QCheckBox* loopSweepCheck;
     QCheckBox* rotateCustomCheck;
     QCheckBox* rotate3dCheck;
+    QComboBox* proceduralCombo;
+    QPushButton* generateProceduralBtn;
+    void buildProceduralScene();
 
     QSlider* csvScaleSlider;
     std::vector<float> m_originalX;
@@ -103,6 +106,8 @@ private:
     QPushButton* importSvgBtn;
     QSpinBox* svgFramesSpin;
     QTimer* svgAnimTimer;
+    QDoubleSpinBox* fineRotationSpin;
+    QCheckBox* fixMirrorCheck;
 
     std::vector<std::vector<float>> m_svgFramesX;
     std::vector<std::vector<float>> m_svgFramesY;

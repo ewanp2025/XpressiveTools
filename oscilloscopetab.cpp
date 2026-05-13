@@ -19,6 +19,7 @@
 #include <QStringList>
 #include <QLabel>
 #include <QLineEdit>
+#include <QScrollArea>
 
 #define NANOSVG_IMPLEMENTATION
 #include "libs/nanosvg.h"
@@ -103,7 +104,12 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     mainLayout->addWidget(plotWidget, 2);
 
 
-    QVBoxLayout* controlLayout = new QVBoxLayout();
+    QScrollArea* scrollArea = new QScrollArea(this);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setMinimumWidth(350);
+
+    QWidget* scrollContent = new QWidget(scrollArea);
+    QVBoxLayout* controlLayout = new QVBoxLayout(scrollContent);
 
     presetCombo = new QComboBox(this);
     presetCombo->addItems({"Custom / Manual", "Perfect Circle (Unison)", "Diagonal Line (Unison)",
@@ -167,6 +173,18 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     formLayout->addRow("", rotate3dCheck);
 
     formLayout->addRow("Multiplexing:", tdmCheck);
+
+    fineRotationSpin = new QDoubleSpinBox(this);
+    fineRotationSpin->setRange(-180.0, 180.0);
+    fineRotationSpin->setValue(0.0);
+    fineRotationSpin->setDecimals(1);
+    fineRotationSpin->setSuffix(" °");
+
+    fixMirrorCheck = new QCheckBox("Swap L/R (Fix Vectorscope Mirroring)", this);
+    fixMirrorCheck->setChecked(true);
+
+    formLayout->addRow("Fine Tune Rotation:", fineRotationSpin);
+    formLayout->addRow("", fixMirrorCheck);
 
     controlLayout->addLayout(formLayout);
 
@@ -242,6 +260,21 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     usageNote->setStyleSheet("font-size: 11px; margin-top: 10px;");
     controlLayout->addWidget(usageNote);
 
+    //QFrame* procLine = new QFrame(this);
+    //procLine->setFrameShape(QFrame::HLine);
+    //controlLayout->addWidget(procLine);
+    //controlLayout->addWidget(new QLabel("Fly-Throughs:", this));
+    //proceduralCombo = new QComboBox(this);
+    //proceduralCombo->addItems({"Pine Tree Forest", "Hyperspace Starfield", "Test", "Wolf3D Wireframe Maze"});
+    //controlLayout->addWidget(proceduralCombo);
+    //generateProceduralBtn = new QPushButton("Generate 3D Fly-Through Scene", this);
+    //generateProceduralBtn->setStyleSheet("background-color: #2a5a2a; color: white; font-weight: bold;");
+    //controlLayout->addWidget(generateProceduralBtn);
+    //connect(generateProceduralBtn, &QPushButton::clicked, this, &OscilloscopeTab::buildProceduralScene);
+
+
+
+
     generateStringBtn = new QPushButton("Generate Xpressive String", this);
     controlLayout->addWidget(generateStringBtn);
 
@@ -250,7 +283,8 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     stringOutput->setMinimumHeight(150);
     controlLayout->addWidget(stringOutput);
 
-    mainLayout->addLayout(controlLayout, 1);
+    scrollArea->setWidget(scrollContent);
+    mainLayout->addWidget(scrollArea, 1);
 
 
     connect(presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OscilloscopeTab::loadPreset);
@@ -261,6 +295,8 @@ OscilloscopeTab::OscilloscopeTab(QWidget *parent) : QWidget(parent) {
     connect(generateStringBtn, &QPushButton::clicked, this, &OscilloscopeTab::generateString);
     connect(importBtn, &QPushButton::clicked, this, &OscilloscopeTab::importVectors);
 
+    connect(fineRotationSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OscilloscopeTab::generateString);
+    connect(fixMirrorCheck, &QCheckBox::checkStateChanged, this, &OscilloscopeTab::generateString);
     updateParameters();
 }
 
@@ -298,6 +334,27 @@ void OscilloscopeTab::updateParameters() {
 
 
 void OscilloscopeTab::generateString() {
+
+    float theta = fineRotationSpin->value() * (M_PI / 180.0);
+    float c1 = (std::sin(theta) - std::cos(theta)) * 0.70710678f;
+    float c2 = (std::cos(theta) + std::sin(theta)) * 0.70710678f;
+    float c3 = (std::sin(theta) + std::cos(theta)) * 0.70710678f;
+    float c4 = (std::cos(theta) - std::sin(theta)) * 0.70710678f;
+
+
+    auto applyVectorscopeMatrix = [&](QString& xExpr, QString& yExpr) {
+        QString outL = QString("((%1)*%2 + (%3)*%4)").arg(xExpr, QString::number(c1, 'f', 5), yExpr, QString::number(c2, 'f', 5));
+        QString outR = QString("((%1)*%2 + (%3)*%4)").arg(xExpr, QString::number(c3, 'f', 5), yExpr, QString::number(c4, 'f', 5));
+
+        if (fixMirrorCheck->isChecked()) {
+            xExpr = outR;
+            yExpr = outL;
+        } else {
+            xExpr = outL;
+            yExpr = outR;
+        }
+    };
+
     QString vibCode = vibrateCheck->isChecked() ? "+ (randv(t * 10000) * 0.02)" : "";
     QString sharedExpr = sharedExprEdit->text().trimmed();
     QString mixStr = (mixSharedExprCheck->isChecked() && !sharedExpr.isEmpty()) ? QString(" + (%1)").arg(sharedExpr) : "";
@@ -349,16 +406,38 @@ void OscilloscopeTab::generateString() {
             treeZ = buildLegacy(0, size - 1, statZ);
         }
 
-        QString angleY = "(t * 0.5)";
-        QString angleX = "(t * 0.25)";
+        QString finalX, finalY;
 
-        QString X1 = QString("((%1) * cos(%3) - (%2) * sin(%3))").arg(treeX, treeZ, angleY);
-        QString Z1 = QString("((%1) * sin(%3) + (%2) * cos(%3))").arg(treeX, treeZ, angleY);
 
-        QString finalX = QString("%1 %2%3").arg(X1, vibCode, mixStr).trimmed();
-        QString finalY = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4%5").arg(treeY, Z1, angleX, vibCode, mixStr).trimmed();
+        if (proceduralCombo->currentIndex() >= 0 && m_vertices3D.size() > 0) {
+            float maxDepth = 10.0f; // Loops every 10 units
+            float speed = 2.0f;     // Forward speed
 
-        // Apply TDM if enabled
+
+            QString moveZ = QString("(mod((%1) - t * %2, %3) + 0.1)").arg(treeZ).arg(speed).arg(maxDepth);
+
+
+            QString projX = QString("((%1) / %2)").arg(treeX, moveZ);
+            QString projY = QString("((%1) / %2)").arg(treeY, moveZ);
+
+            finalX = QString("%1 %2%3").arg(projX, vibCode, mixStr).trimmed();
+            finalY = QString("%1 %2%3").arg(projY, vibCode, mixStr).trimmed();
+        }
+        else {
+
+            QString angleY = "(t * 0.5)";
+            QString angleX = "(t * 0.25)";
+
+            QString X1 = QString("((%1) * cos(%3) - (%2) * sin(%3))").arg(treeX, treeZ, angleY);
+            QString Z1 = QString("((%1) * sin(%3) + (%2) * cos(%3))").arg(treeX, treeZ, angleY);
+
+            finalX = QString("%1 %2%3").arg(X1, vibCode, mixStr).trimmed();
+            finalY = QString("((%1) * cos(%3) - (%2) * sin(%3)) %4%5").arg(treeY, Z1, angleX, vibCode, mixStr).trimmed();
+        }
+
+        applyVectorscopeMatrix(finalX, finalY);
+
+
         if (useTDM) {
             finalX = tdmWrapper.arg(finalX);
             finalY = tdmWrapper.arg(finalY);
@@ -413,6 +492,8 @@ void OscilloscopeTab::generateString() {
             finalY = QString("%1 %2%3").arg(treeY, vibCode, mixStr).trimmed();
         }
 
+        applyVectorscopeMatrix(finalX, finalY);
+
         // Apply TDM if enabled
         if (useTDM) {
             finalX = tdmWrapper.arg(finalX);
@@ -464,6 +545,8 @@ void OscilloscopeTab::generateString() {
         .arg(wave).arg(fx).arg(pStart).arg(pEnd).arg(sweepLogic).arg(vibCode).arg(mixStr).trimmed();
         exprY = QString("%1(integrate(f * %2.0)) %3%4").arg(wave).arg(fy).arg(vibCode).arg(mixStr).trimmed();
     }
+
+    applyVectorscopeMatrix(exprX, exprY);
 
     // Apply TDM if enabled
     if (useTDM) {
@@ -674,7 +757,7 @@ void OscilloscopeTab::exportWav() {
     if (!file.open(QIODevice::WriteOnly)) return;
 
     int sampleRate = 44100;
-    int durationSecs = 5; // Record 5 seconds of rotation
+    int durationSecs = 5;
     int numSamples = sampleRate * durationSecs;
 
     float angleY = 0.0f;
@@ -859,8 +942,7 @@ void OscilloscopeTab::updateSvgAnimation() {
 
     m_currentSvgFrame = (m_currentSvgFrame + 1) % m_svgFramesX.size();
 
-    float userScale = csvScaleSlider->value() / 100.0f;   // 0.01 → 2.0
-
+    float userScale = csvScaleSlider->value() / 100.0f;
     const auto& srcX = m_svgFramesX[m_currentSvgFrame];
     const auto& srcY = m_svgFramesY[m_currentSvgFrame];
 
@@ -876,3 +958,107 @@ void OscilloscopeTab::updateSvgAnimation() {
     plotWidget->setCustomVectors(scaledX, scaledY);
 }
 
+void OscilloscopeTab::buildProceduralScene() {
+    m_vertices3D.clear();
+    m_drawPath.clear();
+
+    int mode = proceduralCombo->currentIndex();
+
+    if (mode == 0) {
+
+        int numTrees = 5;
+        float forestDepth = 12.0f;
+
+
+        std::vector<std::pair<float, float>> treeProfile = {
+            {0.0f, 0.5f}, {-0.15f, 0.2f}, {-0.05f, 0.2f}, {-0.2f, -0.1f}, {-0.05f, -0.1f},
+            {-0.25f, -0.4f}, {-0.05f, -0.4f}, {-0.05f, -0.5f}, {0.05f, -0.5f},
+            {0.05f, -0.4f}, {0.25f, -0.4f}, {0.05f, -0.1f}, {0.2f, -0.1f}, {0.05f, 0.2f}, {0.15f, 0.2f}
+        };
+
+        for (int i = 0; i < numTrees; ++i) {
+            float xOffset = ((rand() % 100) / 50.0f) - 1.0f;
+            float z = (i * (forestDepth / numTrees));
+
+            int startIdx = m_vertices3D.size();
+            for (const auto& pt : treeProfile) {
+                m_vertices3D.push_back({xOffset + pt.first, pt.second, z});
+                m_drawPath.push_back(m_vertices3D.size() - 1);
+            }
+            m_drawPath.push_back(startIdx);
+        }
+    }
+    else if (mode == 1) {
+
+        int numStars = 25;
+        for (int i = 0; i < numStars; ++i) {
+            float x = ((rand() % 200) / 100.0f) - 1.0f;
+            float y = ((rand() % 200) / 100.0f) - 1.0f;
+            float z = ((rand() % 100) / 10.0f);
+
+            int startIdx = m_vertices3D.size();
+            m_vertices3D.push_back({x, y, z});
+            m_vertices3D.push_back({x, y, z + 0.4f});
+
+            m_drawPath.push_back(startIdx);
+            m_drawPath.push_back(startIdx + 1);
+        }
+    }
+    else if (mode == 2) {
+
+        int numSymbols = 4;
+        float depth = 10.0f;
+
+
+        std::vector<std::pair<float, float>> trace = {
+            {-0.3f, 0.4f}, {-0.5f, 0.2f}, {-0.3f, 0.0f},
+            {-0.5f, -0.2f}, {-0.4f, -0.5f}, {0.0f, -0.5f}, {0.1f, -0.2f}, {0.0f, 0.0f},
+            {0.2f, 0.0f}, {0.5f, -0.4f},
+            {0.2f, 0.3f}, {0.3f, 0.2f}, {0.5f, 0.3f},
+            {0.35f, 0.5f}, {0.4f, 0.5f}
+        };
+
+        for (int i = 0; i < numSymbols; ++i) {
+            float ox = ((rand() % 200) / 100.0f) - 1.0f;
+            float oy = ((rand() % 200) / 100.0f) - 1.0f;
+            float z = i * (depth / numSymbols);
+            float scl = 0.4f;
+
+            for (const auto& pt : trace) {
+                m_vertices3D.push_back({ox + pt.first * scl, oy + pt.second * scl, z});
+                m_drawPath.push_back(m_vertices3D.size() - 1);
+            }
+        }
+    }
+    else if (mode == 3) {
+
+        int depthSegments = 8;
+        float corridorDepth = 15.0f;
+        float width = 0.7f;
+        float height = 0.5f;
+
+
+        for (int i = 0; i <= depthSegments; ++i) {
+            float z = i * (corridorDepth / depthSegments);
+            m_vertices3D.push_back({-width, -height, z});
+            m_vertices3D.push_back({-width, height, z});
+            m_drawPath.push_back(m_vertices3D.size() - 2);
+            m_drawPath.push_back(m_vertices3D.size() - 1);
+        }
+
+
+        m_vertices3D.push_back({width, height, corridorDepth});
+        m_drawPath.push_back(m_vertices3D.size() - 1);
+
+
+        for (int i = depthSegments; i >= 0; --i) {
+            float z = i * (corridorDepth / depthSegments);
+            m_vertices3D.push_back({width, height, z});
+            m_vertices3D.push_back({width, -height, z});
+            m_drawPath.push_back(m_vertices3D.size() - 2);
+            m_drawPath.push_back(m_vertices3D.size() - 1);
+        }
+    }
+    rotate3dCheck->setChecked(true);
+    generateString();
+}
