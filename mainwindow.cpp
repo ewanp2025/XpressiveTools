@@ -23,6 +23,7 @@
 #include "drumeditortab.h"
 #include "naturelabtab.h"
 #include "SymbolicRegressionTab.h"
+#include "xpressiveseqtab.h"
 #include <complex>
 
 // =========================================================
@@ -3132,14 +3133,24 @@ void MainWindow::setupUI() {
     initFmResynthTab();
     modeTabs->addTab(fmResynthTab, "FM Bessel Matcher");
 
+    // ------------------------------------
     // TAB 41: Symbolic Regression
     SymbolicRegressionTab* srTab = new SymbolicRegressionTab(m_ghostSynth, this);
     modeTabs->addTab(srTab, "SR Audio Lab");
+    // ------------------------------------
 
+    // ------------------------------------
     // TAB 42: Symbolic Regression
     VocalTransformTab* vocalTransformTab = new VocalTransformTab(m_ghostSynth, this);
     modeTabs->addTab(vocalTransformTab, "Vocal Transformer");
+    // ------------------------------------
 
+
+    // ------------------------------------
+    // TAB 43: Generative Formula Sequencer
+    XpressiveSeqTab* seqTab = new XpressiveSeqTab(this);
+    modeTabs->addTab(seqTab, "Generative Formula Sequencer");
+    // ------------------------------------
 
     // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB

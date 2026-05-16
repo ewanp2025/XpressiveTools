@@ -41,6 +41,8 @@ add_executable(WaveConv
     MicroGP.cpp
     vocaltransformtab.h
     vocaltransformtab.cpp
+    xpressiveseqtab.cpp
+    xpressiveseqtab.h	
 
     libs/kiss_fft.c
     libs/kiss_fft.h
