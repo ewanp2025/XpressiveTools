@@ -32,6 +32,7 @@ private:
 
     QComboBox* modeSelector;
     QSpinBox* numStepsSpin;
+    QCheckBox* toggleHardGate;
     QTextEdit* codeOutputO1;
     QTextEdit* codeOutputO2;
 
@@ -39,6 +40,8 @@ private:
     QCheckBox* stepAccents[32];
     QComboBox* stepPitches[32];
 
+    QCheckBox* stepSquelch[32];
+    QSpinBox* stepSquAmt[32];
 
     QDial* dialDriveBase;
     QDial* dialDriveSweep;
@@ -46,6 +49,7 @@ private:
     QDial* dialDecaySweep;
     QDial* dialMacroClock;
     QDial* dialDetune;
+    QDial* dialSquDecay;
 
     QLabel* lblDriveBase;
     QLabel* lblDriveSweep;
@@ -53,6 +57,7 @@ private:
     QLabel* lblDecaySweep;
     QLabel* lblMacroClock;
     QLabel* lblDetune;
+    QLabel* lblSquDecay;
 
 
     QCheckBox* toggleNSCLathe;
