@@ -9,7 +9,6 @@ class QSlider;
 class QComboBox;
 class QSpinBox;
 class QPushButton;
-class QTextEdit;
 class QLabel;
 class QCheckBox;
 class SynthEngine;
@@ -22,7 +21,7 @@ public:
     ~WavetableTab() override;
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
     void onParametersChanged();
@@ -31,23 +30,36 @@ private slots:
 
 private:
     void setupUI();
-    double calculateWaveform(double phase, double wtPos, int warpMode, double warpAmt);
+    double calculateWaveform(double phase, double wtPos, int warpMode, double warpAmt, int interpMode, int wtBank);
 
     SynthEngine* m_ghostSynth = nullptr;
 
+    QWidget* canvasPlaceholder;
 
+
+    QComboBox* cmbWtBank;
     QSlider* sldWtPos;
     QSlider* sldWarpAmt;
     QComboBox* cmbWarpMode;
-    
+    QComboBox* cmbInterpolation;
+
+
     QComboBox* cmbModSource;
     QSlider* sldModDepth;
     QSlider* sldModRate;
 
-    QSlider* sldUnisonDetune;
-    QSpinBox* spinUnisonVoices;
 
-    QTextEdit* txtOutput;
+    QCheckBox* chkSubOsc;
+    QComboBox* cmbSubShape;
+    QComboBox* cmbSubOctave;
+    QSlider* sldSubVol;
+
+
+    QSpinBox* spinUnisonVoices;
+    QSlider* sldUnisonDetune;
+    QSlider* sldUnisonWidth;
+
+    QComboBox* cmbParserMode;
     QPushButton* btnGenerate;
     QPushButton* btnPlay;
 
