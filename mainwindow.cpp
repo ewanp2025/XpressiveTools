@@ -24,6 +24,9 @@
 #include "naturelabtab.h"
 #include "SymbolicRegressionTab.h"
 #include "xpressiveseqtab.h"
+#include "wavetabletab.h"
+#include "spectralhologramtab.h"
+
 #include <complex>
 
 // =========================================================
@@ -83,7 +86,7 @@ void WaveformDisplay::paintEvent(QPaintEvent *) {
 void MainWindow::setupUI() {
     auto *centralWidget = new QWidget(this);
     auto *mainHLayout = new QHBoxLayout(centralWidget);
-    auto *sidebarGroup = new QGroupBox("Modulation & Arps");
+    auto *sidebarGroup = new QGroupBox("Modulation & Arps (below for SID Architect Only)");
     auto *sideScroll = new QScrollArea();
     auto *sideContent = new QWidget();
     auto *sideLayout = new QVBoxLayout(sideContent);
@@ -3150,6 +3153,18 @@ void MainWindow::setupUI() {
     // TAB 43: Generative Formula Sequencer
     XpressiveSeqTab* seqTab = new XpressiveSeqTab(this);
     modeTabs->addTab(seqTab, "Generative Formula Sequencer");
+    // ------------------------------------
+
+    // ------------------------------------
+    // TAB 44: Spectral Resynthesis
+    //SpectralHologramTab* hologramTab = new SpectralHologramTab(m_ghostSynth, this);
+    //modeTabs->addTab(hologramTab, "Spectral Resynthesis");
+    // ------------------------------------
+
+    // ------------------------------------
+    // TAB 45: Mega Wavetable Engine
+    //WavetableTab* wavetableTab = new WavetableTab(m_ghostSynth, this);
+    //modeTabs->addTab(wavetableTab, "Mega Wavetable");
     // ------------------------------------
 
     // ------------------------------------

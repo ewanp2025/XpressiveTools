@@ -42,7 +42,11 @@ add_executable(WaveConv
     vocaltransformtab.h
     vocaltransformtab.cpp
     xpressiveseqtab.cpp
-    xpressiveseqtab.h	
+    xpressiveseqtab.h
+    wavetabletab.h
+    wavetabletab.cpp
+    spectralhologramtab.h
+    spectralhologramtab.cpp
 
     libs/kiss_fft.c
     libs/kiss_fft.h
