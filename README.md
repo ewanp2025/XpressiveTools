@@ -89,6 +89,8 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  Symbolic Regression - WIP to use symbolic regression to automatically discover mathematical expressions which closely match loaded WAV samples. WIP.
 
+•  Drum Sequencer - WIP Create 16 step drum seqences in the step editor and export to a single mathematical expression. WIP.
+
 **Technical**
 
 Framework: Qt 6.x (Widgets) 
