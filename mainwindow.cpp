@@ -3168,6 +3168,13 @@ void MainWindow::setupUI() {
     // ------------------------------------
 
     // ------------------------------------
+    // TAB 46: Drum Sequencer
+    // ------------------------------------
+    drumSeqTab = new DrumSequencerTab(this);
+    modeTabs->addTab(drumSeqTab, "Pattern Sequencer");
+    // ------------------------------------
+
+    // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
     // ------------------------------------
     QWidget *notesTab = new QWidget();
