@@ -33,6 +33,7 @@
 #include <QClipboard>
 #include "oscilloscopetab.h"
 #include "vocaltransformtab.h"
+#include "drumsequencertab.h"
 
 
 // ==============================================================================
@@ -804,6 +805,9 @@ private:
     void initFmResynthTab();
     void updateFmPreview();
     void autoGuessFmParameters();
+
+
+    DrumSequencerTab *drumSeqTab;
 
     // -------------------------------------
     // TAB UNUSED: X-TRANSPILER (Zyn to Xpressive)
