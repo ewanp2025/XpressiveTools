@@ -3174,6 +3174,16 @@ void MainWindow::setupUI() {
     modeTabs->addTab(drumSeqTab, "Pattern Sequencer");
     // ------------------------------------
 
+
+    // ------------------------------------
+    // TAB 46: Tracker Tab
+    // ------------------------------------
+    trackerTab = new TrackerTab(this);
+    modeTabs->addTab(trackerTab, "Tracker Style Sequencer");
+    // ------------------------------------
+
+
+
     // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
     // ------------------------------------

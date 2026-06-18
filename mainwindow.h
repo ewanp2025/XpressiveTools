@@ -34,6 +34,7 @@
 #include "oscilloscopetab.h"
 #include "vocaltransformtab.h"
 #include "drumsequencertab.h"
+#include "trackertab.h"
 
 
 // ==============================================================================
@@ -821,6 +822,8 @@ private:
     void initTranspilerTab();
     void processZynFile(const QString &filePath);
     QString translateZynOscillator(int type);
+
+    TrackerTab *trackerTab;
 
 
 
