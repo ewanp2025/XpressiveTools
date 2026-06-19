@@ -52,6 +52,8 @@ add_executable(WaveConv
     spectralhologramtab.cpp
     trackertab.h
     trackertab.cpp
+    songextractortab.h
+    songextractortab.cpp
 
     libs/kiss_fft.c
     libs/kiss_fft.h

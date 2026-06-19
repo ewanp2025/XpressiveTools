@@ -3182,6 +3182,12 @@ void MainWindow::setupUI() {
     modeTabs->addTab(trackerTab, "Tracker Style Sequencer");
     // ------------------------------------
 
+    // ------------------------------------
+    // TAB 47: Decompiler
+    // ------------------------------------
+    songExtractorTab = new SongExtractorTab(this);
+    modeTabs->addTab(songExtractorTab, "Decompiler (Extract to .mmp)");
+    // ------------------------------------
 
 
     // ------------------------------------

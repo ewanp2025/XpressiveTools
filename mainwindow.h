@@ -35,7 +35,7 @@
 #include "vocaltransformtab.h"
 #include "drumsequencertab.h"
 #include "trackertab.h"
-
+#include "songextractortab.h"
 
 // ==============================================================================
 // DATA STRUCTURES & STRUCTS
@@ -824,7 +824,7 @@ private:
     QString translateZynOscillator(int type);
 
     TrackerTab *trackerTab;
-
+    SongExtractorTab* songExtractorTab;
 
 
 
