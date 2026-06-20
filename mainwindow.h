@@ -36,6 +36,7 @@
 #include "drumsequencertab.h"
 #include "trackertab.h"
 #include "songextractortab.h"
+#include "ZDomainExperimentsTab.h"
 
 // ==============================================================================
 // DATA STRUCTURES & STRUCTS
@@ -808,7 +809,7 @@ private:
     void autoGuessFmParameters();
 
 
-    DrumSequencerTab *drumSeqTab;
+
 
     // -------------------------------------
     // TAB UNUSED: X-TRANSPILER (Zyn to Xpressive)
@@ -825,6 +826,8 @@ private:
 
     TrackerTab *trackerTab;
     SongExtractorTab* songExtractorTab;
+    DrumSequencerTab *drumSeqTab;
+    ZDomainExperimentsTab* m_zDomainTab;
 
 
 

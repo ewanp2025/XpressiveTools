@@ -3191,6 +3191,13 @@ void MainWindow::setupUI() {
 
 
     // ------------------------------------
+    // TAB 48: Z Domain Test
+    // ------------------------------------
+    m_zDomainTab = new ZDomainExperimentsTab(m_ghostSynth, this);
+    modeTabs->addTab(m_zDomainTab, "Z-Domain Lab");
+    // ------------------------------------
+
+    // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
     // ------------------------------------
     QWidget *notesTab = new QWidget();
