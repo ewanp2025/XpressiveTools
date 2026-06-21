@@ -1,11 +1,10 @@
 #include "ZDomainExperimentsTab.h"
-#include "synthengine.h"
+#include "synthengine.h" // Assuming this exists in your project
 #include <QFormLayout>
 #include <QApplication>
 #include <QClipboard>
 #include <QDebug>
 #include <cmath>
-
 
 ZDomainCanvas::ZDomainCanvas(QWidget *parent) : QWidget(parent) {
     setMinimumHeight(350);
@@ -14,9 +13,7 @@ ZDomainCanvas::ZDomainCanvas(QWidget *parent) : QWidget(parent) {
 }
 
 int ZDomainCanvas::mapYToDelay(int y) {
-
     double normalized = 1.0 - (double)std::clamp(y, 0, height()) / height();
-
     double delay = std::pow(normalized, 3.0) * m_maxSampleDelay;
     return std::max(1, (int)delay);
 }
@@ -46,7 +43,7 @@ void ZDomainCanvas::mousePressEvent(QMouseEvent *event) {
 void ZDomainCanvas::mouseMoveEvent(QMouseEvent *event) {
     m_pointerPos = event->pos();
     m_currentDelayHover = mapYToDelay(event->y());
-    
+
     QString zoneName;
     if (m_currentDelayHover < 10) zoneName = "[ ZONE 1: FIR FILTERING ]";
     else if (m_currentDelayHover < 200) zoneName = "[ ZONE 2: METALLIC COMB ]";
@@ -70,6 +67,18 @@ void ZDomainCanvas::mouseReleaseEvent(QMouseEvent *event) {
     }
 }
 
+
+void ZDomainCanvas::setPresetLine(int delaySamples) {
+    m_drawPath.clear();
+    int targetY = mapDelayToY(delaySamples);
+
+    m_drawPath.moveTo(0, targetY);
+    m_drawPath.lineTo(width(), targetY);
+
+    update();
+    emit pathCompleted();
+}
+
 std::vector<int> ZDomainCanvas::getPathSamples(int numSteps) {
     std::vector<int> samples;
     if (m_drawPath.isEmpty()) {
@@ -80,9 +89,8 @@ std::vector<int> ZDomainCanvas::getPathSamples(int numSteps) {
     double wStep = (double)width() / numSteps;
     for (int i = 0; i < numSteps; ++i) {
         double targetX = i * wStep;
-        
 
-        double foundY = height() / 2.0; 
+        double foundY = height() / 2.0;
         for (int p = 1; p <= 100; p++) {
             double percent = p / 100.0;
             QPointF pt = m_drawPath.pointAtPercent(percent);
@@ -105,10 +113,9 @@ void ZDomainCanvas::paintEvent(QPaintEvent *) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-
     QRect rect = this->rect();
     painter.fillRect(rect, QColor(10, 10, 15));
-    
+
     int y10 = mapDelayToY(10);
     int y200 = mapDelayToY(200);
     int y1500 = mapDelayToY(1500);
@@ -120,24 +127,20 @@ void ZDomainCanvas::paintEvent(QPaintEvent *) {
     painter.fillRect(0, y200, width(), y10-y200, QColor(100, 100, 0, 30));
     painter.fillRect(0, y10, width(), height()-y10, QColor(150, 0, 0, 30));
 
-
     painter.setPen(QPen(QColor(50, 50, 50), 1, Qt::DashLine));
     for (int i = 1; i <= 10; ++i) {
         int x = i * (width() / 10.0);
         painter.drawLine(x, 0, x, height());
     }
 
-
     if (!m_drawPath.isEmpty()) {
         painter.setPen(QPen(QColor(0, 255, 255), 3));
         painter.drawPath(m_drawPath);
     }
 
-
     painter.setPen(QPen(QColor(255, 255, 255, 100), 1));
     painter.drawLine(0, m_pointerPos.y(), width(), m_pointerPos.y());
     painter.drawLine(m_pointerPos.x(), 0, m_pointerPos.x(), height());
-    
 
     painter.setPen(QColor(0, 255, 255));
     painter.drawText(5, m_pointerPos.y() - 5, QString("last(%1)").arg(m_currentDelayHover));
@@ -165,7 +168,6 @@ void ZDomainExperimentsTab::setupUI() {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     QHBoxLayout* topLayout = new QHBoxLayout();
 
-
     QGroupBox* grpControls = new QGroupBox("1. Setup & Expression");
     QVBoxLayout* controlLayout = new QVBoxLayout(grpControls);
 
@@ -174,8 +176,9 @@ void ZDomainExperimentsTab::setupUI() {
     controlLayout->addWidget(new QLabel("Syntax Compiler Target:"));
     controlLayout->addWidget(m_cmbSyntax);
 
+
     controlLayout->addWidget(new QLabel("Base Geometric Expression (Dry):"));
-    m_txtBaseO1 = new QTextEdit("squarew(integrate(f))");
+    m_txtBaseO1 = new QTextEdit("squarew(integrate(f)) * exp(-t * 3.0)");
     m_txtBaseO1->setMaximumHeight(40);
     controlLayout->addWidget(m_txtBaseO1);
 
@@ -198,34 +201,33 @@ void ZDomainExperimentsTab::setupUI() {
     fbLayout->addWidget(m_sldFeedback);
     controlLayout->addLayout(fbLayout);
 
-
     QGroupBox* grpExp = new QGroupBox("Experimental Z-Domain Topology");
     QVBoxLayout* expLayout = new QVBoxLayout(grpExp);
-    
+
     m_chkKarplusExciter = new QCheckBox("Karplus-Strong Exciter (Pluck Injector)");
     m_chkDampen = new QCheckBox("Recursive IIR Dampening (Analog Bucket-Brigade)");
     m_chkDoppler = new QCheckBox("Doppler LFO Index Modulation (Chorus/Flutter)");
-    
+
     expLayout->addWidget(m_chkKarplusExciter);
     expLayout->addWidget(m_chkDampen);
     expLayout->addWidget(m_chkDoppler);
-    
+
     m_sldDopplerDepth = new QSlider(Qt::Horizontal);
     m_sldDopplerDepth->setRange(1, 100);
     m_sldDopplerDepth->setValue(10);
     expLayout->addWidget(new QLabel("Doppler Depth (Samples):"));
     expLayout->addWidget(m_sldDopplerDepth);
-    
+
     controlLayout->addWidget(grpExp);
     controlLayout->addStretch();
     topLayout->addWidget(grpControls, 1);
 
     QGroupBox* grpCanvas = new QGroupBox("2. Draw Z-Domain Timeline (X=Time, Y=Delay)");
     QVBoxLayout* canvasLayout = new QVBoxLayout(grpCanvas);
-    
+
     m_canvas = new ZDomainCanvas();
     canvasLayout->addWidget(m_canvas, 1);
-    
+
     QHBoxLayout* readoutLayout = new QHBoxLayout();
     m_lblCurrentZone = new QLabel("[ ZONE: NONE ]");
     m_lblCurrentTheory = new QLabel("Hover over the canvas to explore Z-Domain acoustic theory.");
@@ -233,14 +235,28 @@ void ZDomainExperimentsTab::setupUI() {
     readoutLayout->addWidget(m_lblCurrentZone);
     readoutLayout->addWidget(m_lblCurrentTheory, 1);
     canvasLayout->addLayout(readoutLayout);
-    
-    topLayout->addWidget(grpCanvas, 2);
-    mainLayout->addLayout(topLayout, 2);
 
+    QGroupBox* grpPresets = new QGroupBox("Topology Presets (Testing)");
+    QHBoxLayout* presetLayout = new QHBoxLayout(grpPresets);
+
+    m_btnPresetFlanger = new QPushButton("Test Flanger");
+    m_btnPresetChorus = new QPushButton("Test Chorus");
+    m_btnPresetComb = new QPushButton("Test Metallic Comb");
+    m_btnPresetKarplus = new QPushButton("Test Karplus Pluck");
+
+    presetLayout->addWidget(m_btnPresetFlanger);
+    presetLayout->addWidget(m_btnPresetChorus);
+    presetLayout->addWidget(m_btnPresetComb);
+    presetLayout->addWidget(m_btnPresetKarplus);
+
+    canvasLayout->addWidget(grpPresets);
+    topLayout->addWidget(grpCanvas, 2);
+
+    mainLayout->addLayout(topLayout, 2);
 
     QGroupBox* grpOutput = new QGroupBox("3. Compiled Z-Domain Math String");
     QVBoxLayout* outLayout = new QVBoxLayout(grpOutput);
-    
+
     m_txtOutputCode = new QTextEdit();
     m_txtOutputCode->setMinimumHeight(100);
     outLayout->addWidget(m_txtOutputCode);
@@ -250,7 +266,7 @@ void ZDomainExperimentsTab::setupUI() {
     m_btnClear = new QPushButton("🗑 Clear Timeline");
     m_btnPlay = new QPushButton("▶ Test Math Output");
     m_btnPlay->setCheckable(true);
-    
+
     btnLayout->addWidget(m_btnGenerate);
     btnLayout->addWidget(m_btnClear);
     btnLayout->addWidget(m_btnPlay);
@@ -264,6 +280,41 @@ void ZDomainExperimentsTab::setupUI() {
     connect(m_btnGenerate, &QPushButton::clicked, this, &ZDomainExperimentsTab::onGenerateCode);
     connect(m_btnClear, &QPushButton::clicked, this, &ZDomainExperimentsTab::onClearCanvas);
     connect(m_btnPlay, &QPushButton::toggled, this, &ZDomainExperimentsTab::togglePlay);
+
+
+    connect(m_btnPresetFlanger, &QPushButton::clicked, [=]() {
+        m_chkKarplusExciter->setChecked(false);
+        m_chkDampen->setChecked(false);
+        m_chkDoppler->setChecked(true);
+        m_sldDopplerDepth->setValue(3);  // Shallow depth for flanger
+        m_sldFeedback->setValue(85);     // High feedback for swoosh
+        m_canvas->setPresetLine(5);      // ~5 samples (Zone 1)
+    });
+
+    connect(m_btnPresetChorus, &QPushButton::clicked, [=]() {
+        m_chkKarplusExciter->setChecked(false);
+        m_chkDampen->setChecked(true);   // Analog warmth
+        m_chkDoppler->setChecked(true);
+        m_sldDopplerDepth->setValue(15); // Deeper warble
+        m_sldFeedback->setValue(40);     // Low feedback for gentle chorus
+        m_canvas->setPresetLine(35);     // ~35 samples (Zone 2)
+    });
+
+    connect(m_btnPresetComb, &QPushButton::clicked, [=]() {
+        m_chkKarplusExciter->setChecked(false);
+        m_chkDampen->setChecked(false);
+        m_chkDoppler->setChecked(false);
+        m_sldFeedback->setValue(90);     // Heavy resonance
+        m_canvas->setPresetLine(120);    // ~120 samples (Zone 2)
+    });
+
+    connect(m_btnPresetKarplus, &QPushButton::clicked, [=]() {
+        m_chkKarplusExciter->setChecked(true); // Pluck!
+        m_chkDampen->setChecked(true);         // Strings dampen over time
+        m_chkDoppler->setChecked(false);
+        m_sldFeedback->setValue(99);           // Almost infinite sustain
+        m_canvas->setPresetLine(400);          // ~400 samples (Zone 3)
+    });
 }
 
 void ZDomainExperimentsTab::updateDSPReadout(int delaySamples, QString zoneName, QString dspTheory) {
@@ -277,9 +328,9 @@ void ZDomainExperimentsTab::onClearCanvas() {
 }
 
 void ZDomainExperimentsTab::onGenerateCode() {
-    int numSteps = 16; 
+    int numSteps = 16;
     std::vector<int> pathDelays = m_canvas->getPathSamples(numSteps);
-    
+
     QString finalMath;
     if (m_cmbSyntax->currentIndex() == 0) {
         finalMath = generateNightlyLogic(pathDelays);
@@ -294,30 +345,26 @@ void ZDomainExperimentsTab::onGenerateCode() {
 QString ZDomainExperimentsTab::generateNightlyLogic(const std::vector<int>& delays) {
     double duration = m_spinDuration->value();
     double stepTime = duration / delays.size();
-    
+
     QString baseExpr = m_txtBaseO1->toPlainText();
     double fb = m_sldFeedback->value() / 100.0;
-    
 
     if (m_chkKarplusExciter->isChecked()) {
         baseExpr = QString("((randv(t*srate) * (t < 0.05)) + %1)").arg(baseExpr);
     }
 
     QString logic = "// Z-Domain Dynamic Sequence\nvar z_delay = 0;\n";
-    
 
     for (size_t i = 0; i < delays.size(); ++i) {
         double startT = i * stepTime;
         double endT = (i + 1) * stepTime;
-        
 
-        QString timeCond = (i == delays.size() - 1) 
-                           ? QString("(t >= %1)").arg(startT, 0, 'f', 2) 
-                           : QString("(t >= %1 & t < %2)").arg(startT, 0, 'f', 2).arg(endT, 0, 'f', 2);
-                           
+        QString timeCond = (i == delays.size() - 1)
+                               ? QString("(t >= %1)").arg(startT, 0, 'f', 2)
+                               : QString("(t >= %1 & t < %2)").arg(startT, 0, 'f', 2).arg(endT, 0, 'f', 2);
+
         logic += QString("z_delay += %1 * %2;\n").arg(timeCond).arg(delays[i]);
     }
-
 
     QString finalZ = "z_delay";
     if (m_chkDoppler->isChecked()) {
@@ -325,15 +372,14 @@ QString ZDomainExperimentsTab::generateNightlyLogic(const std::vector<int>& dela
     }
 
     QString lastStr = QString("last(%1)").arg(finalZ);
-    
 
     if (m_chkDampen->isChecked()) {
         lastStr = QString("((last(%1) + last(%1 + 1)) * 0.5)").arg(finalZ);
     }
 
     logic += QString("\n// Feedback Mix Matrix\nclamp(-1, %1 + %2 * %3, 1);\n")
-                .arg(baseExpr).arg(fb).arg(lastStr);
-                
+                 .arg(baseExpr).arg(fb).arg(lastStr);
+
     return logic;
 }
 
@@ -345,7 +391,7 @@ QString ZDomainExperimentsTab::generateLegacyLogic(const std::vector<int>& delay
     QString baseExpr = m_txtBaseO1->toPlainText();
 
     if (m_chkKarplusExciter->isChecked()) {
-         baseExpr = QString("((randv(t*srate) * (t < 0.05)) + %1)").arg(baseExpr);
+        baseExpr = QString("((randv(t*srate) * (t < 0.05)) + %1)").arg(baseExpr);
     }
 
     std::function<QString(int)> buildTernary = [&](int index) -> QString {
@@ -360,26 +406,25 @@ QString ZDomainExperimentsTab::generateLegacyLogic(const std::vector<int>& delay
     };
 
     QString zTernary = buildTernary(0);
-    
+
     if (m_chkDoppler->isChecked()) {
         zTernary = QString("(%1 + %2 * sin(t*25.13))").arg(zTernary).arg(m_sldDopplerDepth->value());
     }
 
     QString lastStr = QString("last(%1)").arg(zTernary);
-    
+
     if (m_chkDampen->isChecked()) {
         lastStr = QString("((last(%1) + last(%1 + 1)) * 0.5)").arg(zTernary);
     }
 
     return QString("max(-1.0, min(%1 + %2 * %3, 1.0))")
-                .arg(baseExpr).arg(fb).arg(lastStr);
+        .arg(baseExpr).arg(fb).arg(lastStr);
 }
 
 void ZDomainExperimentsTab::togglePlay(bool checked) {
     if (checked) {
         onGenerateCode(); // Ensure code is fresh
         m_btnPlay->setText("⏹ Stop");
-        
 
         if(m_ghostSynth) {
             m_ghostSynth->setExpression(m_txtOutputCode->toPlainText());

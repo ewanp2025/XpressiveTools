@@ -23,9 +23,10 @@ class ZDomainCanvas : public QWidget {
     Q_OBJECT
 public:
     explicit ZDomainCanvas(QWidget *parent = nullptr);
-    
+
     std::vector<int> getPathSamples(int numSteps);
     void clearPath();
+    void setPresetLine(int delaySamples);
 
 signals:
     void pointerMoved(int delaySamples, QString zoneName, QString dspTheory);
@@ -83,7 +84,6 @@ private:
     QSlider* m_sldFeedback;
     QLabel* m_lblFeedback;
 
-
     QCheckBox* m_chkKarplusExciter;
     QCheckBox* m_chkDampen;
     QCheckBox* m_chkDoppler;
@@ -93,6 +93,12 @@ private:
     QPushButton* m_btnGenerate;
     QPushButton* m_btnClear;
     QPushButton* m_btnPlay;
+
+
+    QPushButton* m_btnPresetFlanger;
+    QPushButton* m_btnPresetChorus;
+    QPushButton* m_btnPresetComb;
+    QPushButton* m_btnPresetKarplus;
 };
 
 #endif // ZDOMAINEXPERIMENTSTAB_H
