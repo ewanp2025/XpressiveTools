@@ -91,6 +91,14 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  Drum Sequencer - WIP Create 16 step drum seqences in the step editor and export to a single mathematical expression. WIP.
 
+•  Xpressive Sequencer – A grid sequencer with up to 32 steps that features per step toggles, accents, pitches, and squelch controls to generate complex, evolving mathematical strings.
+
+•  Tracker – An old-school tracker interface (64 rows by 8 columns) to sequence math-based instruments, note frequencies, and macros WIP.
+
+•  Song Extractor – Analyses raw Xpressive expressions, cleans the core formulas, and extracts the sequence data into LMMS pattern files (.mmp).
+
+•  Z-Domain Experiments – WIP A tool for drawing sampledelay lines to experiment with FIR phase cancellation, comb filtering, and Karplus-Strong physical modeling. WIP
+
 **Technical**
 
 Framework: Qt 6.x (Widgets) 
