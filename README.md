@@ -101,6 +101,8 @@ The suite is divided into several tabs each targeting a specific era or style of
 
 •  Z-Domain Experiments – WIP A tool for drawing sampledelay lines to experiment with FIR phase cancellation, comb filtering, and Karplus-Strong physical modeling. WIP
 
+•  Vector Processing Tab – An experiment to bypass Xpressive's lack of input buffering to achieve FIR convolution by unrolling the matrix and evaluating procedural waveforms at algebraically shifted time intervals.
+
 **Technical**
 
 Framework: Qt 6.x (Widgets) 

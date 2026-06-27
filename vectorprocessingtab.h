@@ -30,14 +30,18 @@ private slots:
 
 private:
     void setupUI();
-    QString generateFIRConvolution();
-    QString generateModalSynthesis();
-    QString generateMorphingKernel();
+
+    // Updated generator signatures
+    QString generateIIRResonator(bool legacy);
+    QString generateFIRConvolution(bool legacy);
+    QString generateModalSynthesis(bool legacy);
+    QString generateMorphingKernel(bool legacy);
 
     SynthEngine* m_ghostSynth = nullptr;
     UniversalScope* m_scope = nullptr;
 
     QComboBox* m_cmbExperiment;
+    QComboBox* m_cmbSyntax;
     QComboBox* m_cmbInputSource;
     QSlider* m_kernelSliders[16];
     QLabel* m_kernelLabels[16];

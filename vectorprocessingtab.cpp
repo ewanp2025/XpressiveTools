@@ -41,11 +41,9 @@ void VectorProcessingTab::setupUI() {
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
-
     m_scope = new UniversalScope();
     m_scope->setMinimumHeight(150);
     mainLayout->addWidget(m_scope);
-
 
     QHBoxLayout* controlsLayout = new QHBoxLayout();
 
@@ -55,21 +53,25 @@ void VectorProcessingTab::setupUI() {
     m_cmbExperiment = new QComboBox();
     m_cmbExperiment->addItems({
         "16-Tap IIR Resonator (Feedback Delay Matrix)",
+        "16-Tap FIR Convolution (True Time-Shifted)",
         "Vector Modal Synthesis (Additive)",
         "Morphing IIR Matrix (Crossfading Kernels)"
     });
+
+    m_cmbSyntax = new QComboBox();
+    m_cmbSyntax->addItems({"Nightly (Variables & Script Blocks)", "Legacy (Flat-Inlined Math)"});
 
     m_cmbInputSource = new QComboBox();
     m_cmbInputSource->addItems({"Sawtooth (Harmonic Rich)", "White Noise (Impulse/Exciter)", "Square Pulse"});
 
     formLayout->addRow("Experiment Type:", m_cmbExperiment);
+    formLayout->addRow("Syntax Target:", m_cmbSyntax);
     formLayout->addRow("Input Signal:", m_cmbInputSource);
 
     m_btnNormalize = new QPushButton("Normalize Kernel");
     formLayout->addRow("", m_btnNormalize);
 
     controlsLayout->addWidget(expGroup, 1);
-
 
     QGroupBox* kernelGroup = new QGroupBox("16-Point Impulse Response (Kernel)");
     QHBoxLayout* slidersLayout = new QHBoxLayout(kernelGroup);
@@ -92,7 +94,6 @@ void VectorProcessingTab::setupUI() {
     controlsLayout->addWidget(kernelGroup, 2);
     mainLayout->addLayout(controlsLayout);
 
-
     QHBoxLayout* outRow = new QHBoxLayout();
     m_btnGenerate = new QPushButton("🚀 Compile Unrolled Math");
     m_btnGenerate->setStyleSheet("background-color: #00aa00; border: 1px solid #00ff00; color: white;");
@@ -109,7 +110,6 @@ void VectorProcessingTab::setupUI() {
     m_txtOutput->setMinimumHeight(120);
     mainLayout->addWidget(m_txtOutput);
 
-
     connect(m_cmbExperiment, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &VectorProcessingTab::onExperimentChanged);
     connect(m_btnGenerate, &QPushButton::clicked, this, &VectorProcessingTab::onGenerate);
     connect(m_btnPlay, &QPushButton::toggled, this, &VectorProcessingTab::togglePlay);
@@ -117,7 +117,7 @@ void VectorProcessingTab::setupUI() {
 }
 
 void VectorProcessingTab::onExperimentChanged(int index) {
-    bool enableSliders = (index == 0 || index == 2);
+    bool enableSliders = (index == 0 || index == 1 || index == 3);
     for (int i = 0; i < 16; ++i) {
         m_kernelSliders[i]->setEnabled(enableSliders);
     }
@@ -145,17 +145,19 @@ void VectorProcessingTab::updateUI() {
 
 void VectorProcessingTab::onGenerate() {
     int experiment = m_cmbExperiment->currentIndex();
+    bool legacy = (m_cmbSyntax->currentIndex() == 1);
     QString code;
 
-    if (experiment == 0) code = generateFIRConvolution();
-    else if (experiment == 1) code = generateModalSynthesis();
-    else if (experiment == 2) code = generateMorphingKernel();
+    if (experiment == 0) code = generateIIRResonator(legacy);
+    else if (experiment == 1) code = generateFIRConvolution(legacy);
+    else if (experiment == 2) code = generateModalSynthesis(legacy);
+    else if (experiment == 3) code = generateMorphingKernel(legacy);
 
     m_txtOutput->setText(code);
     QApplication::clipboard()->setText(code);
 }
 
-QString VectorProcessingTab::generateFIRConvolution() {
+QString VectorProcessingTab::generateIIRResonator(bool legacy) {
     QString inputSig = (m_cmbInputSource->currentIndex() == 0) ? "saww(integrate(f))" :
                            (m_cmbInputSource->currentIndex() == 1) ? "randv(t*srate)" : "squarew(integrate(f))";
 
@@ -166,16 +168,54 @@ QString VectorProcessingTab::generateFIRConvolution() {
         }
     }
 
+    if (legacy) {
+        return QString("clamp(-1.0, %1%2, 1.0)").arg(inputSig, convMath);
+    }
+
     return QString(
                "//remember to delete comments when pasting as lmms does not like comments\n"
                "var input := %1;\n"
                "var out := input%2;\n"
-               "clamp(-1.0, out, 1.0)" // Notice: No trailing semicolon here!
+               "clamp(-1.0, out, 1.0)"
                ).arg(inputSig, convMath);
 }
 
-QString VectorProcessingTab::generateModalSynthesis() {
-    // Treat the input source as a percussive exciter by multiplying it by a short decay envelope
+QString VectorProcessingTab::generateFIRConvolution(bool legacy) {
+    int inputIdx = m_cmbInputSource->currentIndex();
+    QString convMath = "";
+
+
+    for (int i = 0; i < 16; ++i) {
+        if (std::abs(m_kernel[i]) > 0.001) {
+
+            QString shiftT = (i == 0) ? "t" : QString("(t - %1/srate)").arg(i);
+
+
+            QString source;
+            if (inputIdx == 0) source = QString("saww(f * %1)").arg(shiftT);
+            else if (inputIdx == 1) source = QString("randv(%1 * srate)").arg(shiftT);
+            else source = QString("squarew(f * %1)").arg(shiftT);
+
+            if (!convMath.isEmpty()) convMath += " + ";
+            convMath += QString("(%1 * %2)").arg(m_kernel[i], 0, 'f', 3).arg(source);
+        }
+    }
+
+    if (convMath.isEmpty()) convMath = "0.0";
+
+    if (legacy) {
+        return QString("clamp(-1.0, %1, 1.0)").arg(convMath);
+    }
+
+    return QString(
+               "// True FIR Convolution via stateless time-shifting\n"
+               "// Note: Bypasses integrate(f) to allow historic phase lookups\n"
+               "var out := %1;\n"
+               "clamp(-1.0, out, 1.0)"
+               ).arg(convMath);
+}
+
+QString VectorProcessingTab::generateModalSynthesis(bool legacy) {
     QString exciterSig = (m_cmbInputSource->currentIndex() == 0) ? "saww(integrate(f))" :
                              (m_cmbInputSource->currentIndex() == 1) ? "randv(t*srate)" : "squarew(integrate(f))";
 
@@ -189,6 +229,10 @@ QString VectorProcessingTab::generateModalSynthesis() {
         .arg(amps[i]).arg(freqs[i]).arg(decays[i]);
     }
 
+    if (legacy) {
+        return QString("clamp(-1.0, (%1 * (t < 0.05))%2, 1.0)").arg(exciterSig, modesMath);
+    }
+
     return QString(
                "//remember to delete comments when pasting as lmms does not like comments\n"
                "var exciter := %1 * (t < 0.05);\n"
@@ -197,28 +241,39 @@ QString VectorProcessingTab::generateModalSynthesis() {
                ).arg(exciterSig, modesMath);
 }
 
-QString VectorProcessingTab::generateMorphingKernel() {
+QString VectorProcessingTab::generateMorphingKernel(bool legacy) {
     QString inputSig = (m_cmbInputSource->currentIndex() == 0) ? "saww(integrate(f))" :
                            (m_cmbInputSource->currentIndex() == 1) ? "randv(t*srate)" : "squarew(integrate(f))";
 
+    QString morphSig = "((sinew(t * 1.5) + 1.0) * 0.5)";
     QString convMath = "";
+
     for (int i = 0; i < 16; ++i) {
         double valA = m_kernel[i];
         double valB = m_kernel[15 - i];
 
         if (std::abs(valA) > 0.001 || std::abs(valB) > 0.001) {
-            convMath += QString(" + (((%1 * (1.0 - morph)) + (%2 * morph)) * last(%3))")
-            .arg(valA, 0, 'f', 3).arg(valB, 0, 'f', 3).arg(i + 1);
+            if (legacy) {
+                convMath += QString(" + (((%1 * (1.0 - %2)) + (%3 * %4)) * last(%5))")
+                .arg(valA, 0, 'f', 3).arg(morphSig).arg(valB, 0, 'f', 3).arg(morphSig).arg(i + 1);
+            } else {
+                convMath += QString(" + (((%1 * (1.0 - morph)) + (%2 * morph)) * last(%3))")
+                .arg(valA, 0, 'f', 3).arg(valB, 0, 'f', 3).arg(i + 1);
+            }
         }
+    }
+
+    if (legacy) {
+        return QString("clamp(-1.0, %1%2, 1.0)").arg(inputSig, convMath);
     }
 
     return QString(
                "//remember to delete comments when pasting as lmms does not like comments\n"
                "var input := %1;\n"
-               "var morph := (sinew(t * 1.5) + 1.0) * 0.5;\n"
-               "var out := input%2;\n"
+               "var morph := %2;\n"
+               "var out := input%3;\n"
                "clamp(-1.0, out, 1.0)"
-               ).arg(inputSig, convMath);
+               ).arg(inputSig, morphSig, convMath);
 }
 
 void VectorProcessingTab::togglePlay(bool checked) {
@@ -253,6 +308,16 @@ void VectorProcessingTab::togglePlay(bool checked) {
                 ptr = (ptr + 1) % 16;
             }
             else if (expType == 1) {
+                delayLine[ptr] = input;
+                output = 0.0;
+                for (int i = 0; i < 16; ++i) {
+                    int readPtr = (ptr - i + 16) % 16;
+                    output += currentKernel[i] * delayLine[readPtr];
+                }
+                output = std::clamp(output, -1.0, 1.0);
+                ptr = (ptr + 1) % 16;
+            }
+            else if (expType == 2) {
                 double freqs[6] = {1.0, 2.04, 3.12, 4.5, 5.8, 7.2};
                 double decays[6] = {10.0, 15.0, 25.0, 40.0, 50.0, 80.0};
                 double amps[6] = {1.0, 0.7, 0.4, 0.2, 0.1, 0.05};
@@ -265,7 +330,7 @@ void VectorProcessingTab::togglePlay(bool checked) {
                 output += exciter;
                 output = std::clamp(output, -1.0, 1.0);
             }
-            else if (expType == 2) {
+            else if (expType == 3) {
                 output = input;
                 double morph = (std::sin(t * 1.5 * 6.28318) + 1.0) * 0.5;
                 for (int i = 0; i < 16; ++i) {

@@ -3198,7 +3198,7 @@ void MainWindow::setupUI() {
     // ------------------------------------
 
     // ------------------------------------
-    // TAB 49: VECTOR PROCESSING (CONVOLUTION)
+    // TAB 49: VECTOR PROCESSING
     // ------------------------------------
     m_vectorProcessingTab = new VectorProcessingTab(m_ghostSynth, this);
     modeTabs->addTab(m_vectorProcessingTab, "Vector Matrix (FIR)");
