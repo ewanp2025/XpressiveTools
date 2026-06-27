@@ -56,6 +56,8 @@ add_executable(WaveConv
     songextractortab.cpp
     ZDomainExperimentsTab.cpp
     ZDomainExperimentsTab.h
+    vectorprocessingtab.cpp
+    vectorprocessingtab.h
 
     libs/kiss_fft.c
     libs/kiss_fft.h

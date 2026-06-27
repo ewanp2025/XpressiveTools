@@ -3198,6 +3198,12 @@ void MainWindow::setupUI() {
     // ------------------------------------
 
     // ------------------------------------
+    // TAB 49: VECTOR PROCESSING (CONVOLUTION)
+    // ------------------------------------
+    m_vectorProcessingTab = new VectorProcessingTab(m_ghostSynth, this);
+    modeTabs->addTab(m_vectorProcessingTab, "Vector Matrix (FIR)");
+
+    // ------------------------------------
     // TAB xx: (UNTIL FINISHED INCASE MORE ADDED ). NEED TO KNOW / NOTES TAB
     // ------------------------------------
     QWidget *notesTab = new QWidget();

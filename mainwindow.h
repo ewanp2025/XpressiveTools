@@ -37,6 +37,7 @@
 #include "trackertab.h"
 #include "songextractortab.h"
 #include "ZDomainExperimentsTab.h"
+#include "vectorprocessingtab.h"
 
 // ==============================================================================
 // DATA STRUCTURES & STRUCTS
@@ -828,6 +829,7 @@ private:
     SongExtractorTab* songExtractorTab;
     DrumSequencerTab *drumSeqTab;
     ZDomainExperimentsTab* m_zDomainTab;
+    VectorProcessingTab* m_vectorProcessingTab;
 
 
 
