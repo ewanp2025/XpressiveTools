@@ -4,7 +4,7 @@ A sound synthesis toolkit built with Qt 6 and C++17 to compliment LMMS Xpressive
 
 This is still very much work in progress. The intent was to create a suite of tools for creating Xpressive expressions as I had realised that Xpressive can do many things that people are asking for in instruments within the LMMS forums. However, the 'language' of the time domain may be quite strange to people who have no prior experience with signal processing.
 
-The internal audio play button is broken in most of the tabs. The best way is to have two screens side by side and copy the expression into Xpressive and play there. The reason that I haven't fixed the audio player issues is that I could never get it to sound exactly the same as Xpressive in the first place, so I have used my efforts and time uinstead to explore deeper into what Xpressive is capable of as none of this has been documented previously apart from a list of variables and basic functions.
+The internal audio play button is broken in most of the tabs. The best way is to have two screens side by side and copy the expression into Xpressive and play there. The reason that I haven't fixed the audio player issues is that I could never get it to sound exactly the same as Xpressive in the first place, so I have used my efforts and time instead to explore deeper into what Xpressive is capable of as none of this has been documented previously apart from a list of variables and basic functions.
 
 **Key Features** 
 
