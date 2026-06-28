@@ -11,6 +11,7 @@ The internal audio play button is broken in most of the tabs. The best way is to
 The suite is divided into several tabs each targeting a specific era or style of sound design.
 
 **Tab Breakdown**
+
 •  SID Architect – Build multi-segment C64-style oscillator chains with per-segment decay and frequency offsets.
 
 •  PCM Sampler – Converts WAV files into mathematical expressions for sample playback within Xpressive with optimized 4-bit or 8- bit quantisation. Bit depth of 2000, 4000, 8000, and 16,000. 16,000 slows down my i5 that I use and makes patterns jump in LMMS.
